@@ -696,6 +696,10 @@ ROUTAGE — LIEU VS NATURE DU FAIT
 PRIORITÉ TRANSVERSALE
 - Si un BusinessUnit unit_type=transversal possède un activity_subject correspondant
   au fait, responsible = ce transversal (même si le lieu mentionne un dedicated).
+- Plusieurs instances peuvent partager le même catalog_key. Les distinguer par
+  specific_name, instance_description et routing_key. Un activity_subject dont le
+  routing_key est partagé ne suffit pas à choisir l'instance : renseigner aussi
+  responsible_business_unit_routing_key.
 - Exemple : "Lumière HS au restaurant" → affected=restaurant, responsible=maintenance
   (transversal) si maintenance possède électricité/éclairage dans routing_taxonomy.
 

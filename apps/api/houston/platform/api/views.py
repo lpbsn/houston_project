@@ -128,7 +128,6 @@ _DENIED_HTTP_409 = frozenset(
         "catalog_business_unit_inactive",
         "catalog_activity_subject_inactive",
         "duplicate_specific_name",
-        "duplicate_transversal_catalog_instance",
         "business_unit_identity_conflict",
         "duplicate_activity_subject_normalized_name",
         "duplicate_activity_subject_routing_key",
@@ -586,6 +585,7 @@ class PlatformOnboardingCompleteView(APIView):
                 "activated": result["activated"],
                 "idempotent": result["idempotent"],
                 "readiness": result["readiness"],
+                "warnings": result.get("warnings", []),
             }
         )
 

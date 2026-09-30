@@ -38,12 +38,14 @@ location_text (on Signal) → free-text location context (e.g. "terrasse")
 
 ### Multi-instance example
 
-Two dedicated instances of catalog `restaurant` in the same establishment:
+Several instances of one catalog generic, dedicated or transversal, in the same establishment. `Event` and `Séminaire` can both use `evenements_privatisations`.
 
 | `specific_name` | Example `routing_key` |
 | --- | --- |
 | Food Court | `restaurant--food-court--550e8400e29b41d4` |
 | Rooftop | `restaurant--rooftop--71c981d64e824f13` |
+| Event | `evenements_privatisations--event--550e8400e29b41d4` |
+| Séminaire | `evenements_privatisations--seminaire--71c981d64e824f13` |
 
 ## Core invariants
 
@@ -58,8 +60,7 @@ Two dedicated instances of catalog `restaurant` in the same establishment:
 
 - `specific_name` is the sole public display name for the instance.
 - `routing_key` is generated once (`build_business_unit_routing_key`), immutable on rename, unique per establishment, **never** in public API responses.
-- Dedicated: multiple active instances of the same catalog generic are allowed.
-- Transversal: **at most one active instance per transversal catalog generic** per establishment (`duplicate_transversal_catalog_instance`).
+- Dedicated and transversal: multiple active instances of the same catalog generic are allowed. Instances stay distinct by `specific_name` (normalized uniqueness per establishment, active and inactive), UUID, and `routing_key`.
 - Creation never implicitly reactivates an inactive instance; reactivation is an explicit service/endpoint.
 - Deactivation refused while active membership scopes exist (`business_unit_has_membership_scopes`).
 - No automatic membership-scope extension when a new instance is created.

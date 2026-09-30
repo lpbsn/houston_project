@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from houston.establishments.api.serializers import OnboardingDraftValidationErrorItemSerializer
+
 
 class PlatformSessionSerializer(serializers.Serializer):
     platform_operator_active = serializers.BooleanField()
@@ -17,6 +19,7 @@ class PlatformOnboardingCompleteResponseSerializer(serializers.Serializer):
     activated = serializers.BooleanField()
     idempotent = serializers.BooleanField()
     readiness = serializers.DictField()
+    warnings = OnboardingDraftValidationErrorItemSerializer(many=True, required=False)
 
 
 class PlatformOrganizationListItemSerializer(serializers.Serializer):

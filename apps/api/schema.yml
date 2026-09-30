@@ -8682,11 +8682,14 @@ paths:
   /api/v1/invitations/accept/:
     post:
       operationId: v1_invitations_accept_create
-      description: Accepts an establishment invitation, sets the account password,
-        activates the user and membership, and creates an auth session. The invitation
-        bearer is sent in the JSON body, not in the URI. Owner invitations activate
-        all compatible owner/invited memberships in the same organization. Cookie
-        transport requires Django CSRF; body transport does not use cookies.
+      description: Accepts an establishment invitation. A pending user sets a password,
+        becomes active, and receives a session. An already active user has the membership
+        activated without a password change and without a new session. The invitation
+        bearer is sent in the JSON body, not in the URI. No access-token bearer is
+        anonymous. A bearer that is present but invalid or expired is rejected before
+        any invitation change. Owner invitations activate all compatible owner/invited
+        memberships in the same organization. Cookie transport requires Django CSRF;
+        body transport does not use cookies.
       tags:
       - auth
       requestBody:
@@ -8702,8 +8705,15 @@ paths:
               $ref: '#/components/schemas/DirectorInvitationAcceptRequest'
         required: true
       security:
+      - BearerAccessToken: []
       - {}
       responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveInvitationAcceptResponse'
+          description: ''
         '201':
           content:
             application/json:
@@ -8716,6 +8726,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/DirectorInvitationAcceptErrorResponse'
           description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
         '403':
           content:
             application/json:
@@ -8723,6 +8739,46 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationAcceptErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/invitations/preview/:
+    post:
+      operationId: v1_invitations_preview_create
+      description: Reports whether accepting this invitation requires setting a password.
+        The invitation bearer is sent in the JSON body, not in the URI.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationPreviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationPreviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationPreviewRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreviewResponse'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -11179,6 +11235,17 @@ components:
       - responsible_business_unit_label
       - status
       - title
+    ActiveInvitationAcceptResponse:
+      type: object
+      properties:
+        requires_login:
+          type: boolean
+        establishment_id:
+          type: string
+          format: uuid
+      required:
+      - establishment_id
+      - requires_login
     ActivitySubjectTreeItem:
       type: object
       properties:
@@ -13219,8 +13286,6 @@ components:
         terms_version:
           type: string
       required:
-      - password
-      - password_confirmation
       - refresh_token_transport
       - token
     DirectorInvitationAcceptResponse:
@@ -14269,6 +14334,20 @@ components:
           type: string
       required:
       - status
+    InvitationPreviewRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+      - token
+    InvitationPreviewResponse:
+      type: object
+      properties:
+        requires_password:
+          type: boolean
+      required:
+      - requires_password
     LegalVersionRequest:
       type: object
       properties:
@@ -14727,10 +14806,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OnboardingDraftValidationErrorItem'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingDraftValidationErrorItem'
       required:
       - errors
       - is_ready_for_complete
       - mode
+      - warnings
     OnboardingDraftValidationErrorItem:
       type: object
       properties:
@@ -15458,6 +15542,10 @@ components:
         readiness:
           type: object
           additionalProperties: {}
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingDraftValidationErrorItem'
       required:
       - activated
       - idempotent

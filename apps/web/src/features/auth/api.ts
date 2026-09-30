@@ -598,33 +598,209 @@ export async function login(input: LoginRequest) {
   })
 }
 
-export async function acceptInvitationSession(
+export type InvitationAcceptOutcome =
+  | { kind: 'session' }
+  | { kind: 'membership_only'; requiresLogin: boolean }
+
+export async function previewInvitation(token: string) {
+  const { data, error, response } = await apiClient.POST('/api/v1/invitations/preview/', {
+    body: { token },
+  })
+
+  if (error || !data) {
+    throw buildAuthError(response, error, 'Invitation could not be accepted.')
+  }
+
+  return data
+}
+
+function isMembershipOnlyAcceptPayload(
+  data: object,
+): data is { requires_login: boolean } {
+  return 'requires_login' in data && !('access_token' in data)
+}
+
+function enqueueCookieSessionOperation<T>(operation: () => Promise<T>) {
+  return enqueueAuthOperation(
+    cookieSessionReplacementQueue,
+    (next) => {
+      cookieSessionReplacementQueue = next
+    },
+    operation,
+  )
+}
+
+async function postInvitationAccept(
+  prepared: PreparedAuthTransport,
   token: string,
   input: DirectorInvitationAcceptInput,
+  accessToken: string | null,
 ) {
-  return runSessionReplacement(async (prepared, generation) => {
-    const { data, error, response } = await apiClient.POST(
-      '/api/v1/invitations/accept/',
-      {
-        body: {
-          ...input,
-          token,
-          refresh_token_transport: prepared.transport,
-        },
-        credentials: prepared.credentials,
-        headers: buildTransportHeaders(prepared),
-      },
-    )
+  return apiClient.POST('/api/v1/invitations/accept/', {
+    body: {
+      ...input,
+      token,
+      refresh_token_transport: prepared.transport,
+    },
+    credentials: prepared.credentials,
+    headers: buildTransportHeaders(prepared, accessToken),
+  })
+}
 
-    if (error || !data) {
-      throw buildAuthError(response, error, 'Invitation could not be accepted.')
-    }
-
+async function commitInvitationSessionNow(data: AuthEnvelope, prepared: PreparedAuthTransport) {
+  const generation = beginSessionReplacement()
+  try {
     await commitAuthEnvelope(data, prepared, {
       expectedGeneration: generation,
       purgeNonAuth: true,
     })
+  } finally {
+    endSessionReplacement()
+  }
+}
+
+async function commitInvitationSession(data: AuthEnvelope, prepared: PreparedAuthTransport) {
+  if (prepared.transport !== 'cookie') {
+    await commitInvitationSessionNow(data, prepared)
+    return
+  }
+
+  const invalidationGeneration = authInvalidationGeneration
+  await enqueueCookieSessionOperation(async () => {
+    if (invalidationGeneration !== authInvalidationGeneration) {
+      await revokeTransientSession(data, prepared)
+      throw new StaleAuthOperationError('The authenticated session is no longer current.')
+    }
+    await commitInvitationSessionNow(data, prepared)
   })
+}
+
+type InvitationAcceptAttempt =
+  | { kind: 'retry_auth'; response: Response; error: unknown }
+  | { kind: 'outcome'; outcome: InvitationAcceptOutcome }
+
+async function settleInvitationAccept(
+  prepared: PreparedAuthTransport,
+  token: string,
+  input: DirectorInvitationAcceptInput,
+  accessToken: string | null,
+  options: { commitDirectly: boolean },
+): Promise<InvitationAcceptAttempt> {
+  const invalidationGeneration = authInvalidationGeneration
+  const { data, error, response } = await postInvitationAccept(
+    prepared,
+    token,
+    input,
+    accessToken,
+  )
+
+  if (response.status === 401 && accessToken) {
+    return { kind: 'retry_auth', response, error }
+  }
+
+  if (error || !data) {
+    throw buildAuthError(response, error, 'Invitation could not be accepted.')
+  }
+
+  if (isMembershipOnlyAcceptPayload(data)) {
+    return {
+      kind: 'outcome',
+      outcome: {
+        kind: 'membership_only',
+        requiresLogin: data.requires_login,
+      },
+    }
+  }
+
+  if (invalidationGeneration !== authInvalidationGeneration) {
+    await revokeTransientSession(data, prepared)
+    throw new StaleAuthOperationError('The authenticated session is no longer current.')
+  }
+
+  if (options.commitDirectly) {
+    await commitInvitationSessionNow(data, prepared)
+  } else {
+    await commitInvitationSession(data, prepared)
+  }
+  return { kind: 'outcome', outcome: { kind: 'session' } }
+}
+
+async function refreshBearerAfterUnauthorized(
+  attempt: Extract<InvitationAcceptAttempt, { kind: 'retry_auth' }>,
+) {
+  const refreshed = await refreshAccessToken()
+  if (!refreshed) {
+    throw buildAuthError(attempt.response, attempt.error, 'Invitation could not be accepted.')
+  }
+  return refreshed
+}
+
+async function acceptInvitationRecoveringBearer(
+  prepared: PreparedAuthTransport,
+  token: string,
+  input: DirectorInvitationAcceptInput,
+) {
+  let accessToken = getAccessToken()
+  let attempt = await settleInvitationAccept(prepared, token, input, accessToken, {
+    commitDirectly: false,
+  })
+  if (attempt.kind === 'retry_auth') {
+    accessToken = await refreshBearerAfterUnauthorized(attempt)
+    attempt = await settleInvitationAccept(prepared, token, input, accessToken, {
+      commitDirectly: false,
+    })
+    if (attempt.kind === 'retry_auth') {
+      throw buildAuthError(attempt.response, attempt.error, 'Invitation could not be accepted.')
+    }
+  }
+  return attempt.outcome
+}
+
+async function acceptCookieSessionInvitation(
+  prepared: PreparedAuthTransport,
+  token: string,
+  input: DirectorInvitationAcceptInput,
+) {
+  let accessToken = getAccessToken()
+
+  for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
+    const invalidationGeneration = authInvalidationGeneration
+    const attempt = await enqueueCookieSessionOperation(async () => {
+      if (invalidationGeneration !== authInvalidationGeneration) {
+        throw new StaleAuthOperationError('The authenticated session is no longer current.')
+      }
+      return settleInvitationAccept(prepared, token, input, accessToken, {
+        commitDirectly: true,
+      })
+    })
+
+    if (attempt.kind === 'outcome') {
+      return attempt.outcome
+    }
+    if (attemptIndex > 0) {
+      throw buildAuthError(attempt.response, attempt.error, 'Invitation could not be accepted.')
+    }
+
+    accessToken = await refreshBearerAfterUnauthorized(attempt)
+  }
+
+  throw new AuthApiError('Invitation could not be accepted.', 401, 'authentication_failed')
+}
+
+export async function acceptInvitationSession(
+  token: string,
+  input: DirectorInvitationAcceptInput,
+): Promise<InvitationAcceptOutcome> {
+  const prepared = await prepareSessionCreationTransport()
+  // A password accept can set a refresh cookie. Keep that request on the cookie
+  // session queue so it cannot overlap a refresh. Release the queue before
+  // refreshing an expired bearer. Bump auth generation only when the response
+  // installs a session. Membership-only accepts stay outside session replacement.
+  if (prepared.transport === 'cookie' && input.password) {
+    return acceptCookieSessionInvitation(prepared, token, input)
+  }
+
+  return acceptInvitationRecoveringBearer(prepared, token, input)
 }
 
 export async function logout() {

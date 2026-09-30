@@ -111,3 +111,8 @@ class BearerAccessTokenAuthenticationScheme(OpenApiAuthenticationExtension):
             "scheme": "bearer",
             "bearerFormat": "opaque",
         }
+
+
+class OptionalBearerAccessTokenAuthenticationScheme(BearerAccessTokenAuthenticationScheme):
+    target_class = "houston.accounts.authentication.OptionalBearerAccessTokenAuthentication"
+    name = "OptionalBearerAccessToken"

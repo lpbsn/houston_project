@@ -1,4 +1,9 @@
-import { AuthApiError, acceptInvitationSession } from '@/features/auth/api'
+import {
+  AuthApiError,
+  acceptInvitationSession,
+  previewInvitation,
+  type InvitationAcceptOutcome,
+} from '@/features/auth/api'
 import type { DirectorInvitationAcceptInput } from '@/features/auth/types'
 
 class InvitationAcceptApiError extends Error {
@@ -13,21 +18,30 @@ class InvitationAcceptApiError extends Error {
   }
 }
 
+function rethrowInvitationError(error: unknown): never {
+  if (!(error instanceof AuthApiError)) {
+    throw error
+  }
+  throw new InvitationAcceptApiError(error.message, error.status, error.code)
+}
+
+export async function previewDirectorInvitation(token: string) {
+  try {
+    const preview = await previewInvitation(token)
+    return { requiresPassword: preview.requires_password }
+  } catch (error) {
+    rethrowInvitationError(error)
+  }
+}
+
 export async function acceptDirectorInvitation(
   token: string,
   input: DirectorInvitationAcceptInput,
-) {
+): Promise<InvitationAcceptOutcome> {
   try {
-    await acceptInvitationSession(token, input)
+    return await acceptInvitationSession(token, input)
   } catch (error) {
-    if (!(error instanceof AuthApiError)) {
-      throw error
-    }
-    throw new InvitationAcceptApiError(
-      error.message,
-      error.status,
-      error.code,
-    )
+    rethrowInvitationError(error)
   }
 }
 

@@ -67,7 +67,6 @@ def test_activation_readiness_returns_blockers_when_setup_is_empty(onboarding_se
     assert blocker_codes(readiness) == {
         "missing_or_invalid_activity_description",
         "missing_active_business_unit",
-        "missing_active_or_invited_director",
     }
     assert "required_sections_not_validated" not in blocker_codes(readiness)
 
@@ -178,11 +177,12 @@ def test_manager_invited_does_not_satisfy_readiness(onboarding_session, owner):
     readiness = compute_activation_readiness(session=onboarding_session)
 
     assert readiness["is_ready"] is False
-    assert "missing_active_or_invited_director" in blocker_codes(readiness)
+    assert "missing_active_or_invited_director" not in blocker_codes(readiness)
     assert readiness["counts"]["active_or_invited_director_count"] == 0
+    assert readiness["sections"]["director"]["required"] is False
 
 
-def test_owner_alone_does_not_satisfy_director_readiness(onboarding_session, owner):
+def test_owner_alone_satisfies_director_readiness(onboarding_session, owner):
     establishment = onboarding_session.establishment
     business_unit = create_business_unit(
         establishment=establishment,
@@ -197,10 +197,11 @@ def test_owner_alone_does_not_satisfy_director_readiness(onboarding_session, own
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
-    assert readiness["is_ready"] is False
-    assert "missing_active_or_invited_director" in blocker_codes(readiness)
+    assert "missing_active_or_invited_director" not in blocker_codes(readiness)
     assert readiness["counts"]["active_owner_or_director_count"] == 1
     assert readiness["counts"]["active_or_invited_director_count"] == 0
+    assert readiness["sections"]["director"]["is_ready"] is True
+    assert readiness["sections"]["director"]["required"] is False
 
 
 def test_deactivated_director_does_not_satisfy_activation_readiness(onboarding_session, owner):
@@ -214,8 +215,8 @@ def test_deactivated_director_does_not_satisfy_activation_readiness(onboarding_s
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
-    assert readiness["is_ready"] is False
-    assert "missing_active_or_invited_director" in blocker_codes(readiness)
+    assert readiness["is_ready"] is True
+    assert "missing_active_or_invited_director" not in blocker_codes(readiness)
     assert readiness["counts"]["active_or_invited_director_count"] == 0
 
 

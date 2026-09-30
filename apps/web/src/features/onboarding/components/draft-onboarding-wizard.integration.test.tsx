@@ -146,7 +146,8 @@ async function fillAndFinishWizard() {
   fireEvent.click(continueButton)
 
   await screen.findByRole('heading', { name: /Invitez votre équipe/i })
-  const directorSection = screen.getByText(/Directeur \(obligatoire\)/i).parentElement!
+  fireEvent.click(screen.getByRole('button', { name: /Ajouter un directeur/i }))
+  const directorSection = screen.getByPlaceholderText('nom@etablissement.fr').closest('div.grid')!
   const inputs = directorSection.querySelectorAll('input')
   fireEvent.change(inputs[0]!, { target: { value: 'Ada' } })
   fireEvent.change(inputs[1]!, { target: { value: 'Lovelace' } })
@@ -159,7 +160,12 @@ async function fillAndFinishWizard() {
   fireEvent.click(finishButton)
 }
 
-function renderWizard() {
+function renderWizard(
+  options: {
+    payload?: ReturnType<typeof emptyOnboardingDraftPayload>
+    errors?: Array<{ code: string; section?: string; field?: string; key?: string }>
+  } = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -174,8 +180,8 @@ function renderWizard() {
         id: 'draft-1',
         onboarding_session_id: 'session-1',
         updated_at: new Date().toISOString(),
-        payload: emptyOnboardingDraftPayload(),
-        validation: { mode: 'soft', is_ready_for_complete: false, errors: [] },
+        payload: options.payload ?? emptyOnboardingDraftPayload(),
+        validation: { mode: 'soft', is_ready_for_complete: false, errors: options.errors ?? [] },
       }),
       putDraft: (sessionId, payload) => putMock(sessionId, payload),
       completeSession: (sessionId) => completeMock(sessionId),
@@ -271,7 +277,8 @@ describe('draft onboarding integration', () => {
     })
 
     await screen.findByRole('heading', { name: /Invitez votre équipe/i })
-    const directorSection = screen.getByText(/Directeur \(obligatoire\)/i).parentElement!
+    fireEvent.click(screen.getByRole('button', { name: /Ajouter un directeur/i }))
+    const directorSection = screen.getByPlaceholderText('nom@etablissement.fr').closest('div.grid')!
     const inputs = directorSection.querySelectorAll('input')
     fireEvent.change(inputs[0]!, { target: { value: 'Ada' } })
     fireEvent.change(inputs[1]!, { target: { value: 'Lovelace' } })
@@ -324,11 +331,13 @@ describe('draft onboarding integration', () => {
       { key: 'restaurant', label: 'Restaurant', unit_type: 'dedicated' },
       [{ key: 'restaurant__stock', label: 'Stock', business_unit_key: 'restaurant' }],
     )
-    payload.team.director = {
-      email: 'dir@example.com',
-      first_name: 'Ada',
-      last_name: 'Lovelace',
-    }
+    payload.team.directors = [
+      {
+        email: 'dir@example.com',
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+      },
+    ]
     payload.team.members = [
       {
         email: 'm@example.com',
@@ -346,5 +355,112 @@ describe('draft onboarding integration', () => {
 
     const stripped = stripEmptyMemberRows(withCurrentStep(payload, 'team'))
     expect(parseOnboardingDraftPayload(stripped).team.members).toHaveLength(1)
+  })
+
+  it('shows a backend duplicate specific name on the matching pole', async () => {
+    const firstKey = '22222222-2222-4222-8222-222222222222'
+    const secondKey = '33333333-3333-4333-8333-333333333333'
+    const payload = emptyOnboardingDraftPayload()
+    payload.establishment = {
+      name: 'Hôtel',
+      description: 'Description assez longue pour valider.',
+    }
+    payload.business_units = [
+      {
+        client_key: firstKey,
+        catalog_key: 'evenements_privatisations',
+        specific_name: 'Event',
+        instance_description: '',
+      },
+      {
+        client_key: secondKey,
+        catalog_key: 'evenements_privatisations',
+        specific_name: 'Event',
+        instance_description: '',
+      },
+    ]
+    payload.activity_subjects = [
+      {
+        client_key: '44444444-4444-4444-8444-444444444444',
+        business_unit_client_key: firstKey,
+        catalog_key: 'evenements_privatisations__facturation',
+        label: '',
+        description: '',
+      },
+      {
+        client_key: '55555555-5555-4555-8555-555555555555',
+        business_unit_client_key: secondKey,
+        catalog_key: 'evenements_privatisations__facturation',
+        label: '',
+        description: '',
+      },
+    ]
+
+    renderWizard({
+      payload,
+      errors: [
+        {
+          code: 'duplicate_specific_name',
+          section: 'business_units',
+          field: 'specific_name',
+          key: secondKey,
+        },
+      ],
+    })
+
+    expect(await screen.findByText('Ce nom de pôle est déjà utilisé dans l’établissement.')).toBeTruthy()
+  })
+
+  it('keeps an unplaced director error visible and ignores a blank member row', async () => {
+    const buKey = '22222222-2222-4222-8222-222222222222'
+    const payload = emptyOnboardingDraftPayload()
+    payload.current_step = 'team'
+    payload.establishment = {
+      name: 'Hôtel',
+      description: 'Description assez longue pour valider.',
+    }
+    payload.business_units = [
+      {
+        client_key: buKey,
+        catalog_key: 'restaurant',
+        specific_name: 'Restaurant',
+        instance_description: '',
+      },
+    ]
+    payload.activity_subjects = [
+      {
+        client_key: '44444444-4444-4444-8444-444444444444',
+        business_unit_client_key: buKey,
+        catalog_key: 'restaurant__stock',
+        label: '',
+        description: '',
+      },
+    ]
+    payload.team.members = [
+      {
+        email: '',
+        first_name: '',
+        last_name: '',
+        role: 'manager',
+        business_unit_client_keys: [],
+      },
+      {
+        email: 'sam@example.com',
+        first_name: '',
+        last_name: '',
+        role: 'staff',
+        business_unit_client_keys: [],
+      },
+    ]
+
+    renderWizard({
+      payload,
+      errors: [{ code: 'missing_director', section: 'team', field: 'director' }],
+    })
+
+    expect(
+      await screen.findByText('Renseignez le directeur (prénom, nom et email).'),
+    ).toBeTruthy()
+    expect(screen.getAllByText('Aucun pôle assigné')).toHaveLength(1)
   })
 })

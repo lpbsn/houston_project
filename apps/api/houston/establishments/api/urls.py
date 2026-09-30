@@ -1,6 +1,6 @@
 from django.urls import path
 
-from houston.accounts.api.views import DirectorInvitationAcceptView
+from houston.accounts.api.views import DirectorInvitationAcceptView, InvitationPreviewView
 from houston.establishments.api.establishment_admin_views import (
     EstablishmentAdminMemberFilterOptionsView,
     EstablishmentAdminMembershipActivateView,
@@ -71,6 +71,11 @@ urlpatterns = [
         "organizations/<uuid:organization_id>/owner-invitations/",
         OrganizationAdminOwnerInvitationView.as_view(),
         name="organization-admin-owner-invitations",
+    ),
+    path(
+        "invitations/preview/",
+        InvitationPreviewView.as_view(),
+        name="invitation-preview",
     ),
     path(
         "invitations/accept/",

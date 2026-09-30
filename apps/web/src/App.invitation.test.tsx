@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
@@ -11,6 +11,7 @@ import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 
 const navigate = vi.fn()
+const fetchBootstrap = vi.hoisted(() => vi.fn())
 const routeState = vi.hoisted(() => ({
   route: { kind: 'invitation' } as AppRoute,
 }))
@@ -27,6 +28,14 @@ const authState = vi.hoisted(() => ({
   pendingOnboardingMemberships: [] as unknown[],
   memberships: [] as unknown[],
 }))
+
+vi.mock('@/features/auth/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/auth/api')>()
+  return {
+    ...actual,
+    fetchBootstrap,
+  }
+})
 
 vi.mock('@/app/app-routes', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/app/app-routes')>()
@@ -165,9 +174,10 @@ afterEach(() => {
 })
 
 describe('App invitation landing', () => {
-  it('navigates to the landing derived from hydrated bootstrap, not pending-onboarding', () => {
+  it('navigates to the landing derived from hydrated bootstrap, not pending-onboarding', async () => {
     const bootstrap = operationalBootstrap()
     const landingPath = getAuthenticatedLandingPath(bootstrap)
+    fetchBootstrap.mockResolvedValue(bootstrap)
     queryClient.setQueryData(bootstrapQueryKey, bootstrap)
     authState.bootstrap = null
 
@@ -176,7 +186,9 @@ describe('App invitation landing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
 
     expect(landingPath).toBe('/reporting')
-    expect(navigate).toHaveBeenCalledWith('/reporting', { replace: true })
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/reporting', { replace: true })
+    })
     expect(navigate).not.toHaveBeenCalledWith('/pending-onboarding', { replace: true })
     expect(navigate).not.toHaveBeenCalledWith(
       expect.stringMatching(/\/install-app/),

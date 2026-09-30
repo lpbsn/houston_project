@@ -15,7 +15,7 @@ Platform HTTP stays under `/api/v1/platform/*`. Onboarding writes go through aut
 ## Workflow
 
 - Persist incomplete wizard state in `OnboardingDraft`.
-- Materialize + invite + activate only in Platform `POST …/complete/` (`complete_onboarding_session_core`): single transaction; validates final draft; materializes BU/AS; maps `client_key → BusinessUnit.id`; creates director + optional manager/staff invites/scopes; checks shared readiness; activates establishment; deletes draft. Idempotent when already activated. Refuses if any BusinessUnit already exists.
+- Materialize + invite + activate only in Platform `POST …/complete/` (`complete_onboarding_session_core`): single transaction; validates final draft; materializes BU/AS; maps `client_key → BusinessUnit.id`; invites each complete director and each complete manager/staff with scopes; skips blank and partial team rows; checks shared readiness; activates establishment; deletes draft. Idempotent when already activated. Refuses if any BusinessUnit already exists. Partial team rows are `warnings`, not `errors`. `validation.is_ready_for_complete` is true when `errors` is empty. `complete` can succeed and returns those warnings.
 - Display `functional_status` (first match wins): `activated`, `error`, `ready_to_complete`, `waiting_acceptance`, `in_progress`. List filters do not include `functional_status`.
 - `Organization.has_been_operational` is set at activation only.
 
@@ -28,10 +28,11 @@ Backend `compute_activation_readiness` / `_activation_blockers` (not a UI checkl
 - at least one active BusinessUnit
 - every active BusinessUnit has at least one active ActivitySubject
 - at least one **active** Owner or Director (`missing_active_owner_or_director`)
-- at least one **active or invited** non-owner Director (`missing_active_or_invited_director`); deactivated Directors do not satisfy the gate
-- during draft onboarding, at most one invited/active non-owner Director per establishment (`DirectorInvitationAlreadyExistsError`)
+- an active Owner satisfies initial direction; a distinct Director is optional. Invited or active non-owner Directors may be several during draft. Deactivated Directors do not count. The director section is not required.
 
-Director invitation during draft: Platform director-invitation path (or from draft complete). Accept remains `POST /api/v1/invitations/accept/`. After the establishment is **active**, additional directors may be invited via establishment membership invitations (onboarding single-director gate does not apply).
+Changing a pole’s catalog type in the wizard removes catalog subjects that do not belong to the new catalog and keeps free subjects (`catalog_key` null). Final validation still rejects `catalog_subject_business_unit_mismatch`.
+
+Director invitation during draft: Platform director-invitation path (or from draft complete), including several directors. Accept remains `POST /api/v1/invitations/accept/`. An already active user is attached by a new membership; accepting that invitation does not reset the password and does not create a session.
 
 Post-activation create uses `create_runtime_business_unit` (core + seed all active catalog subjects). Reactivation is `POST …/business-units/{id}/reactivate/` (`reactivate_business_unit` — no seed, no scope recreation).
 

@@ -870,6 +870,17 @@ def test_membership_invitation_rejects_existing_non_pending_user(api_client, use
         ),
     )
 
+    if user_status == User.Status.ACTIVE:
+        assert response.status_code == 201
+        membership = EstablishmentMembership.objects.get(
+            user=existing,
+            establishment=establishment,
+        )
+        assert membership.status == EstablishmentMembership.Status.INVITED
+        existing.refresh_from_db()
+        assert existing.status == User.Status.ACTIVE
+        return
+
     assert response.status_code == 409
     body = response.json()
     assert body["code"] == "membership_invitation_user_exists"
@@ -903,13 +914,14 @@ def test_membership_invitation_rejects_pending_user_without_membership(api_clien
         ),
     )
 
-    assert response.status_code == 409
-    body = response.json()
-    assert body["code"] == "membership_invitation_user_exists"
-    assert body["detail"] == "A Houston account with this email already exists."
-    assert not EstablishmentMembership.objects.filter(
-        user=pending, establishment=establishment
-    ).exists()
+    assert response.status_code == 201
+    membership = EstablishmentMembership.objects.get(
+        user=pending,
+        establishment=establishment,
+    )
+    assert membership.status == EstablishmentMembership.Status.INVITED
+    pending.refresh_from_db()
+    assert pending.status == User.Status.PENDING
 
 
 def test_membership_invitation_resume_deactivated_replaces_scopes(api_client):
@@ -1085,6 +1097,18 @@ def test_director_invitation_rejects_existing_non_pending_user(api_client, user_
         payload=director_invite_payload(email=existing.email),
     )
 
+    if user_status == User.Status.ACTIVE:
+        assert response.status_code == 201
+        membership = EstablishmentMembership.objects.get(
+            user=existing,
+            establishment=establishment,
+        )
+        assert membership.role == EstablishmentMembership.Role.DIRECTOR
+        assert membership.status == EstablishmentMembership.Status.INVITED
+        existing.refresh_from_db()
+        assert existing.status == User.Status.ACTIVE
+        return
+
     assert response.status_code == 409
     body = response.json()
     assert body["code"] == "membership_invitation_user_exists"
@@ -1108,8 +1132,15 @@ def test_director_invitation_rejects_pending_user_without_membership(api_client)
         payload=director_invite_payload(email=pending.email),
     )
 
-    assert response.status_code == 409
-    assert response.json()["code"] == "membership_invitation_user_exists"
+    assert response.status_code == 201
+    membership = EstablishmentMembership.objects.get(
+        user=pending,
+        establishment=establishment,
+    )
+    assert membership.role == EstablishmentMembership.Role.DIRECTOR
+    assert membership.status == EstablishmentMembership.Status.INVITED
+    pending.refresh_from_db()
+    assert pending.status == User.Status.PENDING
 
 
 @pytest.mark.parametrize(

@@ -2,14 +2,21 @@ import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_DESCRIPTION_MIN_LENGTH,
   isMemberRowEmpty,
-  type OnboardingDraftMember,
+  isPersonRowEmpty,
   type OnboardingDraftPayload,
   type OnboardingDraftPerson,
 } from './onboarding-draft-payload'
 
+export type LocalDraftError = {
+  code: string
+  section: string
+  field?: string
+  key?: string
+}
+
 export type StructureGateResult = {
   ok: boolean
-  reasons: string[]
+  errors: LocalDraftError[]
 }
 
 export function isEstablishmentNameValid(name: string): boolean {
@@ -37,75 +44,145 @@ export function subjectsForBusinessUnit(
 }
 
 export function canContinueFromStructureStep(payload: OnboardingDraftPayload): StructureGateResult {
-  const reasons: string[] = []
+  const errors: LocalDraftError[] = []
 
   if (!isEstablishmentNameValid(payload.establishment.name)) {
-    reasons.push('missing_establishment_name')
+    errors.push({
+      code: 'missing_establishment_name',
+      section: 'establishment',
+      field: 'name',
+    })
   }
   if (!isEstablishmentDescriptionValid(payload.establishment.description)) {
-    reasons.push('invalid_activity_description_length')
+    errors.push({
+      code: 'invalid_activity_description_length',
+      section: 'establishment',
+      field: 'description',
+    })
   }
   if (payload.business_units.length === 0) {
-    reasons.push('insufficient_business_units')
+    errors.push({
+      code: 'insufficient_business_units',
+      section: 'business_units',
+    })
   }
 
   for (const businessUnit of payload.business_units) {
-    if (!isBusinessUnitValid(businessUnit)) {
-      reasons.push('invalid_business_unit')
-      continue
+    if (businessUnit.catalog_key.trim().length === 0) {
+      errors.push({
+        code: 'missing_catalog_key',
+        section: 'business_units',
+        field: 'catalog_key',
+        key: businessUnit.client_key,
+      })
+    }
+    if (businessUnit.specific_name.trim().length === 0) {
+      errors.push({
+        code: 'missing_specific_name',
+        section: 'business_units',
+        field: 'specific_name',
+        key: businessUnit.client_key,
+      })
     }
     if (subjectsForBusinessUnit(payload, businessUnit.client_key).length === 0) {
-      reasons.push('business_unit_without_subjects')
+      errors.push({
+        code: 'business_unit_without_subjects',
+        section: 'business_units',
+        key: businessUnit.client_key,
+      })
     }
   }
 
-  return { ok: reasons.length === 0, reasons }
-}
-
-function isPersonFilled(person: OnboardingDraftPerson | null): boolean {
-  if (!person) {
-    return false
-  }
-  return (
-    person.email.trim().length > 0 &&
-    person.first_name.trim().length > 0 &&
-    person.last_name.trim().length > 0
-  )
-}
-
-function isStartedMemberValid(member: OnboardingDraftMember): boolean {
-  if (isMemberRowEmpty(member)) {
-    return true
-  }
-  return (
-    member.email.trim().length > 0 &&
-    member.first_name.trim().length > 0 &&
-    member.last_name.trim().length > 0 &&
-    (member.role === 'manager' || member.role === 'staff') &&
-    member.business_unit_client_keys.length > 0
-  )
+  return { ok: errors.length === 0, errors }
 }
 
 export type CompleteGateResult = {
   ok: boolean
-  reasons: string[]
+  errors: LocalDraftError[]
+  warnings: LocalDraftError[]
+}
+
+function personFieldWarnings(
+  person: OnboardingDraftPerson,
+  key: string,
+): LocalDraftError[] {
+  const warnings: LocalDraftError[] = []
+  if (person.email.trim().length === 0) {
+    warnings.push({ code: 'missing_email', section: 'team', field: 'email', key })
+  }
+  if (person.first_name.trim().length === 0) {
+    warnings.push({ code: 'missing_first_name', section: 'team', field: 'first_name', key })
+  }
+  if (person.last_name.trim().length === 0) {
+    warnings.push({ code: 'missing_last_name', section: 'team', field: 'last_name', key })
+  }
+  return warnings
 }
 
 export function canCompleteOnboardingDraft(payload: OnboardingDraftPayload): CompleteGateResult {
   const structure = canContinueFromStructureStep(payload)
-  const reasons = [...structure.reasons]
+  const errors = [...structure.errors]
+  const warnings: LocalDraftError[] = []
+  const completeEmails = new Set<string>()
 
-  if (!isPersonFilled(payload.team.director)) {
-    reasons.push('missing_director')
-  }
-
-  for (const member of payload.team.members) {
-    if (!isStartedMemberValid(member)) {
-      reasons.push('invalid_member')
+  payload.team.directors.forEach((director, index) => {
+    if (isPersonRowEmpty(director)) {
+      return
     }
-  }
+    const key = `directors:${index}`
+    if (
+      director.email.trim() &&
+      director.first_name.trim() &&
+      director.last_name.trim()
+    ) {
+      const email = director.email.trim().toLowerCase()
+      if (completeEmails.has(email)) {
+        errors.push({ code: 'duplicate_team_email', section: 'team', field: 'email', key: email })
+      } else {
+        completeEmails.add(email)
+      }
+      return
+    }
+    warnings.push(...personFieldWarnings(director, key))
+  })
 
-  return { ok: reasons.length === 0, reasons }
+  payload.team.members.forEach((member, index) => {
+    if (isMemberRowEmpty(member)) {
+      return
+    }
+    const key = `members:${index}`
+    const identityComplete =
+      member.email.trim().length > 0 &&
+      member.first_name.trim().length > 0 &&
+      member.last_name.trim().length > 0
+    const roleValid = member.role === 'manager' || member.role === 'staff'
+    const hasPoles = member.business_unit_client_keys.length > 0
+    if (identityComplete && roleValid && hasPoles) {
+      const email = member.email.trim().toLowerCase()
+      if (completeEmails.has(email)) {
+        errors.push({ code: 'duplicate_team_email', section: 'team', field: 'email', key: email })
+      } else {
+        completeEmails.add(email)
+      }
+      return
+    }
+    if (!identityComplete) {
+      warnings.push(...personFieldWarnings(member, key))
+    }
+    if (!roleValid) {
+      warnings.push({ code: 'invalid_member_role', section: 'team', field: 'role', key })
+    }
+    if (!hasPoles) {
+      warnings.push({
+        code: 'missing_member_business_units',
+        section: 'team',
+        field: 'business_unit_client_keys',
+        key,
+      })
+    }
+  })
+
+  return { ok: errors.length === 0, errors, warnings }
 }
 
 export function pruneBusinessUnitFromTeam(

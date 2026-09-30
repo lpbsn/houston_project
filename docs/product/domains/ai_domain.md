@@ -15,7 +15,7 @@ Does not own: business writes, RBAC, Observation submit validity, Signal or Acti
 
 In: audio → editable text before Observation submit; Observation pipeline from **validated text only** (0..N CandidateSignals, one BU/AS classification each); structured outputs with backend validation; Fake provider in CI / OpenAI opt-in smoke; fail-closed pipeline errors.
 
-Named versions in use: schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2` (also on `AIUsageLog`).
+Named versions in use: schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_3` (also on `AIUsageLog`).
 
 Out: AI onboarding; direct DB mutation; AI-created Actions; AI permissions or urgency; Chat or image analysis; BYOK; prompt-routing UI; user-visible confidence as authority; fine-tuning on customer content; long-term raw prompt/output storage.
 

@@ -49,7 +49,7 @@ import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
-import { bootstrapQueryKey, clearAuthState, switchEstablishment } from '@/features/auth/api'
+import { bootstrapQueryKey, clearAuthState, fetchBootstrap, switchEstablishment } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { LegalEntryGates } from '@/features/auth/components/legal-entry-gates'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
@@ -668,13 +668,23 @@ function App() {
       return (
         <InvitationAcceptPage
           onAccepted={() => {
-            const bootstrap =
-              queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
-            navigate(
-              getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
-                '/pending-onboarding',
-              { replace: true },
-            )
+            void (async () => {
+              let bootstrap =
+                queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
+              try {
+                bootstrap = await queryClient.fetchQuery({
+                  queryKey: bootstrapQueryKey,
+                  queryFn: fetchBootstrap,
+                })
+              } catch {
+                // The membership is already active. Keep the session bootstrap in hand.
+              }
+              navigate(
+                getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
+                  '/pending-onboarding',
+                { replace: true },
+              )
+            })()
           }}
         />
       )
@@ -1127,7 +1137,7 @@ function App() {
           headingBadge: 'Invitation',
           title: 'Accept invitation',
           description: 'Create your password to join this establishment in Houston.',
-          actions: signInAction,
+          actions: auth.isAuthenticated ? signOutAction : signInAction,
         }
       : route.kind === 'email-change'
         ? {

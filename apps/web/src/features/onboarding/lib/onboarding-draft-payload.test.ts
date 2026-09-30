@@ -32,7 +32,7 @@ describe('parseOnboardingDraftPayload', () => {
     expect(parsed.establishment).toEqual({ name: '', description: '' })
     expect(parsed.business_units).toEqual([])
     expect(parsed.activity_subjects).toEqual([])
-    expect(parsed.team).toEqual({ director: null, members: [] })
+    expect(parsed.team).toEqual({ directors: [], members: [] })
   })
 
   it('throws on incompatible root type', () => {
@@ -88,19 +88,99 @@ describe('structure and complete gates', () => {
     expect(canContinueFromStructureStep(emptyOnboardingDraftPayload()).ok).toBe(false)
     const almost = readyStructure()
     almost.activity_subjects = []
-    expect(canContinueFromStructureStep(almost).ok).toBe(false)
+    expect(canContinueFromStructureStep(almost).errors.map((error) => error.code)).toContain(
+      'business_unit_without_subjects',
+    )
     expect(canContinueFromStructureStep(readyStructure()).ok).toBe(true)
   })
 
-  it('requires director and valid started members to complete', () => {
+  it('allows two poles on the same catalog key and reports empty catalog or name', () => {
+    const payload = readyStructure()
+    const secondKey = '44444444-4444-4444-8444-444444444444'
+    payload.business_units.push({
+      client_key: secondKey,
+      catalog_key: 'evenements_privatisations',
+      specific_name: 'Séminaire',
+      instance_description: '',
+    })
+    payload.business_units[0] = {
+      ...payload.business_units[0]!,
+      catalog_key: 'evenements_privatisations',
+      specific_name: 'Event',
+    }
+    payload.activity_subjects.push({
+      client_key: '55555555-5555-4555-8555-555555555555',
+      business_unit_client_key: secondKey,
+      catalog_key: 'evenements_privatisations__facturation',
+      label: '',
+      description: '',
+    })
+    expect(canContinueFromStructureStep(payload).ok).toBe(true)
+
+    payload.business_units[1]!.catalog_key = ''
+    payload.business_units[1]!.specific_name = ''
+    payload.establishment.description = 'court'
+    const codes = canContinueFromStructureStep(payload).errors.map((error) => error.code)
+    expect(codes).toContain('missing_catalog_key')
+    expect(codes).toContain('missing_specific_name')
+    expect(codes).toContain('invalid_activity_description_length')
+  })
+
+  it('ignores an empty member row and reports an incomplete started member', () => {
+    const payload = readyStructure()
+    payload.team.directors = [
+      {
+        email: '',
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+      },
+    ]
+    payload.team.members = [
+      {
+        email: '',
+        first_name: '',
+        last_name: '',
+        role: 'manager',
+        business_unit_client_keys: [],
+      },
+      {
+        email: 'm@example.com',
+        first_name: 'Bob',
+        last_name: '',
+        role: 'manager',
+        business_unit_client_keys: [],
+      },
+    ]
+    const result = canCompleteOnboardingDraft(payload)
+    expect(result.ok).toBe(true)
+    expect(result.errors.some((error) => error.code === 'missing_email')).toBe(false)
+    expect(
+      result.warnings.some(
+        (error) => error.code === 'missing_email' && error.key === 'directors:0',
+      ),
+    ).toBe(true)
+    expect(
+      result.warnings.some((error) => error.code === 'missing_last_name' && error.key === 'members:1'),
+    ).toBe(true)
+    expect(
+      result.warnings.some(
+        (error) => error.code === 'missing_member_business_units' && error.key === 'members:1',
+      ),
+    ).toBe(true)
+    expect(result.warnings.some((error) => error.key === 'members:0')).toBe(false)
+  })
+
+  it('does not require a director and keeps partial members as warnings', () => {
     const payload = readyStructure()
     payload.current_step = 'team'
-    expect(canCompleteOnboardingDraft(payload).ok).toBe(false)
-    payload.team.director = {
-      email: 'dir@example.com',
-      first_name: 'Ada',
-      last_name: 'Lovelace',
-    }
+    expect(canCompleteOnboardingDraft(payload).ok).toBe(true)
+    payload.team.directors = [
+      {
+        email: 'dir@example.com',
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+      },
+    ]
     expect(canCompleteOnboardingDraft(payload).ok).toBe(true)
 
     payload.team.members = [
@@ -112,7 +192,10 @@ describe('structure and complete gates', () => {
         business_unit_client_keys: [],
       },
     ]
-    expect(canCompleteOnboardingDraft(payload).ok).toBe(false)
+    const partial = canCompleteOnboardingDraft(payload)
+    expect(partial.ok).toBe(true)
+    expect(partial.warnings.some((error) => error.code === 'missing_last_name')).toBe(true)
+    expect(partial.errors.some((error) => error.code === 'missing_last_name')).toBe(false)
   })
 })
 
@@ -145,6 +228,39 @@ describe('catalog apply and prune', () => {
       [{ key: 'restaurant__stock', label: 'Stock', business_unit_key: 'restaurant' }],
     )
     expect(payload.activity_subjects).toHaveLength(2)
+  })
+
+  it('drops incompatible catalog subjects and keeps free subjects when the catalog changes', () => {
+    const bu = createEmptyBusinessUnit()
+    let payload = emptyOnboardingDraftPayload()
+    payload.business_units = [bu]
+    payload = applyCatalogBusinessUnitSelection(
+      payload,
+      bu.client_key,
+      { key: 'restaurant', label: 'Restaurant', unit_type: 'dedicated' },
+      [{ key: 'restaurant__stock', label: 'Stock', business_unit_key: 'restaurant' }],
+    )
+    payload = addManualActivitySubject(payload, bu.client_key, {
+      label: 'Terrasse',
+      description: 'Dehors',
+    })
+    payload.business_units[0]!.specific_name = 'Brasserie'
+    payload.business_units[0]!.instance_description = 'Déjà saisi'
+
+    payload = applyCatalogBusinessUnitSelection(
+      payload,
+      bu.client_key,
+      { key: 'hotel', label: 'Hôtel', description: 'Ignoré', unit_type: 'dedicated' },
+      [{ key: 'hotel__accueil', label: 'Accueil', business_unit_key: 'hotel' }],
+    )
+
+    expect(payload.business_units[0]?.catalog_key).toBe('hotel')
+    expect(payload.business_units[0]?.specific_name).toBe('Brasserie')
+    expect(payload.business_units[0]?.instance_description).toBe('Déjà saisi')
+    expect(payload.activity_subjects.map((subject) => subject.catalog_key ?? subject.label)).toEqual([
+      'Terrasse',
+      'hotel__accueil',
+    ])
   })
 
   it('keeps free subjects as label-only identity', () => {

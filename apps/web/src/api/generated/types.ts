@@ -2485,8 +2485,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. The invitation bearer is sent in the JSON body, not in the URI. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
+        /** @description Accepts an establishment invitation. A pending user sets a password, becomes active, and receives a session. An already active user has the membership activated without a password change and without a new session. The invitation bearer is sent in the JSON body, not in the URI. No access-token bearer is anonymous. A bearer that is present but invalid or expired is rejected before any invitation change. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
         post: operations["v1_invitations_accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reports whether accepting this invitation requires setting a password. The invitation bearer is sent in the JSON body, not in the URI. */
+        post: operations["v1_invitations_preview_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3527,6 +3544,11 @@ export interface components {
             activity_subject_label: string | null;
             location_text: string;
         };
+        ActiveInvitationAcceptResponse: {
+            requires_login: boolean;
+            /** Format: uuid */
+            establishment_id: string;
+        };
         ActivitySubjectTreeItem: {
             /** Format: uuid */
             id: string;
@@ -4325,8 +4347,8 @@ export interface components {
         DirectorInvitationAcceptRequest: {
             refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             token: string;
-            password: string;
-            password_confirmation: string;
+            password?: string;
+            password_confirmation?: string;
             terms_version?: string;
         };
         DirectorInvitationAcceptResponse: {
@@ -4743,6 +4765,12 @@ export interface components {
         HealthResponse: {
             status: string;
         };
+        InvitationPreviewRequest: {
+            token: string;
+        };
+        InvitationPreviewResponse: {
+            requires_password: boolean;
+        };
         LegalVersionRequest: {
             version: string;
         };
@@ -4930,6 +4958,7 @@ export interface components {
             mode: string;
             is_ready_for_complete: boolean;
             errors: components["schemas"]["OnboardingDraftValidationErrorItem"][];
+            warnings: components["schemas"]["OnboardingDraftValidationErrorItem"][];
         };
         OnboardingDraftValidationErrorItem: {
             code: string;
@@ -5233,6 +5262,7 @@ export interface components {
             readiness: {
                 [key: string]: unknown;
             };
+            warnings?: components["schemas"]["OnboardingDraftValidationErrorItem"][];
         };
         PlatformOnboardingListItem: {
             /** Format: uuid */
@@ -14231,6 +14261,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveInvitationAcceptResponse"];
+                };
+            };
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14247,6 +14285,14 @@ export interface operations {
                     "application/json": components["schemas"]["DirectorInvitationAcceptErrorResponse"];
                 };
             };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -14256,6 +14302,47 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationAcceptErrorResponse"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_invitations_preview_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationPreviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationPreviewRequest"];
+                "multipart/form-data": components["schemas"]["InvitationPreviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreviewResponse"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

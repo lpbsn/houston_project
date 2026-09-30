@@ -396,6 +396,7 @@ class OnboardingDraftValidationSerializer(serializers.Serializer):
     mode = serializers.CharField()
     is_ready_for_complete = serializers.BooleanField()
     errors = OnboardingDraftValidationErrorItemSerializer(many=True)
+    warnings = OnboardingDraftValidationErrorItemSerializer(many=True)
 
 
 class OnboardingDraftResponseSerializer(serializers.Serializer):

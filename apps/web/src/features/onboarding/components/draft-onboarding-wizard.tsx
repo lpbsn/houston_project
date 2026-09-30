@@ -35,14 +35,20 @@ import {
   displayDraftActivitySubjectLabel,
   removeActivitySubject,
 } from '@/features/onboarding/lib/onboarding-draft-catalog'
-import { getCompleteErrorMessage } from '@/features/onboarding/lib/onboarding-draft-errors'
+import {
+  extractDraftValidationErrors,
+  getCompleteErrorMessage,
+  messageForDraftErrorCode,
+  messagesForDraftField,
+  type OnboardingDraftValidationErrorItem,
+} from '@/features/onboarding/lib/onboarding-draft-errors'
 import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   DRAFT_STEP_STRUCTURE,
   DRAFT_STEP_TEAM,
   OnboardingDraftPayloadParseError,
+  isMemberRowEmpty,
   parseOnboardingDraftPayload,
-  stripEmptyMemberRows,
   withCurrentStep,
   type OnboardingDraftMember,
   type OnboardingDraftPayload,
@@ -212,16 +218,107 @@ function NewSubjectDialog({
   )
 }
 
+function mergeDraftErrors(
+  local: OnboardingDraftValidationErrorItem[],
+  server: OnboardingDraftValidationErrorItem[],
+): OnboardingDraftValidationErrorItem[] {
+  const seen = new Set<string>()
+  const merged: OnboardingDraftValidationErrorItem[] = []
+  for (const error of [...local, ...server]) {
+    const identity = `${error.section ?? ''}|${error.field ?? ''}|${error.key ?? ''}|${error.code}`
+    if (seen.has(identity)) {
+      continue
+    }
+    seen.add(identity)
+    merged.push(error)
+  }
+  return merged
+}
+
+function isRenderedDraftField(
+  error: OnboardingDraftValidationErrorItem,
+  fields: Array<string | null>,
+): boolean {
+  const field = error.field ?? null
+  return fields.includes(field)
+}
+
+function isDraftErrorPlaced(
+  error: OnboardingDraftValidationErrorItem,
+  step: 'structure' | 'team',
+  draft: OnboardingDraftPayload,
+): boolean {
+  if (step === 'structure') {
+    if (error.section === 'establishment') {
+      return error.field === 'name' || error.field === 'description'
+    }
+    if (error.section !== 'business_units') {
+      return false
+    }
+    if (!error.key) {
+      return (error.field ?? null) === null && draft.business_units.length === 0
+    }
+    const matchesUnit = draft.business_units.some((unit) => unit.client_key === error.key)
+    return (
+      matchesUnit &&
+      isRenderedDraftField(error, ['specific_name', 'catalog_key', null])
+    )
+  }
+  if (error.section !== 'team') {
+    return false
+  }
+  if (error.key?.startsWith('directors:')) {
+    return isRenderedDraftField(error, ['email', 'first_name', 'last_name'])
+  }
+  if (error.field === 'email' && error.key && draft.team.directors.some((director) => director.email.trim() === error.key)) {
+    return true
+  }
+  if (!error.key) {
+    return false
+  }
+  const matchesMember = draft.team.members.some(
+    (member, index) =>
+      error.key === `members:${index}` || member.email.trim() === error.key,
+  )
+  return (
+    matchesMember &&
+    isRenderedDraftField(error, [
+      'email',
+      'first_name',
+      'last_name',
+      'business_unit_client_keys',
+    ])
+  )
+}
+
+function FieldMessages({ messages, tone = 'error' }: { messages: string[]; tone?: 'error' | 'warning' }) {
+  if (messages.length === 0) {
+    return null
+  }
+  const className = tone === 'warning' ? 'text-xs text-amber-800' : 'text-xs text-red-700'
+  return <p className={className}>{messages.join(' ')}</p>
+}
+
+function draftResponseErrors(response: OnboardingDraftResponse): OnboardingDraftValidationErrorItem[] {
+  return extractDraftValidationErrors({ errors: response.validation?.errors ?? [] })
+}
+
+function draftResponseWarnings(response: OnboardingDraftResponse): OnboardingDraftValidationErrorItem[] {
+  return extractDraftValidationErrors({ errors: response.validation?.warnings ?? [] })
+}
+
 function StructureStep({
   draft,
   setDraft,
   catalogUnits,
   catalogLoading,
+  errors,
 }: {
   draft: OnboardingDraftPayload
   setDraft: Dispatch<SetStateAction<OnboardingDraftPayload>>
   catalogUnits: Array<{ key: string; label: string; description: string; unit_type: string }>
   catalogLoading: boolean
+  errors: OnboardingDraftValidationErrorItem[]
 }) {
   const queryClient = useQueryClient()
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set())
@@ -291,6 +388,12 @@ function StructureStep({
               placeholder="Ex. Le Grand Hôtel Central"
               className="h-11 rounded-xl border-spore-forest/15"
             />
+            <FieldMessages
+              messages={messagesForDraftField(errors, {
+                section: 'establishment',
+                field: 'name',
+              })}
+            />
           </label>
           <label className="block space-y-1.5">
             <div className="flex items-center justify-between gap-3">
@@ -312,6 +415,12 @@ function StructureStep({
               }
               placeholder="Décrivez votre établissement : type, capacité, spécificités, positionnement..."
               className="min-h-28 rounded-xl border-spore-forest/15"
+            />
+            <FieldMessages
+              messages={messagesForDraftField(errors, {
+                section: 'establishment',
+                field: 'description',
+              })}
             />
           </label>
         </div>
@@ -346,6 +455,9 @@ function StructureStep({
         {draft.business_units.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-spore-forest/20 bg-white/60 px-4 py-10 text-center text-sm text-spore-muted">
             Ajoutez un pôle pour commencer.
+            <FieldMessages
+              messages={messagesForDraftField(errors, { section: 'business_units' })}
+            />
           </div>
         ) : null}
 
@@ -384,6 +496,26 @@ function StructureStep({
                       · {subjects.length} sujet{subjects.length === 1 ? '' : 's'}
                     </span>
                   </div>
+                  {expanded ? null : (
+                    <FieldMessages
+                      messages={[
+                        ...messagesForDraftField(errors, {
+                          section: 'business_units',
+                          field: 'specific_name',
+                          key: unit.client_key,
+                        }),
+                        ...messagesForDraftField(errors, {
+                          section: 'business_units',
+                          field: 'catalog_key',
+                          key: unit.client_key,
+                        }),
+                        ...messagesForDraftField(errors, {
+                          section: 'business_units',
+                          key: unit.client_key,
+                        }),
+                      ]}
+                    />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -418,6 +550,13 @@ function StructureStep({
                       placeholder="Ex. Hôtel, Restaurant, Coworking..."
                       className="h-11 rounded-xl border-spore-forest/15"
                     />
+                    <FieldMessages
+                      messages={messagesForDraftField(errors, {
+                        section: 'business_units',
+                        field: 'specific_name',
+                        key: unit.client_key,
+                      })}
+                    />
                   </label>
 
                   <div className="space-y-2">
@@ -449,6 +588,13 @@ function StructureStep({
                         })
                       )}
                     </div>
+                    <FieldMessages
+                      messages={messagesForDraftField(errors, {
+                        section: 'business_units',
+                        field: 'catalog_key',
+                        key: unit.client_key,
+                      })}
+                    />
                     {unitType ? (
                       <p className="text-xs text-spore-muted">
                         Type catalogue :{' '}
@@ -495,6 +641,12 @@ function StructureStep({
                         Ajouter un sujet
                       </Button>
                     </div>
+                    <FieldMessages
+                      messages={messagesForDraftField(errors, {
+                        section: 'business_units',
+                        key: unit.client_key,
+                      })}
+                    />
                     {subjects.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-spore-forest/20 px-4 py-6 text-center text-sm text-spore-muted">
                         Aucun sujet. Sélectionnez un pôle du catalogue pour préremplir ses sujets,
@@ -570,19 +722,24 @@ function emptyMember(): OnboardingDraftMember {
 function TeamStepView({
   draft,
   setDraft,
+  errors,
+  warnings,
 }: {
   draft: OnboardingDraftPayload
   setDraft: Dispatch<SetStateAction<OnboardingDraftPayload>>
+  errors: OnboardingDraftValidationErrorItem[]
+  warnings: OnboardingDraftValidationErrorItem[]
 }) {
-  const director = draft.team.director ?? emptyDirector()
   const poles = draft.business_units.filter((unit) => unit.specific_name.trim().length > 0)
 
-  function updateDirector(patch: Partial<OnboardingDraftPerson>) {
+  function updateDirector(index: number, patch: Partial<OnboardingDraftPerson>) {
     setDraft((current) => ({
       ...current,
       team: {
         ...current.team,
-        director: { ...(current.team.director ?? emptyDirector()), ...patch },
+        directors: current.team.directors.map((director, directorIndex) =>
+          directorIndex === index ? { ...director, ...patch } : director,
+        ),
       },
     }))
   }
@@ -631,46 +788,109 @@ function TeamStepView({
 
       <div className="space-y-4">
         <div className="rounded-xl border border-spore-forest/10 p-4">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-            Directeur (obligatoire)
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+                Directeurs
+              </div>
+              <p className="mt-1 text-xs text-spore-muted">
+                Optionnel. L’owner actif couvre déjà la direction initiale.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={() =>
+                setDraft((current) => ({
+                  ...current,
+                  team: {
+                    ...current.team,
+                    directors: [...current.team.directors, emptyDirector()],
+                  },
+                }))
+              }
+            >
+              <Plus className="size-4" />
+              Ajouter un directeur
+            </Button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-                Prénom
-              </span>
-              <Input
-                value={director.first_name}
-                onChange={(event) => updateDirector({ first_name: event.target.value })}
-                placeholder="Prénom"
-                className="h-11 rounded-xl"
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-                Nom
-              </span>
-              <Input
-                value={director.last_name}
-                onChange={(event) => updateDirector({ last_name: event.target.value })}
-                placeholder="Nom"
-                className="h-11 rounded-xl"
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-                Email
-              </span>
-              <Input
-                type="email"
-                value={director.email}
-                onChange={(event) => updateDirector({ email: event.target.value })}
-                placeholder="nom@etablissement.fr"
-                className="h-11 rounded-xl"
-              />
-            </label>
-          </div>
-          <p className="mt-3 text-xs text-spore-muted">Rôle : Directeur (non modifiable)</p>
+          {draft.team.directors.length === 0 ? (
+            <p className="text-sm text-spore-muted">Aucun directeur ajouté.</p>
+          ) : (
+            draft.team.directors.map((director, index) => {
+              const directorKey = `directors:${index}`
+              return (
+                <div key={directorKey} className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+                      Prénom
+                    </span>
+                    <Input
+                      value={director.first_name}
+                      onChange={(event) => updateDirector(index, { first_name: event.target.value })}
+                      placeholder="Prénom"
+                      className="h-11 rounded-xl"
+                    />
+                    <FieldMessages
+                      tone="warning"
+                      messages={messagesForDraftField(warnings, {
+                        section: 'team',
+                        field: 'first_name',
+                        key: directorKey,
+                      })}
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+                      Nom
+                    </span>
+                    <Input
+                      value={director.last_name}
+                      onChange={(event) => updateDirector(index, { last_name: event.target.value })}
+                      placeholder="Nom"
+                      className="h-11 rounded-xl"
+                    />
+                    <FieldMessages
+                      tone="warning"
+                      messages={messagesForDraftField(warnings, {
+                        section: 'team',
+                        field: 'last_name',
+                        key: directorKey,
+                      })}
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+                      Email
+                    </span>
+                    <Input
+                      type="email"
+                      value={director.email}
+                      onChange={(event) => updateDirector(index, { email: event.target.value })}
+                      placeholder="nom@etablissement.fr"
+                      className="h-11 rounded-xl"
+                    />
+                    <FieldMessages
+                      messages={messagesForDraftField(errors, {
+                        section: 'team',
+                        field: 'email',
+                        key: director.email.trim(),
+                      })}
+                    />
+                    <FieldMessages
+                      tone="warning"
+                      messages={messagesForDraftField(warnings, {
+                        section: 'team',
+                        field: 'email',
+                        key: directorKey,
+                      })}
+                    />
+                  </label>
+                </div>
+              )
+            })
+          )}
         </div>
 
         {draft.team.members.length === 0 ? (
@@ -695,7 +915,9 @@ function TeamStepView({
           </div>
         ) : (
           draft.team.members.map((member, index) => {
-            const noPole = member.business_unit_client_keys.length === 0
+            const noPole =
+              !isMemberRowEmpty(member) && member.business_unit_client_keys.length === 0
+            const memberKey = `members:${index}`
             return (
               <div key={index} className="rounded-xl border border-spore-forest/10 p-4">
                 <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_10rem_auto]">
@@ -709,6 +931,14 @@ function TeamStepView({
                       placeholder="Prénom"
                       className="h-11 rounded-xl"
                     />
+                    <FieldMessages
+                      tone="warning"
+                      messages={messagesForDraftField(warnings, {
+                        section: 'team',
+                        field: 'first_name',
+                        key: memberKey,
+                      })}
+                    />
                   </label>
                   <label className="space-y-1.5">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
@@ -719,6 +949,14 @@ function TeamStepView({
                       onChange={(event) => updateMember(index, { last_name: event.target.value })}
                       placeholder="Nom"
                       className="h-11 rounded-xl"
+                    />
+                    <FieldMessages
+                      tone="warning"
+                      messages={messagesForDraftField(warnings, {
+                        section: 'team',
+                        field: 'last_name',
+                        key: memberKey,
+                      })}
                     />
                   </label>
                   <label className="space-y-1.5">
@@ -731,6 +969,21 @@ function TeamStepView({
                       onChange={(event) => updateMember(index, { email: event.target.value })}
                       placeholder="nom@etablissement.fr"
                       className="h-11 rounded-xl"
+                    />
+                    <FieldMessages
+                      messages={messagesForDraftField(errors, {
+                        section: 'team',
+                        field: 'email',
+                        key: member.email.trim(),
+                      })}
+                    />
+                    <FieldMessages
+                      tone="warning"
+                      messages={messagesForDraftField(warnings, {
+                        section: 'team',
+                        field: 'email',
+                        key: memberKey,
+                      })}
                     />
                   </label>
                   <label className="space-y-1.5">
@@ -804,6 +1057,20 @@ function TeamStepView({
                       Aucun pôle assigné
                     </span>
                   ) : null}
+                  {!isMemberRowEmpty(member) &&
+                  warnings.some((warning) => warning.key === memberKey) ? (
+                    <p className="text-xs text-amber-800">
+                      Cette ligne incomplète ne sera pas invitée.
+                    </p>
+                  ) : null}
+                  <FieldMessages
+                    tone="warning"
+                    messages={messagesForDraftField(warnings, {
+                      section: 'team',
+                      field: 'business_unit_client_keys',
+                      key: memberKey,
+                    })}
+                  />
                 </div>
               </div>
             )
@@ -845,12 +1112,19 @@ export function DraftOnboardingWizard({
   const [isDirty, setIsDirty] = useState(false)
   const [step, setStep] = useState<'structure' | 'team'>('structure')
   const [navError, setNavError] = useState<string | null>(null)
+  const [serverErrors, setServerErrors] = useState<OnboardingDraftValidationErrorItem[]>([])
+  const [serverWarnings, setServerWarnings] = useState<OnboardingDraftValidationErrorItem[]>([])
+  const [completionWarnings, setCompletionWarnings] = useState<OnboardingDraftValidationErrorItem[]>([])
   const [isNavigating, setIsNavigating] = useState(false)
 
   const autosave = useOnboardingDraftAutosave({
     sessionId,
     draftQueryKey,
     putDraft: (payload) => putDraft(sessionId, payload),
+    onSaved: (response) => {
+      setServerErrors(draftResponseErrors(response))
+      setServerWarnings(draftResponseWarnings(response))
+    },
   })
   const { enqueue, flush, stop, resume, status: saveStatus } = autosave
 
@@ -860,6 +1134,8 @@ export function DraftOnboardingWizard({
         parseOnboardingDraftPayload(draftQuery.data.payload),
       )
       setDraft(parsed)
+      setServerErrors(draftResponseErrors(draftQuery.data))
+      setServerWarnings(draftResponseWarnings(draftQuery.data))
       setStep(parsed.current_step === DRAFT_STEP_TEAM ? 'team' : 'structure')
       setHydrateError(null)
       setHydrated(true)
@@ -912,14 +1188,46 @@ export function DraftOnboardingWizard({
     return <OnboardingLoadingState label="Préparation du parcours d’onboarding…" />
   }
 
-  const structureOk = canContinueFromStructureStep(draft).ok
-  const completeOk = canCompleteOnboardingDraft(draft).ok
+  const structureGate = canContinueFromStructureStep(draft)
+  const completeGate = canCompleteOnboardingDraft(draft)
+  const structureOk = structureGate.ok
+  const completeOk = completeGate.ok && serverErrors.length === 0
+  const fieldWarnings = mergeDraftErrors(
+    step === 'team' ? completeGate.warnings : [],
+    serverWarnings,
+  )
+  const fieldErrors = mergeDraftErrors(
+    step === 'structure' ? structureGate.errors : completeGate.errors,
+    serverErrors,
+  )
+  const bannerMessages = [
+    ...new Set(
+      fieldErrors
+        .filter((error) => !isDraftErrorPlaced(error, step, draft))
+        .map((error) => messageForDraftErrorCode(error.code)),
+    ),
+    ...(navError ? [navError] : []),
+  ]
   const stickyMessage =
     step === 'structure'
       ? structureStickyMessage(draft)
       : completeOk
         ? 'Vous pouvez terminer la configuration.'
         : 'Renseignez le directeur pour terminer.'
+
+  function rememberDraftFailure(error: unknown, fallback: string) {
+    const items = extractDraftValidationErrors(
+      error && typeof error === 'object' && 'payload' in error
+        ? (error as { payload: unknown }).payload
+        : error,
+    )
+    if (items.length > 0) {
+      setServerErrors(items)
+      setNavError(null)
+      return
+    }
+    setNavError(getCompleteErrorMessage(error, fallback))
+  }
 
   async function handleContinue() {
     if (!draft || !structureOk || isNavigating) return
@@ -930,10 +1238,14 @@ export function DraftOnboardingWizard({
     )
     setDraft(snapshot)
     try {
-      await flush(snapshot)
+      const response = await flush(snapshot)
+      if (response) {
+        setServerErrors(draftResponseErrors(response))
+        setServerWarnings(draftResponseWarnings(response))
+      }
       setStep('team')
     } catch (error) {
-      setNavError(getCompleteErrorMessage(error, 'Impossible d’enregistrer avant de continuer.'))
+      rememberDraftFailure(error, 'Impossible d’enregistrer avant de continuer.')
     } finally {
       setIsNavigating(false)
     }
@@ -948,39 +1260,61 @@ export function DraftOnboardingWizard({
     )
     setDraft(snapshot)
     try {
-      await flush(snapshot)
+      const response = await flush(snapshot)
+      if (response) {
+        setServerErrors(draftResponseErrors(response))
+        setServerWarnings(draftResponseWarnings(response))
+      }
       setStep('structure')
     } catch (error) {
-      setNavError(getCompleteErrorMessage(error, 'Impossible d’enregistrer avant de revenir.'))
+      rememberDraftFailure(error, 'Impossible d’enregistrer avant de revenir.')
     } finally {
       setIsNavigating(false)
     }
   }
 
+  async function continueAfterActivation() {
+    const bootstrap = await queryClient.fetchQuery({
+      queryKey: bootstrapQueryKey,
+      queryFn: fetchBootstrap,
+    })
+    const landing =
+      afterCompletePath ??
+      getAuthenticatedLandingPath(bootstrap, {
+        isDesktop: isDesktopWebLanding(isLgViewport),
+      }) ??
+      '/reporting'
+    onNavigate?.(landing)
+  }
+
   async function handleComplete() {
-    if (!draft || !completeOk || completeMutation.isPending) return
+    if (!draft || !completeOk || completeMutation.isPending || completionWarnings.length > 0) return
     setNavError(null)
     const finalSnapshot = canonicalizeDraftActivitySubjectIdentities(
-      stripEmptyMemberRows(withCurrentStep(draft, DRAFT_STEP_TEAM)),
+      withCurrentStep(draft, DRAFT_STEP_TEAM),
     )
     setDraft(finalSnapshot)
     stop()
     try {
-      await flush(finalSnapshot)
-      await completeMutation.mutateAsync()
-      const bootstrap = await queryClient.fetchQuery({
-        queryKey: bootstrapQueryKey,
-        queryFn: fetchBootstrap,
+      const response = await flush(finalSnapshot)
+      if (response) {
+        setServerErrors(draftResponseErrors(response))
+        setServerWarnings(draftResponseWarnings(response))
+      }
+      const completed = await completeMutation.mutateAsync()
+      const warnings = extractDraftValidationErrors({
+        errors:
+          completed && typeof completed === 'object' && 'warnings' in completed
+            ? (completed as { warnings?: unknown }).warnings
+            : [],
       })
-      const landing =
-        afterCompletePath ??
-        getAuthenticatedLandingPath(bootstrap, {
-          isDesktop: isDesktopWebLanding(isLgViewport),
-        }) ??
-        '/reporting'
-      onNavigate?.(landing)
+      if (warnings.length > 0) {
+        setCompletionWarnings(warnings)
+        return
+      }
+      await continueAfterActivation()
     } catch (error) {
-      setNavError(getCompleteErrorMessage(error, 'Impossible de terminer l’onboarding.'))
+      rememberDraftFailure(error, 'Impossible de terminer l’onboarding.')
       resume()
     }
   }
@@ -1005,17 +1339,38 @@ export function DraftOnboardingWizard({
             unit_type: unit.unit_type,
           }))}
           catalogLoading={catalogQuery.isPending}
+          errors={fieldErrors}
         />
       ) : (
-        <TeamStepView draft={draft} setDraft={updateDraft} />
+        <TeamStepView
+          draft={draft}
+          setDraft={updateDraft}
+          errors={fieldErrors}
+          warnings={fieldWarnings}
+        />
       )}
 
-      {(navError || completeMutation.error) && (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {navError ??
-            getCompleteErrorMessage(completeMutation.error, 'Une erreur est survenue.')}
+      {completionWarnings.length > 0 ? (
+        <div
+          className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          <p>L’établissement est activé. Ces lignes incomplètes n’ont pas été invitées.</p>
+          <ul className="mt-2 list-disc pl-5">
+            {completionWarnings.map((warning, index) => (
+              <li key={`${warning.code}:${warning.key ?? index}`}>
+                {messageForDraftErrorCode(warning.code)}
+              </li>
+            ))}
+          </ul>
         </div>
-      )}
+      ) : null}
+
+      {bannerMessages.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {bannerMessages.join(' ')}
+        </div>
+      ) : null}
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,var(--app-safe-bottom))] sm:px-8">
         <div className="pointer-events-auto mx-auto flex w-full max-w-[800px] items-center justify-between gap-4 rounded-xl border border-border bg-background px-4 py-3 shadow-md">
@@ -1035,10 +1390,21 @@ export function DraftOnboardingWizard({
                 <Button
                   type="button"
                   className="h-10"
-                  disabled={!completeOk || isNavigating || completeMutation.isPending}
-                  onClick={() => void handleComplete()}
+                  disabled={
+                    completionWarnings.length === 0 &&
+                    (!completeOk || isNavigating || completeMutation.isPending)
+                  }
+                  onClick={() =>
+                    void (completionWarnings.length > 0
+                      ? continueAfterActivation()
+                      : handleComplete())
+                  }
                 >
-                  {completeMutation.isPending ? 'Activation…' : 'Terminer ✓'}
+                  {completeMutation.isPending
+                    ? 'Activation…'
+                    : completionWarnings.length > 0
+                      ? 'Continuer'
+                      : 'Terminer ✓'}
                 </Button>
               </>
             ) : (

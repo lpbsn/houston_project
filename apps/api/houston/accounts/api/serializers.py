@@ -362,25 +362,44 @@ def _user_for_password_reset_validation(raw_token: str) -> User | None:
 
 class DirectorInvitationAcceptRequestSerializer(RefreshTokenTransportSerializerMixin):
     token = serializers.CharField()
-    password = serializers.CharField(trim_whitespace=False)
-    password_confirmation = serializers.CharField(trim_whitespace=False)
+    password = serializers.CharField(required=False, allow_blank=True, trim_whitespace=False)
+    password_confirmation = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=False,
+    )
     terms_version = serializers.CharField(required=False, allow_blank=False)
 
-    def validate_password(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_password_confirmation(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
     def validate(self, attrs: dict) -> dict:
-        return validate_created_password_pair(
-            attrs=attrs,
-            user=_user_for_invitation_password_validation(attrs["token"]),
-        )
+        user = _user_for_invitation_password_validation(attrs["token"])
+        if user is not None and user.status == User.Status.ACTIVE:
+            attrs.pop("password_confirmation", None)
+            attrs["password"] = ""
+            return attrs
+        password = attrs.get("password") or ""
+        confirmation = attrs.get("password_confirmation") or ""
+        if not password:
+            raise serializers.ValidationError({"password": "This field may not be blank."})
+        if not confirmation:
+            raise serializers.ValidationError(
+                {"password_confirmation": "This field may not be blank."}
+            )
+        attrs["password"] = password
+        attrs["password_confirmation"] = confirmation
+        return validate_created_password_pair(attrs=attrs, user=user)
+
+
+class InvitationPreviewRequestSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
+class InvitationPreviewResponseSerializer(serializers.Serializer):
+    requires_password = serializers.BooleanField()
+
+
+class ActiveInvitationAcceptResponseSerializer(serializers.Serializer):
+    requires_login = serializers.BooleanField()
+    establishment_id = serializers.UUIDField()
 
 
 class DirectorInvitationAcceptResponseSerializer(AuthResponseSerializer):
