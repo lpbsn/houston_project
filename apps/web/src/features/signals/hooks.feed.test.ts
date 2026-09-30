@@ -76,7 +76,7 @@ const page2Ids = Array.from({ length: 15 }, (_, index) => `open-extra-${index}`)
 const firstPage: SignalFeedResponse = {
   items: page1Ids.map((id) => buildFeedItem({ id, status: 'open' })),
   pins: [buildFeedItem({ id: 'pin-1', is_pinned: true, title: 'Épinglée' })],
-  counts: { open: 40, in_progress: 0, interesting: 0, pinned: 1 },
+  counts: { open: 40, in_progress: 0, interesting: 0, pinned: 1, retained: 0 },
   next_cursor: 'cursor-1',
   has_more: true,
   applied_filters: appliedFilters,

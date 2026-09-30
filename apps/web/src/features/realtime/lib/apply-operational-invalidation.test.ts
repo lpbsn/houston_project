@@ -41,7 +41,7 @@ describe('applyOperationalInvalidation', () => {
     invalidateSpy.mockRestore()
   })
 
-  it('removes a remotely resolved or canceled signal from the hydrated feed', () => {
+  it('keeps a remotely resolved or canceled signal until the feed refetches', () => {
     const removed: string[] = []
     const unregister = registerFeedReadingSession({
       matches: (queryKey) => queryKeyMatchesPrefix(queryKey, ['signals', 'feed', 'est-1']),
@@ -67,7 +67,7 @@ describe('applyOperationalInvalidation', () => {
         establishmentId: 'est-1',
       })
 
-      expect(removed).toEqual(['sig-1', 'sig-1'])
+      expect(removed).toEqual([])
       expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
     } finally {

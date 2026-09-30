@@ -1415,7 +1415,18 @@ describe('ExecutionFeedPage desktop list', () => {
                   task_count: 4,
                   treated_task_count: 1,
                 }),
-                buildPlanFeedWrapper('plan-done', 'Plan terminé', { status: 'done' }),
+                buildPlanFeedWrapper('plan-done', 'Plan terminé', {
+                  status: 'done',
+                  permission_hints: {
+                    can_mark_done: false,
+                    can_validate: false,
+                    can_reopen: false,
+                    can_cancel: false,
+                    can_update: false,
+                    is_pilot_pole_assignee: true,
+                    can_pin: false,
+                  },
+                }),
               ],
               pins: [
                 buildPlanFeedWrapper('plan-pinned', 'Plan épinglé', { is_pinned: true }),
@@ -1629,7 +1640,7 @@ describe('ExecutionFeedPage desktop list', () => {
     cleanup()
     renderExecutionFeedPage({ establishmentId: 'est-2' })
 
-    expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(screen.getByText('Plan terminé')).toBeTruthy()
     expect(screen.getByText('Plan épinglé')).toBeTruthy()
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
@@ -1652,7 +1663,7 @@ describe('ExecutionFeedPage desktop list', () => {
 
     view.rerenderPage({ establishmentId: 'est-2' })
 
-    expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(screen.getByText('Plan terminé')).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
     expect(
       readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),

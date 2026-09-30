@@ -47,7 +47,7 @@ def _feed(api_client, membership, query: str):
     )
 
 
-def test_si01_resolve_leaves_feed_and_pins(api_client):
+def test_si01_resolve_clears_pin_and_keeps_signal_until_retention_ends(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _pin(create_minimal_v3_signal(membership, title="Pinned open"), membership)
     token = login(api_client, user=membership.user)
@@ -61,10 +61,20 @@ def test_si01_resolve_leaves_feed_and_pins(api_client):
     feed = _feed(api_client, membership, "?view_mode=general")
     body = feed.json()
     assert feed.status_code == 200
-    assert body["items"] == []
+    assert [item["id"] for item in body["items"]] == [str(signal.id)]
+    assert body["items"][0]["status"] == Signal.Status.RESOLVED
     assert body["pins"] == []
     assert body["counts"]["open"] == 0
     assert body["counts"]["pinned"] == 0
+    assert body["counts"]["retained"] == 1
+    assert (
+        body["counts"]["open"]
+        + body["counts"]["in_progress"]
+        + body["counts"]["interesting"]
+        + body["counts"]["pinned"]
+        + body["counts"]["retained"]
+        == len(body["items"]) + len(body["pins"])
+    )
 
     detail = api_client.get(
         signal_detail_url(membership.establishment_id, signal.id),

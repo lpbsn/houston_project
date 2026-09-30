@@ -4,7 +4,7 @@ import { hashKey } from '@tanstack/react-query'
 import { createTestQueryClient } from '@/test-utils'
 
 import { signalsQueryKeys } from '../api'
-import { EMPTY_SIGNAL_FEED_FILTERS } from './signal-feed-filters'
+import { EMPTY_SIGNAL_FEED_FILTERS, signalFeedFiltersForStatus } from './signal-feed-filters'
 import type { SignalDetail, SignalFeedItem, SignalFeedResponse } from '../types'
 import {
   appendSignalFeedPage,
@@ -143,7 +143,7 @@ const EMPTY_APPLIED_FILTERS = {
   activity_subject_ids: [],
 }
 
-const EMPTY_COUNTS = { open: 1, in_progress: 0, interesting: 0, pinned: 0 }
+const EMPTY_COUNTS = { open: 1, in_progress: 0, interesting: 0, pinned: 0, retained: 0 }
 
 function buildFeed(overrides: Partial<SignalFeedResponse> = {}): SignalFeedResponse {
   return {
@@ -168,7 +168,7 @@ describe('patchSignalInActiveFeedCache', () => {
       signalFeedCacheFromFirstPage(
         buildFeed({
           items: [buildFeedItem(), otherItem],
-          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
         }),
       ),
     )
@@ -186,7 +186,7 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(data?.items.map((item) => item.id)).toEqual(['signal-2'])
     expect(data?.pins?.map((item) => item.id)).toEqual([SIGNAL_ID])
     expect(data?.pins?.[0]?.is_pinned).toBe(true)
-    expect(data?.counts).toEqual({ open: 1, in_progress: 0, interesting: 0, pinned: 1 })
+    expect(data?.counts).toEqual({ open: 1, in_progress: 0, interesting: 0, pinned: 1, retained: 0 })
   })
 
   it('keeps an existing pin in place when the signal becomes interesting', () => {
@@ -201,7 +201,7 @@ describe('patchSignalInActiveFeedCache', () => {
         buildFeed({
           items: [],
           pins: [pinned, otherPin],
-          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 2 },
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 2, retained: 0 },
         }),
       ),
     )
@@ -218,7 +218,7 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(next.counts?.pinned).toBe(2)
   })
 
-  it('removes a resolved signal from both collections', () => {
+  it('keeps a resolved signal in the unfiltered list and clears its pin', () => {
     const queryClient = createTestQueryClient()
     const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
     queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(buildFeed()))
@@ -233,9 +233,33 @@ describe('patchSignalInActiveFeedCache', () => {
 
     const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
     const data = cache ? readSignalFeedCache(cache) : undefined
+    expect(data?.items.map((item) => item.id)).toEqual([SIGNAL_ID])
+    expect(data?.items[0]?.status).toBe('resolved')
+    expect(data?.pins).toEqual([])
+    expect(data?.counts?.open).toBe(0)
+    expect(data?.counts?.retained).toBe(1)
+  })
+
+  it('drops a resolved signal from a status-filtered list', () => {
+    const queryClient = createTestQueryClient()
+    const filters = signalFeedFiltersForStatus(EMPTY_SIGNAL_FEED_FILTERS, 'open')
+    const queryKey = signalsQueryKeys.feed(EST, 'personal', filters)
+    queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(buildFeed()))
+
+    patchSignalInActiveFeedCache(queryClient, {
+      establishmentId: EST,
+      viewMode: 'personal',
+      filters,
+      signalId: SIGNAL_ID,
+      patch: { status: 'resolved', is_pinned: false },
+    })
+
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+    const data = cache ? readSignalFeedCache(cache) : undefined
     expect(data?.items).toEqual([])
     expect(data?.pins).toEqual([])
     expect(data?.counts?.open).toBe(0)
+    expect(data?.counts?.retained).toBe(0)
   })
 
   it('keeps the global category order after an optimistic status transition', () => {
@@ -283,7 +307,7 @@ describe('appendSignalFeedPage', () => {
       buildFeed({
         items: [buildFeedItem({ id: 'open-1' })],
         pins: [buildFeedItem({ id: 'pin-1', is_pinned: true })],
-        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 1 },
+        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 1, retained: 0 },
         next_cursor: 'cursor-1',
         has_more: true,
       }),
@@ -339,7 +363,7 @@ describe('removeSignalFromFeedCache', () => {
             buildFeedItem({ id: 'signal-1', status: 'open' }),
             buildFeedItem({ id: 'signal-2', status: 'open' }),
           ],
-          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
         }),
       ),
       'signal-1',
@@ -351,6 +375,7 @@ describe('removeSignalFromFeedCache', () => {
       in_progress: 0,
       interesting: 0,
       pinned: 0,
+      retained: 0,
     })
   })
 
@@ -360,7 +385,7 @@ describe('removeSignalFromFeedCache', () => {
         buildFeed({
           items: [],
           pins: [buildFeedItem({ is_pinned: true })],
-          counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1 },
+          counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1, retained: 0 },
         }),
       ),
       SIGNAL_ID,
@@ -372,6 +397,7 @@ describe('removeSignalFromFeedCache', () => {
       in_progress: 2,
       interesting: 1,
       pinned: 0,
+      retained: 0,
     })
   })
 })

@@ -92,7 +92,7 @@ function signalPage(page: number): SignalFeedResponse {
     pins: page === 0 ? [signalItem('signal-pin-1'), signalItem('signal-pin-2')] : undefined,
     counts:
       page === 0
-        ? { open: SESSION_PAGES * PAGE_SIZE, in_progress: 0, interesting: 0, pinned: 2 }
+        ? { open: SESSION_PAGES * PAGE_SIZE, in_progress: 0, interesting: 0, pinned: 2, retained: 0 }
         : undefined,
     applied_filters:
       page === 0

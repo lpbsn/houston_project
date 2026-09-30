@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 MAX_CANDIDATES_PER_OBSERVATION = 5
 SIGNAL_TITLE_MAX_LENGTH = 200
 SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH = 2000
@@ -53,9 +55,11 @@ FEED_SIGNAL_STATUSES = frozenset(
     {"open", "in_progress", "interesting", "resolved", "canceled"}
 )
 
-# Operational feed only. Distinct from FEED_SIGNAL_STATUSES so detail and media
-# keep resolved and canceled. Same values as ACTIVE_SIGNAL_STATUSES today.
+# Operational feed statuses. Resolved and canceled stay in the list only while
+# their canonical timestamp is still inside the retention window below.
 OPERATIONAL_SIGNAL_FEED_STATUSES = frozenset({"open", "in_progress", "interesting"})
+SIGNAL_CANCELED_FEED_RETENTION = timedelta(hours=48)
+SIGNAL_RESOLVED_FEED_RETENTION = timedelta(days=10)
 PINNABLE_SIGNAL_STATUSES = frozenset({"open", "interesting"})
 SIGNAL_FEED_PIN_LIMIT = 5
 SIGNAL_FEED_DEFAULT_PAGE_SIZE = 25

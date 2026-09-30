@@ -14,19 +14,10 @@ import {
   scheduleEstablishmentDashboardInvalidation,
 } from '@/lib/query-invalidation'
 
-import { removeHydratedFeedEntity } from '@/lib/feed-external-updates'
-
 import { observationsQueryKeys } from '@/features/observations/api'
 import { isObservationProcessingTracked } from '@/features/observations/lib/observation-processing-tracker-store'
 
 import type { OperationalRealtimeInvalidateEvent } from '../types'
-
-const TERMINAL_EXECUTION_REASONS = new Set([
-  'action_plan_execution.done',
-  'action_plan_execution.canceled',
-])
-
-const TERMINAL_SIGNAL_REASONS = new Set(['signal.resolved', 'signal.canceled'])
 
 const NOTIFICATION_INVALIDATION_REASONS = new Set([
   'notification.created',
@@ -44,10 +35,6 @@ export function applyOperationalInvalidation(
   { queryClient, establishmentId }: ApplyOperationalInvalidationOptions,
 ) {
   if (event.subject_type === 'signal') {
-    if (TERMINAL_SIGNAL_REASONS.has(event.reason)) {
-      removeHydratedFeedEntity(['signals', 'feed', establishmentId], event.entity_id)
-      removeHydratedFeedEntity(['signals', 'cross-feed'], event.entity_id)
-    }
     invalidateEstablishmentSignalQueries(queryClient, establishmentId)
     if (event.reason === 'signal.created') {
       scheduleEstablishmentDashboardInvalidation(queryClient, establishmentId)
@@ -59,20 +46,6 @@ export function applyOperationalInvalidation(
     return
   }
   if (event.subject_type === 'action_plan_execution') {
-    if (TERMINAL_EXECUTION_REASONS.has(event.reason)) {
-      removeHydratedFeedEntity(
-        ['action-plans', 'action-plan-execution-feed', establishmentId],
-        event.entity_id,
-      )
-      removeHydratedFeedEntity(
-        ['action-plans', 'cross-action-plan-execution-feed'],
-        event.entity_id,
-      )
-      removeHydratedFeedEntity(
-        ['action-plans', 'cross-action-plan-execution-feed-pins'],
-        event.entity_id,
-      )
-    }
     invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, event.entity_id)
     return
   }

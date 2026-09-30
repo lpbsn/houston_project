@@ -52,7 +52,10 @@ import { removeSignalFromFeedCache, type SignalFeedCacheState } from '../lib/sig
 import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
 import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
-import { groupLoadedSignalFeedItems } from '../lib/signal-display'
+import {
+  groupLoadedSignalFeedItems,
+  retainedTerminalSignalFeedItems,
+} from '../lib/signal-display'
 import {
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
@@ -196,6 +199,7 @@ function SignalFeedPageContent({
     feed && statusSelection !== 'in_progress' ? (feed.pins ?? []) : []
   const listItems = feed?.items ?? []
   const groups = feed ? groupLoadedSignalFeedItems(listItems, statusSelection) : null
+  const retainedTerminalItems = retainedTerminalSignalFeedItems(listItems, statusSelection)
   const listHasMore = feed?.has_more === true
   const pinsHaveMore = isCross && feed?.pins_has_more === true
   const hasListContent = listItems.length > 0 || listHasMore
@@ -757,6 +761,9 @@ function SignalFeedPageContent({
                     {renderItems(group.items)}
                   </div>
                 ))}
+                {retainedTerminalItems.length > 0 ? (
+                  <div>{renderItems(retainedTerminalItems)}</div>
+                ) : null}
               </div>
             ) : listItems.length > 0 ? (
               <div>{renderItems(listItems)}</div>
