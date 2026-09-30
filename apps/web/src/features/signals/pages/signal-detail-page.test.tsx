@@ -990,6 +990,7 @@ describe('SignalDetailPage linked action plans', () => {
     const description = screen.getByText('Description du signal.')
     const photo = screen.getByRole('button', { name: 'Agrandir la photo' })
     const plans = screen.getByText("Plans d'action")
+    expect(screen.getByRole('button', { name: /Plan fuite/i }).className).toContain('pl-4')
     const classification = screen.getByText('Classification')
     const resolution = screen.getByText('Demande de résolution')
     const createPlan = screen.getByRole('button', { name: "+ Créer un plan d'action" })
