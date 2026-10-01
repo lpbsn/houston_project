@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -96,16 +96,12 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
   const canSchedule = plan ? canShowActionPlanSchedule(plan.permission_hints) : false
   const planningOptions = { canSchedule, staffMode: staffUseMode }
   const launchDraft = draftForLaunch(draft, timing)
-  const fieldErrors = useMemo(
-    () =>
-      hasAttemptedSubmit
-        ? validateCatalogPlanningDraft(launchDraft, {
-            canSchedule,
-            staffMode: staffUseMode,
-          })
-        : {},
-    [canSchedule, hasAttemptedSubmit, launchDraft, staffUseMode],
-  )
+  const fieldErrors = hasAttemptedSubmit
+    ? validateCatalogPlanningDraft(launchDraft, {
+        canSchedule,
+        staffMode: staffUseMode,
+      })
+    : {}
 
   useEffect(() => {
     if (guidanceNonce <= lastGuidanceNonceRef.current) {
