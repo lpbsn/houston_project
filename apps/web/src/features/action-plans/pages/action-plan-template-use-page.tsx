@@ -178,7 +178,9 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
 
     const submit = resolveCatalogPlanningSubmit(submitted, {
       ...planningOptions,
-      requiresValidation,
+      ...(requiresValidationChoice === null
+        ? {}
+        : { requiresValidation: requiresValidationChoice }),
     })
     if (!submit) {
       return

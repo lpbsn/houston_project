@@ -203,6 +203,49 @@ describe('ActionPlanTemplateUsePage', () => {
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
+  it('shows the catalog validation value without sending an override until the switch changes', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({
+      replayed: false,
+      summary: { executions_created: 1, schedules_created: 0 },
+      executions: [{ item_id: 'i1', id: 'exec-1', primary_membership_id: null, status: 'in_progress' }],
+      schedules: [],
+    })
+    planningMutationMock.mockReturnValue({ mutateAsync, isPending: false })
+
+    renderPage(createElement(ActionPlanTemplateUsePage, { actionPlanId: 'plan-1' }))
+
+    expect(screen.getByRole('switch', { name: 'Validation requise' }).getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    selectCurrentUser()
+    fireEvent.click(screen.getByRole('button', { name: 'Lancer le plan' }))
+
+    await vi.waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalled()
+    })
+    expect(mutateAsync.mock.calls[0]?.[0].body.requires_validation).toBeUndefined()
+
+    cleanup()
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({ requires_validation: false }),
+      refetch: vi.fn(),
+    })
+    renderPage(createElement(ActionPlanTemplateUsePage, { actionPlanId: 'plan-1' }))
+    expect(screen.getByRole('switch', { name: 'Validation requise' }).getAttribute('aria-checked')).toBe(
+      'false',
+    )
+    selectCurrentUser()
+    fireEvent.click(screen.getByRole('switch', { name: 'Validation requise' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lancer le plan' }))
+
+    await vi.waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledTimes(2)
+    })
+    expect(mutateAsync.mock.calls[1]?.[0].body.requires_validation).toBe(true)
+  })
+
   it('submits an empty draft for Maintenant', async () => {
     const mutateAsync = vi.fn().mockResolvedValue({
       replayed: false,
