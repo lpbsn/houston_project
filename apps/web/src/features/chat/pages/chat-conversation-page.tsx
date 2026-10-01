@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Info, LoaderCircle, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -37,6 +38,21 @@ import {
 } from '../hooks'
 import { useChatConversationPresence } from '../hooks/use-chat-conversation-presence'
 
+function previewUrlFromMessagePages(
+  pages: Array<{ items: Array<{ attachments?: Array<{ id: string; preview_url: string }> }> }> | undefined,
+  attachmentId: string,
+): string | null {
+  for (const page of pages ?? []) {
+    for (const message of page.items) {
+      const attachment = message.attachments?.find((item) => item.id === attachmentId)
+      if (attachment?.preview_url) {
+        return attachment.preview_url
+      }
+    }
+  }
+  return null
+}
+
 type ChatConversationPageProps = {
   conversationId: string
   embedded?: boolean
@@ -65,6 +81,7 @@ export function ChatConversationPage({
   const [keyboardInset, setKeyboardInset] = useState(0)
   const detailQuery = useChatConversationDetailQuery(establishmentId, conversationId)
   const messagesQuery = useChatMessagesInfiniteQuery(establishmentId, conversationId)
+  const queryClient = useQueryClient()
   const { mutate: markConversationSeen } = useMarkConversationSeenMutation(
     establishmentId,
     conversationId,
@@ -356,6 +373,7 @@ export function ChatConversationPage({
                     <MessageBubble
                       message={message}
                       isOwn={isOwn}
+                      onResignPreview={() => messagesQuery.refetch()}
                       onReply={setReplyTo}
                       onSelectAttachment={(item) => {
                         void handleSelectAttachment(item)
@@ -431,7 +449,38 @@ export function ChatConversationPage({
       />
 
       {previewItem ? (
-        <ChatAttachmentPreviewDialog item={previewItem} onClose={() => setPreviewItem(null)} />
+        <ChatAttachmentPreviewDialog
+          item={previewItem}
+          onClose={() => setPreviewItem(null)}
+          onResign={async () => {
+            const refreshed = await messagesQuery.refetch()
+            await queryClient.refetchQueries({
+              queryKey: ['chat', 'shared-media', establishmentId, conversationId],
+            })
+            const fromMessages = previewUrlFromMessagePages(refreshed.data?.pages, previewItem.id)
+            const shared = queryClient.getQueriesData<{
+              pages?: Array<{ items: Array<{ id: string; preview_url: string }> }>
+            }>({
+              queryKey: ['chat', 'shared-media', establishmentId, conversationId],
+            })
+            let fromShared: string | null = null
+            for (const [, data] of shared) {
+              for (const page of data?.pages ?? []) {
+                const item = page.items.find((entry) => entry.id === previewItem.id)
+                if (item?.preview_url) {
+                  fromShared = item.preview_url
+                }
+              }
+            }
+            const nextPreviewUrl = fromMessages ?? fromShared
+            setPreviewItem((current) => {
+              if (!current || !nextPreviewUrl || nextPreviewUrl === current.src) {
+                return current
+              }
+              return { ...current, src: nextPreviewUrl }
+            })
+          }}
+        />
       ) : null}
 
       {canManageMembers ? (

@@ -21,14 +21,6 @@ vi.mock('../api', async (importOriginal) => {
   }
 })
 
-vi.mock('../lib/chat-media', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/chat-media')>()
-  return {
-    ...actual,
-    fetchAuthenticatedChatMedia: vi.fn(async (src: string) => src),
-  }
-})
-
 const conversation: ChatConversationDetail = {
   id: 'conv-1',
   type: 'dm',

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain/terrain-bottom-sheet'
+import { resolveApiUrl } from '@/lib/runtime'
 import {
   dismissTopNativeOverlay,
   registerNativeOverlayDismiss,
@@ -11,10 +12,6 @@ import {
 } from '@/lib/native-overlay-dismiss'
 
 import type { CommentAttachment } from '../types'
-
-vi.mock('../hooks/use-comment-media-object-url', () => ({
-  useCommentMediaObjectUrl: () => ({ objectUrl: 'blob:comment', loading: false, error: null }),
-}))
 
 import { CommentAttachmentPreviewDialog } from './comment-attachment-preview-dialog'
 
@@ -43,6 +40,7 @@ describe('CommentAttachmentPreviewDialog', () => {
     render(<CommentAttachmentPreviewDialog attachment={attachment} onClose={onClose} />)
 
     expect(screen.getByRole('dialog', { name: 'photo.jpg' })).toBeTruthy()
+    expect(screen.getByRole('img').getAttribute('src')).toBe(resolveApiUrl(attachment.preview_url))
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })

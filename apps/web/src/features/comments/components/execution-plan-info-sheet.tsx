@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 
-import { useCommentMediaObjectUrl } from '../hooks/use-comment-media-object-url'
+import { CommentAttachmentImage } from './comment-attachment-image'
 import { formatCommentAttachmentSize, formatCommentRelativeTime } from '../lib/comment-display'
 import { isCommentImageAttachment, isCommentPdfAttachment } from '../lib/comment-media'
 import type { CommentAttachment } from '../types'
@@ -117,10 +117,6 @@ function PlanInfoMediaTile({
   attachment: CommentAttachment
   onOpen: () => void
 }) {
-  const { objectUrl, loading } = useCommentMediaObjectUrl(
-    attachment.thumbnail_url ?? attachment.preview_url,
-  )
-
   return (
     <button
       type="button"
@@ -128,13 +124,17 @@ function PlanInfoMediaTile({
       aria-label={attachment.original_filename}
       onClick={onOpen}
     >
-      {objectUrl ? (
-        <img src={objectUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center bg-[#F4F3EF] text-[10px] text-[#7D7B75]">
-          {loading ? '…' : 'IMG'}
-        </span>
-      )}
+      <CommentAttachmentImage
+        src={attachment.thumbnail_url ?? attachment.preview_url}
+        fallbackSrc={attachment.preview_url}
+        alt=""
+        className="h-full w-full object-cover"
+        errorFallback={
+          <span className="flex h-full w-full items-center justify-center bg-[#F4F3EF] text-[10px] text-[#7D7B75]">
+            IMG
+          </span>
+        }
+      />
     </button>
   )
 }

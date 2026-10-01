@@ -47,15 +47,3 @@ export async function fetchAuthenticatedCommentMediaBlob(path: string): Promise<
   }
   return response.blob()
 }
-
-export async function fetchAuthenticatedCommentMedia(path: string): Promise<string | null> {
-  const href = resolveCommentMediaHref(path)
-  if (!href || isInlineCommentMediaHref(href)) {
-    return href
-  }
-  const blob = await fetchAuthenticatedCommentMediaBlob(path)
-  if (!blob) {
-    return null
-  }
-  return URL.createObjectURL(blob)
-}

@@ -1,24 +1,25 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 
-import { useChatMediaObjectUrl } from '../hooks/use-chat-media-object-url'
 import type { ChatAttachmentPreviewItem } from '../lib/chat-media'
+import { ChatMediaImage } from './message-bubble'
 
 export const CHAT_IMAGE_PREVIEW_ERROR = 'Impossible d’afficher cette image.'
 
 type ChatAttachmentPreviewDialogProps = {
   item: ChatAttachmentPreviewItem
   onClose: () => void
+  onResign?: () => void | Promise<unknown>
 }
 
-export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPreviewDialogProps) {
+export function ChatAttachmentPreviewDialog({
+  item,
+  onClose,
+  onResign,
+}: ChatAttachmentPreviewDialogProps) {
   const titleId = useId()
-  const { objectUrl, error: fetchError, loading } = useChatMediaObjectUrl(item.src)
-  const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const imageError = failedSrc === item.src
-  const showError = fetchError || imageError || (!loading && !objectUrl)
   const onCloseRef = useRef(onClose)
   useEffect(() => {
     onCloseRef.current = onClose
@@ -68,18 +69,17 @@ export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPre
             Fermer
           </Button>
         </div>
-        {showError ? (
-          <p className="rounded-[12px] bg-white px-4 py-6 text-sm text-[#1a1a1a]" role="alert">
-            {CHAT_IMAGE_PREVIEW_ERROR}
-          </p>
-        ) : objectUrl ? (
-          <img
-            src={objectUrl}
-            alt={item.filename}
-            className="max-h-[85vh] max-w-full object-contain"
-            onError={() => setFailedSrc(item.src)}
-          />
-        ) : null}
+        <ChatMediaImage
+          src={item.src}
+          alt={item.filename}
+          onResign={onResign}
+          className="max-h-[85vh] max-w-full object-contain"
+          errorFallback={
+            <p className="rounded-[12px] bg-white px-4 py-6 text-sm text-[#1a1a1a]" role="alert">
+              {CHAT_IMAGE_PREVIEW_ERROR}
+            </p>
+          }
+        />
       </div>
     </div>
   )

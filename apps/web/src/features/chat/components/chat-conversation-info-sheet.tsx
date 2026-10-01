@@ -143,7 +143,9 @@ export function ChatConversationInfoSheet({
                 >
                   <ChatMediaImage
                     src={item.thumbnail_url ?? item.preview_url}
+                    fallbackSrc={item.preview_url}
                     alt={item.original_filename}
+                    onResign={() => mediaQuery.refetch()}
                   />
                 </button>
                 {!available ? (

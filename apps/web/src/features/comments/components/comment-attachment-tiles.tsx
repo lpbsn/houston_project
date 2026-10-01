@@ -2,7 +2,7 @@ import { FileText } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-import { useCommentMediaObjectUrl } from '../hooks/use-comment-media-object-url'
+import { CommentAttachmentImage } from './comment-attachment-image'
 import {
   isCommentImageAttachment,
   isCommentPdfAttachment,
@@ -45,9 +45,8 @@ function CommentAttachmentTile({
     kind: attachment.kind,
     contentType: attachment.content_type,
   })
-  const { objectUrl, loading } = useCommentMediaObjectUrl(
-    isImage ? (attachment.thumbnail_url ?? attachment.preview_url) : null,
-  )
+  const previewUrl = attachment.preview_url
+  const thumbnailUrl = attachment.thumbnail_url ?? previewUrl
 
   return (
     <button
@@ -62,11 +61,13 @@ function CommentAttachmentTile({
     >
       {isImage ? (
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#F4F3EF]">
-          {objectUrl ? (
-            <img src={objectUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-[10px] text-[#7D7B75]">{loading ? '…' : 'IMG'}</span>
-          )}
+          <CommentAttachmentImage
+            src={thumbnailUrl}
+            fallbackSrc={previewUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            errorFallback={<span className="text-[10px] text-[#7D7B75]">IMG</span>}
+          />
         </span>
       ) : (
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F4F3EF] text-[#1B4FD8]">
