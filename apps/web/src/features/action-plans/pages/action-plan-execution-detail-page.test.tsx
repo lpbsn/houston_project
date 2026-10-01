@@ -11,6 +11,8 @@ import { AI_CONSENT_REQUIRED_CODE, OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE } fro
 
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 
+import { ActionPlanExecutionDetailTopbarTrailing } from '../components/action-plan-execution-detail-topbar-trailing'
+
 import { ActionPlanExecutionDetailPage } from './action-plan-execution-detail-page'
 
 const detailQueryMock = vi.fn()
@@ -210,9 +212,11 @@ function buildMultiPoleExecution(): ActionPlanExecutionDetail {
   })
 }
 
-function renderPage(options: { onBack?: () => void; withDesktopTopbar?: boolean } = {}) {
+function renderPage(
+  options: { onBack?: () => void; withDesktopTopbar?: boolean; withTopbar?: boolean } = {},
+) {
   const page = createElement(ActionPlanExecutionDetailPage, { executionId: 'exec-1' })
-  if (!options.withDesktopTopbar) {
+  if (!options.withDesktopTopbar && !options.withTopbar) {
     return render(page)
   }
   return render(
@@ -224,6 +228,13 @@ function renderPage(options: { onBack?: () => void; withDesktopTopbar?: boolean 
         title: "Plan d'action",
         hideTitle: true,
         onBack: options.onBack,
+        trailing: options.withTopbar
+          ? createElement(ActionPlanExecutionDetailTopbarTrailing, {
+              establishmentId: 'est-1',
+              executionId: 'exec-1',
+              onNavigate: navigateMock,
+            })
+          : undefined,
       }),
       page,
     ),
@@ -488,7 +499,8 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     renderPage()
 
     expect(screen.getByText('Contrôler la terrasse')).toBeTruthy()
-    expect(screen.getByText(/Alice Martin/)).toBeTruthy()
+    expect(screen.getAllByText('Restaurant').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Alice Martin/)).toBeNull()
     expect(screen.queryByText('Assignées :')).toBeNull()
     expect(screen.queryByText('Contribution :')).toBeNull()
   })
@@ -585,33 +597,46 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.getByText(/Créé par/)).toBeTruthy()
-    expect(screen.getAllByText('Maintenance').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Climatisation')).toBeTruthy()
-    const deadlineLabel = screen.getByText('Deadline')
-    const assigneesLabel = screen.getByText('Assignés')
-    expect(
-      deadlineLabel.compareDocumentPosition(assigneesLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    const title = screen.getByRole('heading', { name: 'Plan nettoyage terrasse' })
+    const context = screen.getByTestId('execution-detail-mobile-context')
+    const pilot = screen.getByText('Pôle pilote')
+    expect(context.contains(pilot)).toBe(true)
+    expect(title.parentElement?.textContent).not.toContain('En cours')
+    expect(context.textContent).toContain('En cours')
+    expect(context.contains(screen.getByText('Créateur'))).toBe(true)
+    expect(context.textContent).toMatch(/Alice le \d{2}\/\d{2}\/\d{4} à \d{2}:\d{2}/)
+    expect(context.textContent).not.toContain('Climatisation')
+    expect(context.textContent).not.toContain('Planification')
+    expect(screen.getAllByText('Restaurant').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Pôle pilote :/)).toBeNull()
+    expect(screen.queryByText(/Tâche 0\/1/)).toBeNull()
+    expect(screen.queryByText(/Tâche 1\/1/)).toBeNull()
+    expect(screen.queryByText('Aucune description.')).toBeNull()
+    const overdue = screen.getByText('Échéance dépassée')
+    const progress = screen.getByRole('progressbar', { name: 'Progression temporelle' })
+    expect(progress.querySelector('.bg-\\[\\#E24B4A\\]')).toBeNull()
+    expect(title.compareDocumentPosition(overdue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(overdue.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const assigneesList = screen.getByRole('list', { name: 'Assignés' })
+    expect(context.contains(assigneesList)).toBe(true)
     expect(assigneesList.textContent).toContain('Jean D.')
     expect(assigneesList.textContent).toContain('(vous)')
-    expect(screen.getByText('Paul B.')).toBeTruthy()
+    expect(assigneesList.textContent).toContain('Paul B.')
     expect(screen.getByText('Description')).toBeTruthy()
     expect(screen.getByText('Vérifier le disjoncteur en local technique.')).toBeTruthy()
     const descriptionLabel = screen.getByText('Description')
-    const poleTasksLabel = screen.getByText('Tâches par pôle')
+    const tasksLabel = screen.getByText('Tâches · 1/2 traitées')
+    expect(screen.getAllByText(/traitées/)).toHaveLength(1)
     expect(
-      descriptionLabel.compareDocumentPosition(poleTasksLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+      context.compareDocumentPosition(descriptionLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(
-      poleTasksLabel.compareDocumentPosition(screen.getByRole('button', { name: 'Marquer terminé' })) &
+      descriptionLabel.compareDocumentPosition(tasksLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      tasksLabel.compareDocumentPosition(screen.getByRole('button', { name: 'Marquer terminé' })) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
-    expect(screen.getByText(/Pôle pilote :/)).toBeTruthy()
-    expect(screen.getByText(/Pôle contributeur :/)).toBeTruthy()
-    expect(screen.getByText(/Tâche 0\/1/)).toBeTruthy()
-    expect(screen.getByText(/Tâche 1\/1/)).toBeTruthy()
   })
 
   it('shows linked signal strip and navigates to signal detail', () => {
@@ -641,10 +666,16 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
 
     renderPage()
 
+    const detailsPanel = screen.getByTestId('execution-detail-details-panel')
+    const linkedSignal = screen.getByRole('button', { name: 'Voir l’observation liée' })
+    expect(detailsPanel.contains(linkedSignal)).toBe(true)
+    const context = screen.getByTestId('execution-detail-mobile-context')
+    expect(context.contains(linkedSignal)).toBe(false)
+    expect(context.compareDocumentPosition(linkedSignal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByText('Observation liée')).toBeTruthy()
     expect(screen.getByText(/Fuite terrasse/)).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation liée' }))
+    fireEvent.click(linkedSignal)
 
     expect(navigateMock).toHaveBeenCalledWith('/signals/signal-42')
   })
@@ -891,14 +922,16 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
     })
   })
 
-  it('does not render Tâches par pôle label when there are no tasks', () => {
+  it('does not render a task section when there are no tasks', () => {
     renderPage()
 
     expect(screen.queryByText('Tâches par pôle')).toBeNull()
-    expect(screen.getByText('Aucune tâche dans cette exécution.')).toBeTruthy()
+    expect(screen.queryByText(/traitées/)).toBeNull()
+    expect(screen.queryByText('Aucune tâche dans cette exécution.')).toBeNull()
+    expect(screen.queryByText('Aucune description.')).toBeNull()
   })
 
-  it('renders exactly one Tâches par pôle label when tasks exist', () => {
+  it('renders the treated counter once in the task section header', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -918,7 +951,8 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
 
     renderPage()
 
-    expect(screen.getAllByText('Tâches par pôle')).toHaveLength(1)
+    expect(screen.getAllByText('Tâches · 0/1 traitées')).toHaveLength(1)
+    expect(screen.queryByText('Tâches par pôle')).toBeNull()
   })
 
   it('still shows the task success banner on touch after marking a task done', async () => {
@@ -1131,7 +1165,7 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
     expect(screen.queryByRole('button', { name: 'Rouvrir' })).toBeNull()
   })
 
-  it('shows Annuler button when can_cancel is true', () => {
+  it('keeps Annuler in the secondary menu when it is the only lifecycle action', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -1141,7 +1175,7 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
           can_validate: false,
           can_reopen: false,
           can_cancel: true,
-          can_update: false,
+          can_update: true,
           is_pilot_pole_assignee: false,
           can_pin: false,
         },
@@ -1150,10 +1184,59 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
       refetch: vi.fn(),
     })
 
-    renderPage()
+    renderPage({ withTopbar: true })
 
-    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
+    expect(screen.queryByTestId('execution-validation-actions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
+    const modifier = screen.getByRole('button', { name: 'Modifier' })
+    const menu = screen.getByRole('button', { name: 'Autres actions' })
+    expect(screen.getByTestId('execution-detail-details-content').contains(menu)).toBe(false)
+    expect(modifier.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.click(menu)
+
+    const dialog = screen.getByRole('dialog', { name: 'Actions' })
+    expect(dialog.textContent).toContain('Annuler')
+    expect(dialog.textContent).not.toContain('Modifier')
+    expect(dialog.textContent).not.toContain('Rouvrir')
+  })
+
+  it('keeps Valider as the only footer action and moves Rouvrir to the secondary menu', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'pending_validation',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: true,
+          can_reopen: true,
+          can_cancel: true,
+          can_update: true,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage({ withTopbar: true })
+
+    const footer = screen.getByTestId('execution-validation-actions')
+    expect(footer.textContent).toContain('Valider')
+    expect(footer.textContent).not.toContain('Rouvrir')
+    expect(footer.textContent).not.toContain('Annuler')
+    expect(screen.queryByRole('button', { name: 'Rouvrir' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autres actions' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Actions' })
+    expect(dialog.textContent).toContain('Rouvrir')
+    expect(dialog.textContent).toContain('Annuler')
+    expect(dialog.textContent).not.toContain('Modifier')
+    expect(dialog.textContent).not.toContain('Valider')
   })
 })
 

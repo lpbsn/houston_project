@@ -212,7 +212,8 @@ describe('ActionPlanExecutionTaskRow', () => {
     })
 
     expect(screen.getByText('Vérifier les étiquettes')).toBeTruthy()
-    expect(screen.getByText('Alice Martin - Restaurant')).toBeTruthy()
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    expect(screen.queryByText('Alice Martin - Restaurant')).toBeNull()
     expect(screen.getByText(/Échéance :/)).toBeTruthy()
   })
 
@@ -227,7 +228,7 @@ describe('ActionPlanExecutionTaskRow', () => {
     expect(screen.queryByText('Restaurant')).toBeNull()
   })
 
-  it('renders terminal status in the bottom-right corner', () => {
+  it('renders terminal status and deadline as secondary lines', () => {
     renderRow({
       task: buildTask({
         status: 'done',
@@ -239,16 +240,12 @@ describe('ActionPlanExecutionTaskRow', () => {
       canShowSecondaryActions: false,
     })
 
-    const status = screen.getByText('Terminée')
-    const deadline = screen.getByText(/Échéance :/)
-    const statusRow = status.parentElement?.parentElement
-
-    expect(statusRow).toBe(deadline.parentElement)
-    expect(statusRow?.className).toContain('justify-between')
+    expect(screen.getByText('Terminée')).toBeTruthy()
+    expect(screen.getByText(/Échéance :/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Actions sur la tâche' })).toBeNull()
   })
 
-  it('renders task title with text-base font-semibold and circular checkbox', () => {
+  it('renders a secondary task title with a circular checkbox', () => {
     const { container } = render(
       createElement(ActionPlanExecutionTaskRow, {
         task: buildTask(),
@@ -263,8 +260,8 @@ describe('ActionPlanExecutionTaskRow', () => {
     )
 
     const title = screen.getByText('Nettoyer la terrasse')
-    expect(title.className).toContain('text-base')
-    expect(title.className).toContain('font-semibold')
+    expect(title.className).toContain('text-sm')
+    expect(title.className).toContain('font-medium')
     expect(container.querySelector('.rounded-full')).toBeTruthy()
   })
 })

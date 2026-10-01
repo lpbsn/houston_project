@@ -1,6 +1,4 @@
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
-import { terrain } from '@/lib/terrain-styles'
-import { cn } from '@/lib/utils'
 
 import type { ActionPlanExecutionDetail } from '../types'
 
@@ -12,16 +10,15 @@ export function ActionPlanExecutionDetailDescriptionSection({
   execution,
 }: ActionPlanExecutionDetailDescriptionSectionProps) {
   const description = execution.description.trim()
+  if (!description) {
+    return null
+  }
 
   return (
     <section className="flex flex-col gap-1.5">
       <TerrainSectionLabel>Description</TerrainSectionLabel>
       <TerrainCard>
-        {description ? (
-          <p className="whitespace-pre-wrap text-sm text-[#222222]">{description}</p>
-        ) : (
-          <p className={cn('text-sm', terrain.muted)}>Aucune description.</p>
-        )}
+        <p className="whitespace-pre-wrap text-sm text-[#222222]">{description}</p>
       </TerrainCard>
     </section>
   )

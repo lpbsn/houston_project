@@ -1,8 +1,5 @@
 import { useMemo } from 'react'
 
-import { TerrainCard } from '@/components/ui/terrain'
-import { cn } from '@/lib/utils'
-
 import {
   canShowActionPlanTaskCreateObservation,
   canShowActionPlanTaskMarkDone,
@@ -36,10 +33,8 @@ export function ActionPlanExecutionTaskList({
     [tasks],
   )
 
-  const isCompact = density === 'compact'
-
   return (
-    <div className={isCompact ? 'divide-y divide-[#E8E6DF]' : 'space-y-3'}>
+    <div className="divide-y divide-[#E8E6DF]">
       {sortedTasks.map((task) => {
         const row = (
           <ActionPlanExecutionTaskRow
@@ -67,18 +62,7 @@ export function ActionPlanExecutionTaskList({
           />
         )
 
-        if (isCompact) {
-          return <div key={task.id}>{row}</div>
-        }
-
-        return (
-          <TerrainCard
-            key={task.id}
-            className={cn('p-0', task.status === 'done' && 'shadow-sm')}
-          >
-            {row}
-          </TerrainCard>
-        )
+        return <div key={task.id}>{row}</div>
       })}
     </div>
   )

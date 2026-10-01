@@ -6,6 +6,7 @@ type ActionPlanExecutionTaskFiltersProps = {
   poles: Pick<ActionPlanPoleTaskSummary, 'businessUnitId' | 'label'>[]
   selectedPoleId: string | null
   onSelectedPoleIdChange: (poleId: string | null) => void
+  className?: string
 }
 
 function filterButtonClass(isSelected: boolean): string {
@@ -21,12 +22,13 @@ export function ActionPlanExecutionTaskFilters({
   poles,
   selectedPoleId,
   onSelectedPoleIdChange,
+  className,
 }: ActionPlanExecutionTaskFiltersProps) {
   return (
     <div
       role="group"
       aria-label="Filtrer les tâches par pôle"
-      className="flex flex-wrap gap-2"
+      className={cn('flex flex-wrap gap-2', className)}
     >
       <button
         type="button"
