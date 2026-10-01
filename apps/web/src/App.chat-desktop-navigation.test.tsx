@@ -296,6 +296,8 @@ vi.mock('@/app/lazy-terrain-pages', async () => {
     LazyExecutionFeedPage: () => createElement(Page, { name: 'execution' }),
     LazyExecutionUpcomingPage: () => createElement(Page, { name: 'execution-upcoming' }),
     LazyNotificationsCenterPage: () => createElement(Page, { name: 'notifications' }),
+    LazyOperationalConfigPage: () =>
+      createElement('div', { 'data-testid': 'operational-config' }, 'operational-config'),
     LazyProfilePage: () => createElement(Page, { name: 'profile' }),
     LazyReportPage: () => createElement(Page, { name: 'reporting' }),
     LazySignalDetailPage: () => createElement(Page, { name: 'signal-detail' }),

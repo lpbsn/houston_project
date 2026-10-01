@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 
@@ -28,6 +28,7 @@ import {
   LazyNotificationsCenterPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
+  LazyOperationalConfigPage,
   LazyReportPage,
   LazySignalDetailPage,
   LazySignalFeedPage,
@@ -89,8 +90,6 @@ import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-ac
 import { EmailChangeConfirmPage } from '@/features/auth/pages/email-change-confirm-page'
 import { ForgotPasswordPage } from '@/features/auth/pages/forgot-password-page'
 import { PasswordResetConfirmPage } from '@/features/auth/pages/password-reset-confirm-page'
-import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
-import { PlatformApp } from '@/features/platform/pages/platform-app'
 import { isPlatformOperatorActive } from '@/features/platform/lib/access'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
@@ -114,6 +113,12 @@ import {
 import { TERRAIN_PAGE_TRANSITION } from '@/lib/terrain-motion'
 import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
 import { explicitTerrainScope, resolveDesktopScopeSwitchHref } from '@/features/navigation/lib/scoped-desktop-navigation'
+
+const LazyPlatformApp = lazy(() =>
+  import('@/features/platform/pages/platform-app').then((module) => ({
+    default: module.PlatformApp,
+  })),
+)
 
 function establishmentIdRequiringSwitch(route: AppRoute): string | null {
   if (route.kind === 'scoped-terrain' && route.scope.type === 'establishment') {
@@ -914,7 +919,7 @@ function App() {
         if (!isDesktopWeb || scope.type !== 'establishment') {
           return null
         }
-        return <OperationalConfigPage establishmentId={scope.establishmentId} />
+        return <LazyOperationalConfigPage establishmentId={scope.establishmentId} />
       }
       if (route.page === 'settings') {
         return (
@@ -1281,11 +1286,13 @@ function App() {
       )
     }
     return wrapAuthenticated(
-      <PlatformApp
-        section={route.section}
-        resourceId={route.resourceId}
-        onNavigate={navigate}
-      />,
+      <Suspense fallback={<RoutePageLoading />}>
+        <LazyPlatformApp
+          section={route.section}
+          resourceId={route.resourceId}
+          onNavigate={navigate}
+        />
+      </Suspense>,
     )
   }
 

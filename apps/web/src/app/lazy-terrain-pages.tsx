@@ -126,6 +126,12 @@ export const LazyComingSoonPage = lazy(() =>
   })),
 )
 
+export const LazyOperationalConfigPage = lazy(() =>
+  import('@/features/establishment-config/pages/operational-config-page').then((module) => ({
+    default: module.OperationalConfigPage,
+  })),
+)
+
 export const LazyChatRealtimeProvider = lazy(() =>
   import('@/features/chat/components/chat-realtime-provider').then((module) => ({
     default: module.ChatRealtimeProvider,

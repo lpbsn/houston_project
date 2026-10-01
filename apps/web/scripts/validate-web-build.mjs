@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -64,6 +64,49 @@ for (const file of hashedJs) {
     source.includes('firebase-messaging-sw')
   ) {
     fail('web dist must not include native FCM or a Firebase messaging service worker')
+  }
+}
+
+const entryScripts = [
+  ...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+\.js)["'][^>]*>/gi),
+].map((match) => match[1])
+if (entryScripts.length !== 1) {
+  fail(`index.html should reference one entry script, found ${entryScripts.length}`)
+}
+
+const entryPath = resolve(distRoot, entryScripts[0].replace(/^\//, ''))
+if (!existsSync(entryPath)) {
+  fail(`missing entry chunk ${entryScripts[0]}`)
+}
+
+const entrySource = readFileSync(entryPath, 'utf8')
+if (entrySource.includes('draft-onboarding-wizard')) {
+  fail('entry chunk must not include draft-onboarding-wizard')
+}
+if (entrySource.includes('modifier la configuration opérationnelle')) {
+  fail('entry chunk must not include the operational configuration editor')
+}
+
+const sporeIconRefs = [
+  ...new Set(
+    [...entrySource.matchAll(/\/assets\/[A-Za-z0-9._-]*spore-icon-green[A-Za-z0-9._-]*\.png/g)].map(
+      (match) => match[0],
+    ),
+  ),
+]
+if (sporeIconRefs.length === 0) {
+  fail('entry chunk must reference spore-icon-green')
+}
+
+const sporeIconGreenMaxBytes = 64 * 1024
+for (const iconRef of sporeIconRefs) {
+  const iconPath = resolve(distRoot, iconRef.replace(/^\//, ''))
+  if (!existsSync(iconPath)) {
+    fail(`missing entry asset ${iconRef}`)
+  }
+  const iconBytes = statSync(iconPath).size
+  if (iconBytes >= sporeIconGreenMaxBytes) {
+    fail(`spore-icon-green exceeds 64 KiB (${iconBytes} bytes)`)
   }
 }
 
