@@ -18,8 +18,7 @@ Unified smoke validation for local pilot and Railway prod-test.
 Optional. Not CI. Local `make web-cap-sync` already exists. Store AAB procedure: [`native_release.md`](native_release.md). CI `cap sync` remains **deferred**.
 
 - [ ] Xcode (iOS Simulator) and/or Android Studio (emulator) installed — see [`INSTALL_MAC.md`](../../INSTALL_MAC.md)
-- [ ] iOS: `VITE_API_BASE_URL=http://localhost:8000` then `make web-cap-sync`; login + one terrain flow + WS
-- [ ] Android emulator: `VITE_API_BASE_URL=http://10.0.2.2:8000` then `make web-cap-sync` (rebuild required; default `.env` `localhost` does not reach the host)
+- [ ] iOS / Android: `make web-cap-sync` (Vite mode `native`, `https://app.spore-os.com`); login + one terrain flow + WS against that API
 - [ ] `VITE_PUBLIC_APP_URL` (Vite) and `HOUSTON_PUBLIC_APP_URL` (Django) are distinct variables; set both to the same public HTTP(S) origin (not the emulator API host `10.0.2.2`)
 - [ ] `make web-dev-native` is a compile-time pin only — it does not authenticate in the browser
 

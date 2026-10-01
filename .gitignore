@@ -9,6 +9,8 @@ venv/
 .env
 .env.*
 !.env.example
+!.env.development
+!.env.native
 !.env.prod-test.example
 
 # Django

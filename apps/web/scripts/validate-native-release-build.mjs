@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { loadEnv } from 'vite'
+
 import {
   assertNativeReleaseBundleText,
   assertNativeReleaseEnv,
@@ -33,8 +35,10 @@ function collectTextFiles(dir, acc = []) {
   return acc
 }
 
+const repoRoot = resolve(webRoot, '../..')
+
 try {
-  assertNativeReleaseEnv()
+  assertNativeReleaseEnv(loadEnv('native', repoRoot, 'VITE_'))
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error))
 }
