@@ -177,6 +177,16 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Plan catalogue' })).toBeTruthy()
     expect(screen.getByText('Contrôler la température')).toBeTruthy()
     expect(screen.getByText('Validation requise')).toBeTruthy()
+    const heading = screen.getByRole('heading', { name: 'Plan catalogue' })
+    const informations = screen.getByRole('button', { name: 'Informations' })
+    const task = screen.getByText('Contrôler la température')
+    expect(
+      heading.compareDocumentPosition(informations) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      informations.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(informations.getAttribute('aria-expanded')).toBe('false')
     expect(screen.getByRole('button', { name: 'Utiliser ce modèle' }).closest('footer')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
     expect(screen.queryByRole('textbox')).toBeNull()
@@ -335,6 +345,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       isPending: false,
     })
     vi.spyOn(catalogPlanningSubmit, 'validateCatalogPlanningDraft').mockReturnValue({})
+    vi.spyOn(catalogPlanningSubmit, 'isCatalogPlanningPrimaryDisabled').mockReturnValue(false)
     vi.spyOn(catalogPlanningSubmit, 'resolveCatalogPlanningSubmit').mockReturnValue({
       kind: 'planning',
       body: {
@@ -397,6 +408,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       isPending: false,
     })
     vi.spyOn(catalogPlanningSubmit, 'validateCatalogPlanningDraft').mockReturnValue({})
+    vi.spyOn(catalogPlanningSubmit, 'isCatalogPlanningPrimaryDisabled').mockReturnValue(false)
     vi.spyOn(catalogPlanningSubmit, 'resolveCatalogPlanningSubmit').mockReturnValue({
       kind: 'planning',
       body: {

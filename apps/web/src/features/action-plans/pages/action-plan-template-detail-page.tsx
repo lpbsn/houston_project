@@ -17,8 +17,8 @@ import { cn } from '@/lib/utils'
 
 import { ActionPlanExecutionDetailLabel } from '../components/action-plan-execution-detail-label'
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
-import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
 import {
+  ActionPlanTemplateDetailDescription,
   ActionPlanTemplateDetailHeader,
   ActionPlanTemplateDetailSecondary,
 } from '../components/action-plan-template-detail-header'
@@ -544,30 +544,42 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             </div>
           ) : null}
 
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             <ActionPlanTemplateDetailHeader plan={plan} />
-          </div>
-
-          <div className="space-y-3">
-            <section className="space-y-2">
+            <ActionPlanTemplateDetailSecondary plan={plan} />
+            <ActionPlanTemplateDetailDescription plan={plan} />
+            <section className="flex flex-col gap-1.5">
               <TerrainSectionLabel>Tâches</TerrainSectionLabel>
               {sortedTasks.length === 0 ? (
-                <TerrainCard className="p-0">
-                  <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Aucune tâche.</p>
-                </TerrainCard>
+                <p className={cn('border border-transparent px-4 text-sm', terrain.muted)}>
+                  Aucune tâche.
+                </p>
               ) : (
-                <div className="space-y-1">
-                  {sortedTasks.map((task) => (
-                    <TerrainCard key={task.id} className="p-0">
-                      <ActionPlanTaskReadOnlyRow task={task} />
-                    </TerrainCard>
-                  ))}
-                </div>
+                <ul className="divide-y divide-[#E8E6DF] border border-transparent px-4">
+                  {sortedTasks.map((task) => {
+                    const assigneePoleLine = formatActionPlanTaskAssigneePoleLine({
+                      assigneeDisplayName: task.assigned_display_name,
+                      poleLabel: task.business_unit?.specific_name?.trim() || null,
+                    })
+                    const taskDescription = task.description?.trim() ?? ''
+                    return (
+                      <li key={task.id} className="py-2.5">
+                        <p className="text-sm text-[#1a1a1a]">{task.task}</p>
+                        {assigneePoleLine ? (
+                          <p className="mt-0.5 text-xs text-[#7D7B75]">{assigneePoleLine}</p>
+                        ) : null}
+                        {taskDescription ? (
+                          <p className="mt-0.5 whitespace-pre-wrap text-xs text-[#9a958c]">
+                            {taskDescription}
+                          </p>
+                        ) : null}
+                      </li>
+                    )
+                  })}
+                </ul>
               )}
             </section>
           </div>
-
-          <ActionPlanTemplateDetailSecondary plan={plan} />
         </div>
 
         {canUse ? (

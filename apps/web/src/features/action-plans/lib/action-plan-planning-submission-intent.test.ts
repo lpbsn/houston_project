@@ -82,6 +82,12 @@ describe('action-plan-planning-submission-intent', () => {
       items: [{ item_id: 'i2', kind: 'execution', primary_membership_id: 'm1' }],
     })
     expect(left).toBe(right)
+    const overridden = buildPlanningBusinessFingerprint({
+      use_shared_chronology: false,
+      requires_validation: false,
+      items: [{ item_id: 'i3', kind: 'execution', primary_membership_id: 'm1' }],
+    })
+    expect(overridden).not.toBe(left)
   })
 
   it('reuses submission id and item ids when business fingerprint matches', async () => {

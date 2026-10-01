@@ -1,11 +1,13 @@
-import { Ellipsis, Pencil, Trash2 } from 'lucide-react'
+import { Ban, MoreHorizontal, Pencil, Power, Trash2, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
+import { terrain } from '@/lib/terrain-styles'
 import { useLgViewport } from '@/lib/lg-viewport'
+import { cn } from '@/lib/utils'
 
 import {
   useActionPlanDetailQuery,
@@ -13,6 +15,7 @@ import {
   useDeactivateActionPlanMutation,
   useDeleteActionPlanMutation,
 } from '../hooks'
+import { formatCatalogStatusLabel } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
   canShowActionPlanActivate,
@@ -23,6 +26,46 @@ import {
 
 export const DELETE_TEMPLATE_CONFIRM =
   'Supprimer définitivement ce modèle ? Cette action est irréversible. Les actions planifiées seront supprimées.'
+
+function MobileActionRow({
+  icon: Icon,
+  label,
+  tone,
+  disabled,
+  onClick,
+}: {
+  icon: LucideIcon
+  label: string
+  tone: 'neutral' | 'danger'
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={cn(
+          'flex min-h-[52px] w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          tone === 'danger'
+            ? cn(terrain.errorSurface, terrain.danger)
+            : 'border-[#E8E6DF] bg-[#F5F4F0] text-[#1a1a1a]',
+        )}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+        <span
+          className={cn(
+            'text-[15px] font-semibold',
+            tone === 'danger' ? terrain.danger : 'text-[#1a1a1a]',
+          )}
+        >
+          {label}
+        </span>
+      </button>
+    </li>
+  )
+}
 
 type ActionPlanTemplateDetailTopbarTrailingProps = {
   establishmentId: string
@@ -61,8 +104,10 @@ export function ActionPlanTemplateDetailTopbarTrailing({
       await deleteMutation.mutateAsync()
       notifySuccess({ message: 'Modèle supprimé.', kind: 'deleted' })
       onNavigate('/action-plans')
-    } catch {
-      // Error feedback is shown on the detail page via shared mutation state.
+    } catch (error) {
+      setActionError(
+        resolveActionPlanErrorMessage(error, 'Le modèle n’a pas pu être supprimé.'),
+      )
     }
   }
 
@@ -130,69 +175,80 @@ export function ActionPlanTemplateDetailTopbarTrailing({
     return null
   }
 
+  const catalogStatusLabel =
+    detailQuery.data.catalog_status === 'active' || detailQuery.data.catalog_status === 'inactive'
+      ? formatCatalogStatusLabel(detailQuery.data.catalog_status)
+      : null
+
   return (
     <>
-      <Button
+      <button
         type="button"
-        variant="outline"
-        size="icon"
-        className="h-10 w-10 shrink-0 rounded-full border-[#E8E6DF] bg-white text-[#1a1a1a] shadow-sm hover:bg-[#F5F4F0]"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#5F5A52]"
         aria-label="Actions du modèle"
-        onClick={() => setActionsOpen(true)}
+        aria-haspopup="dialog"
+        onClick={() => {
+          setActionError(null)
+          setActionsOpen(true)
+        }}
       >
-        <Ellipsis className="h-4 w-4" aria-hidden />
-      </Button>
+        <MoreHorizontal className="h-5 w-5" aria-hidden />
+      </button>
       <TerrainBottomSheet
         title="Actions"
         open={actionsOpen}
         onClose={() => setActionsOpen(false)}
       >
-        <div className="flex flex-col py-1">
-          {actionError ? <p className="px-4 py-2 text-sm text-destructive">{actionError}</p> : null}
+        <div className="mb-3 rounded-xl border border-[#E8E6DF] bg-[#F9F8F5] px-3 py-2.5">
+          {catalogStatusLabel ? (
+            <p className="mb-1 text-[11px] text-[#888]">{catalogStatusLabel}</p>
+          ) : null}
+          <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#1a1a1a]">
+            {detailQuery.data.title}
+          </p>
+        </div>
+        <ul className="flex flex-col gap-2">
           {canUpdate ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 justify-start rounded-none px-4 text-sm"
+            <MobileActionRow
+              icon={Pencil}
+              label="Modifier"
+              tone="neutral"
               onClick={() => onNavigate(`/action-plans/${actionPlanId}/edit`)}
-            >
-              Modifier
-            </Button>
+            />
           ) : null}
           {canActivate ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 justify-start rounded-none px-4 text-sm"
+            <MobileActionRow
+              icon={Power}
+              label="Activer"
+              tone="neutral"
               disabled={activateMutation.isPending}
               onClick={() => void handleActivate()}
-            >
-              Activer
-            </Button>
+            />
           ) : null}
           {canDeactivate ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 justify-start rounded-none px-4 text-sm text-[#E24B4A] hover:text-[#E24B4A]"
+            <MobileActionRow
+              icon={Ban}
+              label="Désactiver"
+              tone="danger"
               disabled={deactivateMutation.isPending}
               onClick={() => void handleDeactivate()}
-            >
-              Désactiver
-            </Button>
+            />
           ) : null}
           {canDelete ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 justify-start rounded-none px-4 text-sm text-[#B42318] hover:text-[#B42318]"
+            <MobileActionRow
+              icon={Trash2}
+              label="Supprimer"
+              tone="danger"
               disabled={deleteMutation.isPending}
               onClick={() => void handleDelete()}
-            >
-              Supprimer
-            </Button>
+            />
           ) : null}
-        </div>
+        </ul>
+        {actionError ? (
+          <p className="mt-2 px-1 text-sm text-destructive" role="alert">
+            {actionError}
+          </p>
+        ) : null}
       </TerrainBottomSheet>
     </>
   )

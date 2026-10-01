@@ -265,3 +265,178 @@ def test_concurrent_planning_submit_same_hash_replays_without_false_conflict(
         == 1
     )
     assert ActionPlanExecution.objects.filter(action_plan=catalog).count() >= 1
+
+
+@pytest.mark.django_db
+def test_planning_submit_rejects_shared_launch_without_assignee(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    catalog = create_catalog_action_plan(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plan_planning_submit_url(owner_membership.establishment_id, catalog.id),
+        {
+            "submission_id": str(uuid.uuid4()),
+            "use_shared_chronology": True,
+            "items": [
+                {
+                    "item_id": str(uuid.uuid4()),
+                    "kind": "execution",
+                    "assignees": [],
+                    "start_at": None,
+                    "end_at": None,
+                }
+            ],
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400, response.content
+    assert ActionPlanExecution.objects.filter(action_plan=catalog).count() == 0
+
+
+@pytest.mark.django_db
+def test_planning_submit_validation_override_is_explicit_and_leaves_the_template(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.materialization import materialize_execution_from_schedule
+
+    catalog = create_catalog_action_plan(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+    )
+    assert catalog.requires_validation is True
+    window = visible_schedule_window(period_days=14)
+    assignee = {
+        "membership_id": str(staff_membership.id),
+        "business_unit_id": str(business_unit.id),
+    }
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plan_planning_submit_url(owner_membership.establishment_id, catalog.id),
+        {
+            "submission_id": str(uuid.uuid4()),
+            "use_shared_chronology": True,
+            "requires_validation": False,
+            "items": [
+                {
+                    "item_id": str(uuid.uuid4()),
+                    "kind": "execution",
+                    "assignees": [assignee],
+                    "start_at": None,
+                    "end_at": None,
+                },
+                {
+                    "item_id": str(uuid.uuid4()),
+                    "kind": "schedule",
+                    "assignees": [assignee],
+                    "start_date": window["start_date"].isoformat(),
+                    "end_date": window["end_date"].isoformat(),
+                    "start_at": window["start_at"].isoformat(),
+                    "end_at": window["end_at"].isoformat(),
+                    "recurrence_days": recurrence_days_for_visible_today(),
+                },
+            ],
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.content
+    catalog.refresh_from_db()
+    assert catalog.requires_validation is True
+    execution = ActionPlanExecution.objects.get(id=response.json()["executions"][0]["id"])
+    assert execution.requires_validation is False
+    schedule = ActionPlanSchedule.objects.get(id=response.json()["schedules"][0]["id"])
+    assert schedule.requires_validation_override is False
+    occurrence = schedule.executions.order_by("occurrence_date").first()
+    assert occurrence is not None
+    assert occurrence.requires_validation is False
+    occurrence_date = occurrence.occurrence_date
+    schedule.executions.all().delete()
+    catalog.requires_validation = True
+    catalog.save(update_fields=["requires_validation", "updated_at"])
+    rematerialized = materialize_execution_from_schedule(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+        emit_side_effects=False,
+    )
+    assert rematerialized.requires_validation is False
+
+
+@pytest.mark.django_db
+def test_planning_submit_without_validation_override_rereads_the_template(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.materialization import materialize_execution_from_schedule
+
+    catalog = create_catalog_action_plan(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+    )
+    window = visible_schedule_window(period_days=14)
+    assignee = {
+        "membership_id": str(staff_membership.id),
+        "business_unit_id": str(business_unit.id),
+    }
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plan_planning_submit_url(owner_membership.establishment_id, catalog.id),
+        {
+            "submission_id": str(uuid.uuid4()),
+            "use_shared_chronology": False,
+            "items": [
+                {
+                    "item_id": str(uuid.uuid4()),
+                    "kind": "execution",
+                    "primary_membership_id": str(staff_membership.id),
+                    "business_unit_id": str(business_unit.id),
+                    "start_at": None,
+                    "end_at": None,
+                },
+                {
+                    "item_id": str(uuid.uuid4()),
+                    "kind": "schedule",
+                    "primary_membership_id": str(staff_membership.id),
+                    "business_unit_id": str(business_unit.id),
+                    "assignees": [assignee],
+                    "start_date": window["start_date"].isoformat(),
+                    "end_date": window["end_date"].isoformat(),
+                    "start_at": window["start_at"].isoformat(),
+                    "end_at": window["end_at"].isoformat(),
+                    "recurrence_days": recurrence_days_for_visible_today(),
+                },
+            ],
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.content
+    execution = ActionPlanExecution.objects.get(id=response.json()["executions"][0]["id"])
+    assert execution.requires_validation is True
+    assert execution.use_shared_chronology is False
+    schedule = ActionPlanSchedule.objects.get(id=response.json()["schedules"][0]["id"])
+    assert schedule.requires_validation_override is None
+    occurrence = schedule.executions.order_by("occurrence_date").first()
+    assert occurrence is not None
+    occurrence_date = occurrence.occurrence_date
+    schedule.executions.all().delete()
+    catalog.requires_validation = False
+    catalog.save(update_fields=["requires_validation", "updated_at"])
+    rematerialized = materialize_execution_from_schedule(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+        schedule_assignee=schedule.schedule_assignees.get(),
+        emit_side_effects=False,
+    )
+    assert rematerialized.requires_validation is False

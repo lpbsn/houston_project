@@ -310,7 +310,11 @@ describe('ActionPlanTemplateDetailTopbarTrailing', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'Modifier' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Actions du modèle' }))
+    const trigger = screen.getByRole('button', { name: 'Actions du modèle' })
+    expect(trigger.className.includes('border')).toBe(false)
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    fireEvent.click(trigger)
+    expect(screen.getByText('Plan catalogue')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
     expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/edit')
   })
@@ -352,5 +356,25 @@ describe('ActionPlanTemplateDetailTopbarTrailing', () => {
         kind: 'activated',
       })
     })
+  })
+
+  it('shows a delete failure inside the mobile actions sheet', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    deleteMutateAsyncMock.mockRejectedValueOnce(new Error('Observation blocks delete'))
+
+    renderTrailing(
+      createElement(ActionPlanTemplateDetailTopbarTrailing, {
+        establishmentId: 'est-1',
+        actionPlanId: 'plan-1',
+        onNavigate: navigateMock,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du modèle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe('Observation blocks delete')
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 })

@@ -10801,6 +10801,9 @@ components:
         use_shared_chronology:
           type: boolean
           default: false
+        requires_validation:
+          type: boolean
+          nullable: true
         items:
           type: array
           items:

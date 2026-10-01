@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
-import { TerrainErrorState, TerrainStickyFooter } from '@/components/ui/terrain'
+import { TerrainErrorState, TerrainStickyFooter, TerrainSwitch } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
@@ -76,6 +76,7 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
   const planningMutation = useSubmitActionPlanPlanningMutation(establishmentId ?? '')
 
   const [timing, setTiming] = useState<ActionPlanLaunchTiming>('now')
+  const [requiresValidationChoice, setRequiresValidationChoice] = useState<boolean | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [draft, setDraft] = useState<ActionPlanEventPlanningDraft>(createActionPlanEventPlanningDraft)
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
@@ -150,6 +151,7 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
   }
 
   const canUse = canShowActionPlanUse(plan.permission_hints)
+  const requiresValidation = requiresValidationChoice ?? plan.requires_validation
   const primaryDisabled = isCatalogPlanningPrimaryDisabled(launchDraft, {
     ...planningOptions,
     isPending: planningMutation.isPending,
@@ -178,7 +180,10 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
       return
     }
 
-    const submit = resolveCatalogPlanningSubmit(submitted, planningOptions)
+    const submit = resolveCatalogPlanningSubmit(submitted, {
+      ...planningOptions,
+      requiresValidation,
+    })
     if (!submit) {
       return
     }
@@ -244,12 +249,13 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
           />
         </div>
 
-        {plan.requires_validation ? (
-          <div className="flex items-center justify-between rounded-xl border border-[#E8E6DF] bg-white px-3 py-3">
-            <span className="text-sm text-[#1a1a1a]">Validation requise</span>
-            <span className="text-sm text-[#7D7B75]">Oui</span>
-          </div>
-        ) : null}
+        <div className="overflow-hidden rounded-xl border border-[#E8E6DF] bg-white">
+          <TerrainSwitch
+            label="Validation requise"
+            checked={requiresValidation}
+            onCheckedChange={setRequiresValidationChoice}
+          />
+        </div>
       </div>
 
       {canUse && !isNativeKeyboardOpen ? (

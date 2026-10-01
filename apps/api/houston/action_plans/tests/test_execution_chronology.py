@@ -89,6 +89,8 @@ def test_create_allows_start_and_end(owner_membership, business_unit):
 def test_catalog_use_rejects_end_at_without_start_at(
     owner_membership,
     catalog_action_plan,
+    staff_membership,
+    business_unit,
 ):
     with pytest.raises(
         ActionPlanValidationError,
@@ -97,7 +99,9 @@ def test_catalog_use_rejects_end_at_without_start_at(
         create_execution_from_action_plan(
             action_plan_id=catalog_action_plan.id,
             actor=owner_membership,
-            assignees=[],
+            assignees=[
+                build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
             use_shared_chronology=True,
             start_at=None,
             end_at=timezone.now() + timedelta(hours=2),

@@ -43,6 +43,7 @@ def compute_planning_request_hash(
     *,
     use_shared_chronology: bool,
     items: list[dict],
+    requires_validation: bool | None = None,
 ) -> str:
     canonical_items = [_canonicalize_value(dict(item)) for item in items]
     canonical_items.sort(key=lambda item: str(item.get("item_id") or ""))
@@ -53,5 +54,7 @@ def compute_planning_request_hash(
         "use_shared_chronology": use_shared_chronology,
         "items": canonical_items,
     }
+    if requires_validation is not None:
+        canonical["requires_validation"] = requires_validation
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()

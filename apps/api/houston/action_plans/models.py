@@ -199,6 +199,7 @@ class ActionPlanSchedule(BaseModel):
     end_at = models.TimeField()
     all_day = models.BooleanField(default=False)
     recurrence_days = models.JSONField(default=list, blank=True)
+    requires_validation_override = models.BooleanField(null=True, blank=True)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,

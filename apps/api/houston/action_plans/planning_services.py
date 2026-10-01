@@ -318,11 +318,22 @@ def _build_outbox_entries(
     return entries
 
 
+def _resolve_launch_requires_validation(
+    *,
+    action_plan: ActionPlan,
+    requires_validation: bool | None,
+) -> bool:
+    if requires_validation is None:
+        return action_plan.requires_validation
+    return requires_validation
+
+
 def _create_individual_execution(
     *,
     action_plan: ActionPlan,
     actor: EstablishmentMembership,
     item: dict,
+    requires_validation: bool | None = None,
 ) -> ActionPlanExecution:
     plan_tasks = list(
         action_plan.tasks.select_related("assigned_membership__user", "business_unit").order_by(
@@ -387,7 +398,10 @@ def _create_individual_execution(
         pilot_business_unit=action_plan.pilot_business_unit,
         title=action_plan.title,
         description=action_plan.description,
-        requires_validation=action_plan.requires_validation,
+        requires_validation=_resolve_launch_requires_validation(
+            action_plan=action_plan,
+            requires_validation=requires_validation,
+        ),
         chronology_owner_membership=owner.membership,
         use_shared_chronology=False,
         start_at=owner.start_at,
@@ -413,6 +427,7 @@ def _create_shared_execution(
     action_plan: ActionPlan,
     actor: EstablishmentMembership,
     item: dict,
+    requires_validation: bool | None = None,
 ) -> ActionPlanExecution:
     return create_execution_from_action_plan(
         action_plan_id=action_plan.id,
@@ -424,6 +439,7 @@ def _create_shared_execution(
         visible_from=item.get("visible_from"),
         occurrence_date=item.get("occurrence_date"),
         all_day=bool(item.get("all_day", False)),
+        requires_validation=requires_validation,
         emit_side_effects=False,
     )
 
@@ -463,6 +479,7 @@ def _create_schedule_from_item(
     actor: EstablishmentMembership,
     item: dict,
     use_shared_chronology: bool,
+    requires_validation: bool | None = None,
 ) -> ActionPlanSchedule:
     if use_shared_chronology:
         assignees = item.get("assignees") or []
@@ -497,6 +514,7 @@ def _create_schedule_from_item(
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
         all_day=bool(item.get("all_day", False)),
+        requires_validation_override=requires_validation,
         emit_side_effects=False,
     )
 
@@ -604,6 +622,7 @@ def create_resources_from_planning_intent(
     submission: ActionPlanPlanningSubmission,
     use_shared_chronology: bool,
     items: list[dict],
+    requires_validation: bool | None = None,
 ) -> PlanningSubmissionResult:
     """Create executions/schedules/outbox for an already-authorized plan + submission."""
     now = timezone.now()
@@ -621,6 +640,7 @@ def create_resources_from_planning_intent(
                         action_plan=action_plan,
                         actor=actor,
                         item=item,
+                        requires_validation=requires_validation,
                     )
                     primary_membership_id = None
                 else:
@@ -628,6 +648,7 @@ def create_resources_from_planning_intent(
                         action_plan=action_plan,
                         actor=actor,
                         item=item,
+                        requires_validation=requires_validation,
                     )
                     primary_membership_id = uuid.UUID(str(item["primary_membership_id"]))
                 created_executions.append(execution)
@@ -646,6 +667,7 @@ def create_resources_from_planning_intent(
                     actor=actor,
                     item=item,
                     use_shared_chronology=use_shared_chronology,
+                    requires_validation=requires_validation,
                 )
                 primary_membership_id = None
                 if not use_shared_chronology:
@@ -731,6 +753,7 @@ def submit_action_plan_planning(
     use_shared_chronology: bool,
     items: list[dict],
     action_plan: ActionPlan,
+    requires_validation: bool | None = None,
 ) -> PlanningSubmissionResult:
     _assert_planning_access(actor=actor, action_plan=action_plan)
     if action_plan.establishment_id != establishment_id:
@@ -744,6 +767,7 @@ def submit_action_plan_planning(
     request_hash = compute_planning_request_hash(
         use_shared_chronology=use_shared_chronology,
         items=items,
+        requires_validation=requires_validation,
     )
 
     replayed = _lookup_planning_submission(
@@ -771,6 +795,7 @@ def submit_action_plan_planning(
         submission=submission_or_replay,
         use_shared_chronology=use_shared_chronology,
         items=items,
+        requires_validation=requires_validation,
     )
 
 

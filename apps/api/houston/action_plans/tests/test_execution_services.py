@@ -460,13 +460,12 @@ def test_create_execution_from_catalog_with_plan_tasks_only(
     owner_membership,
     catalog_action_plan,
 ):
-    execution = create_execution_from_action_plan(
-        action_plan_id=catalog_action_plan.id,
-        actor=owner_membership,
-        assignees=[],
-    )
-
-    assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 1
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
+        create_execution_from_action_plan(
+            action_plan_id=catalog_action_plan.id,
+            actor=owner_membership,
+            assignees=[],
+        )
 
 
 def test_create_rejects_empty_title(owner_membership, business_unit, staff_membership):

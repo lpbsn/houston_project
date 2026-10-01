@@ -1,6 +1,8 @@
+import { useAuth } from '@/app/auth-provider'
 import { AssigneeSection } from '@/components/domain/assignee-section'
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { useEstablishmentUserSearchQuery } from '@/features/users/hooks'
 import type { ScopedUserSearchResult } from '@/features/users/types'
 
 import {
@@ -27,6 +29,33 @@ export function ActionPlanAssigneesSheet({
   onClose,
   onConfirm,
 }: ActionPlanAssigneesSheetProps) {
+  const { activeMembership } = useAuth()
+  const eligibleMembersQuery = useEstablishmentUserSearchQuery(establishmentId, '', {
+    businessUnitId: pilotBusinessUnitId || undefined,
+    allowEmptyQuery: Boolean(pilotBusinessUnitId),
+  })
+  const selfUser =
+    (eligibleMembersQuery.data ?? []).find(
+      (user) => user.membership_id === activeMembership?.id,
+    ) ?? null
+  const selfSelected = Boolean(
+    selfUser && assignees.some((assignee) => assignee.membershipId === selfUser.membership_id),
+  )
+
+  function selectSelf() {
+    if (!selfUser || selfSelected) {
+      return
+    }
+    onAssigneesChange([
+      ...assignees,
+      createActionPlanAssigneeDraft({
+        membershipId: selfUser.membership_id,
+        businessUnitId: pilotBusinessUnitId,
+        displayName: selfUser.display_name,
+      }),
+    ])
+  }
+
   const selectedUsers: ScopedUserSearchResult[] = assignees
     .filter((assignee) => assignee.membershipId)
     .map((assignee) => ({
@@ -65,6 +94,19 @@ export function ActionPlanAssigneesSheet({
         </Button>
       }
     >
+      {selfUser ? (
+        <div className="mb-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-full px-4"
+            aria-pressed={selfSelected}
+            onClick={selectSelf}
+          >
+            Moi
+          </Button>
+        </div>
+      ) : null}
       <AssigneeSection
         mode="multiple"
         establishmentId={establishmentId}

@@ -17,35 +17,37 @@ type ActionPlanTemplateDetailHeaderProps = {
 }
 
 export function ActionPlanTemplateDetailHeader({ plan }: ActionPlanTemplateDetailHeaderProps) {
+  return (
+    <TerrainCard className="space-y-3">
+      <h1 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{plan.title}</h1>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <HoustonBadge variant="gray" className="text-[10px]">
+          {plan.pilot_business_unit.specific_name}
+        </HoustonBadge>
+        {plan.requires_validation ? (
+          <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">
+            Validation requise
+          </HoustonBadge>
+        ) : null}
+      </div>
+    </TerrainCard>
+  )
+}
+
+export function ActionPlanTemplateDetailDescription({ plan }: ActionPlanTemplateDetailHeaderProps) {
   const description = plan.description.trim()
 
   return (
-    <div className="flex flex-col gap-4">
-      <TerrainCard className="space-y-3">
-        <h1 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{plan.title}</h1>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <HoustonBadge variant="gray" className="text-[10px]">
-            {plan.pilot_business_unit.specific_name}
-          </HoustonBadge>
-          {plan.requires_validation ? (
-            <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">
-              Validation requise
-            </HoustonBadge>
-          ) : null}
-        </div>
+    <section className="flex flex-col gap-1.5">
+      <TerrainSectionLabel>Description</TerrainSectionLabel>
+      <TerrainCard>
+        {description ? (
+          <p className="whitespace-pre-wrap text-sm text-[#555]">{description}</p>
+        ) : (
+          <p className={cn('text-sm', terrain.muted)}>Aucune description.</p>
+        )}
       </TerrainCard>
-
-      <section className="flex flex-col gap-1.5">
-        <TerrainSectionLabel>Description</TerrainSectionLabel>
-        <TerrainCard>
-          {description ? (
-            <p className="whitespace-pre-wrap text-sm text-[#555]">{description}</p>
-          ) : (
-            <p className={cn('text-sm', terrain.muted)}>Aucune description.</p>
-          )}
-        </TerrainCard>
-      </section>
-    </div>
+    </section>
   )
 }
 
@@ -62,7 +64,7 @@ export function ActionPlanTemplateDetailSecondary({ plan }: ActionPlanTemplateDe
     <section className="flex flex-col gap-1.5">
       <button
         type="button"
-        className="flex w-full items-center justify-between px-1 py-1 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7D7B75]"
+        className="flex w-full items-center justify-between px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7D7B75]"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >

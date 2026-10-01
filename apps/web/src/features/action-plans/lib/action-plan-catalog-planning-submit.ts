@@ -31,6 +31,7 @@ export type CatalogPlanningSubmit = {
 export type CatalogPlanningOptions = {
   canSchedule: boolean
   staffMode?: boolean
+  requiresValidation?: boolean
 }
 
 export type CatalogPlanningPrimaryKind = 'planning'
@@ -53,7 +54,7 @@ export function validateCatalogPlanningDraft(
   }
 
   return validateActionPlanEventPlanningDraft(draft, {
-    requireAssignees: false,
+    requireAssignees: !options.staffMode,
     allowRepeat: options.canSchedule,
   })
 }
@@ -170,6 +171,9 @@ export function resolveCatalogPlanningSubmit(
     body: {
       submission_id: crypto.randomUUID(),
       use_shared_chronology: !draft.usePerAssigneeChronology,
+      ...(options.requiresValidation === undefined
+        ? {}
+        : { requires_validation: options.requiresValidation }),
       items,
     },
   }
@@ -180,6 +184,11 @@ export function isCatalogPlanningPrimaryDisabled(
   options: CatalogPlanningOptions & { isPending: boolean },
 ): boolean {
   if (options.isPending) {
+    return true
+  }
+
+  const hasAssignee = draft.assignees.some((assignee) => assignee.membershipId)
+  if (!options.staffMode && !hasAssignee) {
     return true
   }
 
@@ -239,6 +248,9 @@ export async function submitCatalogPlanningWithIntent(options: {
     actionPlanId: options.actionPlanId,
     body: {
       use_shared_chronology: options.body.use_shared_chronology,
+      ...('requires_validation' in options.body
+        ? { requires_validation: options.body.requires_validation }
+        : {}),
       items: options.body.items,
     },
   })
@@ -246,6 +258,9 @@ export async function submitCatalogPlanningWithIntent(options: {
     applyPlanningSubmissionIntent(
       {
         use_shared_chronology: options.body.use_shared_chronology,
+        ...('requires_validation' in options.body
+          ? { requires_validation: options.body.requires_validation }
+          : {}),
         items: options.body.items,
       },
       intent,

@@ -3374,6 +3374,7 @@ export interface components {
             submission_id: string;
             /** @default false */
             use_shared_chronology: boolean;
+            requires_validation?: boolean | null;
             items: components["schemas"]["ActionPlanPlanningItem"][];
         };
         ActionPlanPlanningSubmitResponse: {

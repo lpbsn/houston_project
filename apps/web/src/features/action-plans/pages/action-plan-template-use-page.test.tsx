@@ -56,6 +56,12 @@ function buildPlan(overrides: Partial<ActionPlanDetail> = {}): ActionPlanDetail 
   }
 }
 
+function selectCurrentUser() {
+  fireEvent.click(screen.getByRole('button', { name: /Assignés/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Moi' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+}
+
 function renderPage(ui: ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -114,6 +120,23 @@ vi.mock('../lib/action-plan-planning-submission-intent', async (importOriginal) 
     clearPlanningSubmissionIntent: vi.fn(),
   }
 })
+
+vi.mock('@/features/users/hooks', () => ({
+  useEstablishmentUserSearchQuery: () => ({
+    data: [
+      {
+        id: 'membership-1',
+        membership_id: 'membership-1',
+        display_name: 'Camille',
+        username: 'camille',
+        role: 'manager',
+        email: null,
+        business_unit_ids: ['bu-1'],
+      },
+    ],
+    isFetching: false,
+  }),
+}))
 
 vi.mock('../hooks', () => ({
   useActionPlanDetailQuery: () => detailQueryMock(),
@@ -174,7 +197,9 @@ describe('ActionPlanTemplateUsePage', () => {
     expect(screen.getByText(/2 tâches/)).toBeTruthy()
     expect(screen.getByText(/Restaurant/)).toBeTruthy()
     expect(screen.getByText('Validation requise')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Lancer le plan' })).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Lancer le plan' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
@@ -188,6 +213,11 @@ describe('ActionPlanTemplateUsePage', () => {
     planningMutationMock.mockReturnValue({ mutateAsync, isPending: false })
 
     renderPage(createElement(ActionPlanTemplateUsePage, { actionPlanId: 'plan-1' }))
+    expect(
+      (screen.getByRole('button', { name: 'Lancer le plan' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    selectCurrentUser()
+    fireEvent.click(screen.getByRole('switch', { name: 'Validation requise' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lancer le plan' }))
 
     await vi.waitFor(() => {
@@ -195,10 +225,17 @@ describe('ActionPlanTemplateUsePage', () => {
     })
     const body = mutateAsync.mock.calls[0]?.[0].body
     expect(body.use_shared_chronology).toBe(true)
+    expect(body.requires_validation).toBe(false)
     expect(body.items[0]).toMatchObject({
       kind: 'execution',
       start_at: null,
       end_at: null,
+      assignees: [
+        expect.objectContaining({
+          membership_id: 'membership-1',
+          business_unit_id: 'bu-1',
+        }),
+      ],
     })
     expect(navigateMock).toHaveBeenCalledWith('/action-plans/executions/exec-1')
   })
@@ -246,6 +283,7 @@ describe('ActionPlanTemplateUsePage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Planifier' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Maintenant' }))
+    selectCurrentUser()
     fireEvent.click(screen.getByRole('button', { name: 'Lancer le plan' }))
 
     await vi.waitFor(() => {
@@ -279,6 +317,7 @@ describe('ActionPlanTemplateUsePage', () => {
     planningMutationMock.mockReturnValue({ mutateAsync, isPending: false })
 
     renderPage(createElement(ActionPlanTemplateUsePage, { actionPlanId: 'plan-1' }))
+    selectCurrentUser()
     fireEvent.click(screen.getByRole('button', { name: 'Lancer le plan' }))
 
     await vi.waitFor(() => {

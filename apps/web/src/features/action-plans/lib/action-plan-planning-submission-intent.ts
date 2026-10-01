@@ -116,6 +116,7 @@ async function sha256Hex(value: string): Promise<string> {
 /** Business fingerprint excluding submission_id and item_id (idempotence keys). */
 export function buildPlanningBusinessFingerprint(body: {
   use_shared_chronology?: boolean
+  requires_validation?: boolean | null
   items?: Array<Record<string, unknown>>
   submission_id?: string
 }): string {
@@ -126,6 +127,9 @@ export function buildPlanningBusinessFingerprint(body: {
   })
   return JSON.stringify({
     use_shared_chronology: body.use_shared_chronology ?? false,
+    ...('requires_validation' in body
+      ? { requires_validation: body.requires_validation }
+      : {}),
     items,
   })
 }
@@ -133,11 +137,16 @@ export function buildPlanningBusinessFingerprint(body: {
 export function applyPlanningSubmissionIntent<
   TItem extends Record<string, unknown> & { item_id?: string },
 >(
-  body: { use_shared_chronology: boolean; items: TItem[] },
+  body: {
+    use_shared_chronology: boolean
+    requires_validation?: boolean | null
+    items: TItem[]
+  },
   intent: PlanningSubmissionIntent,
 ): {
   submission_id: string
   use_shared_chronology: boolean
+  requires_validation?: boolean | null
   items: Array<TItem & { item_id: string }>
 } {
   if (intent.itemIds.length !== body.items.length) {
@@ -146,6 +155,9 @@ export function applyPlanningSubmissionIntent<
   return {
     submission_id: intent.submissionId,
     use_shared_chronology: body.use_shared_chronology,
+    ...('requires_validation' in body
+      ? { requires_validation: body.requires_validation }
+      : {}),
     items: body.items.map((item, index) => ({
       ...item,
       item_id: intent.itemIds[index]!,
@@ -158,6 +170,7 @@ export async function resolvePlanningSubmissionIntent(options: {
   actionPlanId: string
   body: {
     use_shared_chronology?: boolean
+    requires_validation?: boolean | null
     items: Array<Record<string, unknown> & { item_id?: string }>
   }
 }): Promise<PlanningSubmissionIntent> {

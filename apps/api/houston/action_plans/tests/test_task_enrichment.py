@@ -14,6 +14,7 @@ from houston.action_plans.services import (
 from houston.action_plans.tests.helpers import (
     action_plan_url,
     api_task_payload,
+    build_assignee_payload,
     build_task_payload,
     create_catalog_action_plan,
 )
@@ -149,14 +150,18 @@ def test_use_catalog_plan_merges_task_assignee(
     execution = create_execution_from_action_plan(
         action_plan_id=plan.id,
         actor=owner_membership,
-        assignees=[],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
     )
 
-    assert ActionPlanAssignee.objects.filter(action_plan_execution=execution).count() == 1
-    assert (
-        ActionPlanAssignee.objects.get(action_plan_execution=execution).membership_id
-        == staff_membership.id
+    assignee_ids = set(
+        ActionPlanAssignee.objects.filter(action_plan_execution=execution).values_list(
+            "membership_id",
+            flat=True,
+        )
     )
+    assert assignee_ids == {owner_membership.id, staff_membership.id}
 
 
 def test_replace_action_plan_tasks(owner_membership, business_unit, staff_membership):
