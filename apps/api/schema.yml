@@ -2973,6 +2973,7 @@ paths:
       - comments
       security:
       - BearerAccessToken: []
+      - {}
       responses:
         '200':
           description: Binary attachment.
@@ -5155,6 +5156,7 @@ paths:
       - chat
       security:
       - BearerAccessToken: []
+      - {}
       responses:
         '200':
           description: Binary attachment.
