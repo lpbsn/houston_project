@@ -77,7 +77,7 @@ export const actionPlanExecutionDetailReopenBgClassName = 'bg-[#3A7A96] hover:bg
 export const actionPlanExecutionDetailCancelBgClassName = 'bg-[#E85553] hover:bg-[#d14c4a]'
 export const actionPlanExecutionDetailTaskDoneClassName = 'text-[#2D9C75]'
 export const actionPlanExecutionDetailLifecycleButtonClassName =
-  'inline-flex min-h-11 flex-1 items-center justify-center rounded-full px-3 text-[14px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2'
+  'inline-flex h-12 min-h-12 w-full flex-1 items-center justify-center rounded-xl px-4 text-[15px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2'
 
 export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue' | 'teal' | 'brown'
 

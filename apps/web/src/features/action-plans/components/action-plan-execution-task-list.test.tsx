@@ -56,7 +56,7 @@ describe('ActionPlanExecutionTaskList', () => {
     expect(titles).toEqual(['Première tâche', 'Deuxième tâche'])
   })
 
-  it('renders each task in its own card', () => {
+  it('renders tasks in one divided list without a card per task', () => {
     const { container } = render(
       createElement(ActionPlanExecutionTaskList, {
         tasks: [
@@ -71,7 +71,7 @@ describe('ActionPlanExecutionTaskList', () => {
       }),
     )
 
-    expect(container.querySelectorAll('.rounded-\\[14px\\]')).toHaveLength(2)
-    expect(container.querySelector('.divide-y')).toBeNull()
+    expect(container.querySelectorAll('.rounded-\\[14px\\]')).toHaveLength(0)
+    expect(container.querySelector('.divide-y')).toBeTruthy()
   })
 })

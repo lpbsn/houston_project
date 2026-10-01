@@ -327,6 +327,18 @@ export function formatActionPlanFeedValidatedLine(
   )
 }
 
+export function formatActionPlanFeedCanceledLine(
+  item: Pick<ActionPlanExecutionFeedItem, 'canceled_at'> & {
+    canceled_by_display_name?: string | null
+  },
+): string | null {
+  return formatActionPlanFeedActorDateLine(
+    'Annulé le',
+    item.canceled_at,
+    item.canceled_by_display_name,
+  )
+}
+
 export function formatActionPlanFeedMarkedDoneLine(
   item: Pick<
     ActionPlanExecutionFeedItem,

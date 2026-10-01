@@ -6,6 +6,8 @@ import {
   canShowActionPlanExecutionUpdate,
   canShowActionPlanTaskMarkDone,
   canShowActionPlanTaskUnmarkDone,
+  resolveActionPlanExecutionDominantAction,
+  resolveActionPlanExecutionSecondaryActions,
 } from '@/features/action-plans/lib/action-plan-permission-hints'
 import type { ActionPlanTaskExecution } from '@/features/action-plans/types'
 
@@ -128,5 +130,40 @@ describe('action-plan permission hints', () => {
         task: doneTask,
       }),
     ).toBe(false)
+  })
+
+  it('keeps one dominant lifecycle action and parks reopen with cancel when validate is shown', () => {
+    const hints = {
+      can_mark_done: false,
+      can_validate: true,
+      can_reopen: true,
+      can_cancel: true,
+      can_update: true,
+      is_pilot_pole_assignee: false,
+      can_pin: false,
+    }
+
+    expect(resolveActionPlanExecutionDominantAction(hints)).toBe('validate')
+    expect(resolveActionPlanExecutionSecondaryActions(hints, { isTerminal: false })).toEqual([
+      'reopen',
+      'cancel',
+    ])
+  })
+
+  it('does not treat cancel as a dominant action', () => {
+    const hints = {
+      can_mark_done: false,
+      can_validate: false,
+      can_reopen: false,
+      can_cancel: true,
+      can_update: false,
+      is_pilot_pole_assignee: false,
+      can_pin: false,
+    }
+
+    expect(resolveActionPlanExecutionDominantAction(hints)).toBeNull()
+    expect(resolveActionPlanExecutionSecondaryActions(hints, { isTerminal: false })).toEqual([
+      'cancel',
+    ])
   })
 })

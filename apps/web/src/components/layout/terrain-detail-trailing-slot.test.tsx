@@ -3,7 +3,10 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { TerrainDetailTrailingSlot } from './terrain-detail-trailing-slot'
+import {
+  TerrainDetailTrailingEndSlot,
+  TerrainDetailTrailingSlot,
+} from './terrain-detail-trailing-slot'
 import { TerrainTopbar } from './terrain-topbar'
 
 afterEach(() => {
@@ -29,5 +32,31 @@ describe('TerrainDetailTrailingSlot', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+  })
+
+  it('places the end slot to the right of the topbar trailing control', () => {
+    render(
+      <>
+        <TerrainTopbar
+          variant="detail"
+          title="Exécution"
+          hideTitle
+          onBack={() => undefined}
+          trailing={<button type="button">Modifier</button>}
+        />
+        <TerrainDetailTrailingSlot>
+          <button type="button">Marquer terminé</button>
+        </TerrainDetailTrailingSlot>
+        <TerrainDetailTrailingEndSlot>
+          <button type="button">Autres actions</button>
+        </TerrainDetailTrailingEndSlot>
+      </>,
+    )
+
+    const actions = screen.getByRole('button', { name: 'Marquer terminé' })
+    const edit = screen.getByRole('button', { name: 'Modifier' })
+    const menu = screen.getByRole('button', { name: 'Autres actions' })
+    expect(actions.compareDocumentPosition(edit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(edit.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

@@ -73,6 +73,40 @@ export function canShowActionPlanExecutionCancel(
   return hints?.can_cancel === true && !options.isTerminal
 }
 
+export type ActionPlanExecutionDominantAction = 'markDone' | 'validate' | 'reopen'
+
+export type ActionPlanExecutionSecondaryAction = 'reopen' | 'cancel'
+
+export function resolveActionPlanExecutionDominantAction(
+  hints: ActionPlanExecutionPermissionHints | null | undefined,
+): ActionPlanExecutionDominantAction | null {
+  if (canShowActionPlanExecutionMarkDone(hints)) {
+    return 'markDone'
+  }
+  if (canShowActionPlanExecutionValidate(hints)) {
+    return 'validate'
+  }
+  if (canShowActionPlanExecutionReopen(hints)) {
+    return 'reopen'
+  }
+  return null
+}
+
+export function resolveActionPlanExecutionSecondaryActions(
+  hints: ActionPlanExecutionPermissionHints | null | undefined,
+  options: { isTerminal: boolean },
+): ActionPlanExecutionSecondaryAction[] {
+  const actions: ActionPlanExecutionSecondaryAction[] = []
+  const dominant = resolveActionPlanExecutionDominantAction(hints)
+  if (canShowActionPlanExecutionReopen(hints) && dominant !== 'reopen') {
+    actions.push('reopen')
+  }
+  if (canShowActionPlanExecutionCancel(hints, options)) {
+    actions.push('cancel')
+  }
+  return actions
+}
+
 export function canShowActionPlanTaskMarkDone(
   hints: ActionPlanTaskExecutionPermissionHints | null | undefined,
   options: { isTerminal: boolean; task: ActionPlanTaskExecution },

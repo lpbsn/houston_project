@@ -1,3 +1,5 @@
+import { Plus } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { TerrainStickyFooter } from '@/components/ui/terrain'
 import { terrainBrandAction } from '@/lib/terrain-styles'
@@ -23,15 +25,16 @@ export function SignalDetailStickyFooter({
       data-testid={dataTestId}
       className={cn(
         // Override TerrainStickyFooter sticky/mt-auto — parent flex column owns bottom pin.
-        'relative mt-0 flex shrink-0 flex-col gap-2',
+        'relative mt-0 flex shrink-0 flex-col gap-2 px-5',
         className,
       )}
     >
       <Button
         type="button"
         variant={subdued ? 'outline' : 'default'}
+        aria-label="+ Créer un plan"
         className={cn(
-          'w-full rounded-xl',
+          'w-full gap-1.5 rounded-xl px-4',
           subdued
             ? 'h-10 border-[#E8E6DF] bg-white text-[13px] font-medium text-[#114660] hover:bg-[#F5F4F0] hover:text-[#114660]'
             : cn(
@@ -42,7 +45,8 @@ export function SignalDetailStickyFooter({
         )}
         onClick={onCreateActionPlan}
       >
-        + Créer un plan
+        <Plus className="size-4" aria-hidden />
+        Créer un plan
       </Button>
     </TerrainStickyFooter>
   )

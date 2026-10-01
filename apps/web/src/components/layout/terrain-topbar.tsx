@@ -2,7 +2,10 @@ import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
-import { useTerrainDetailTrailingSlotValue } from '@/components/layout/terrain-detail-trailing-slot'
+import {
+  useTerrainDetailTrailingEndSlotValue,
+  useTerrainDetailTrailingSlotValue,
+} from '@/components/layout/terrain-detail-trailing-slot'
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
@@ -32,7 +35,8 @@ function TrailingSlot({ trailing }: { trailing?: ReactNode }) {
 
 function DetailTrailingSlot({ trailing }: { trailing?: ReactNode }) {
   const slotted = useTerrainDetailTrailingSlotValue()
-  if (!trailing && !slotted) {
+  const endSlotted = useTerrainDetailTrailingEndSlotValue()
+  if (!trailing && !slotted && !endSlotted) {
     return <span className="w-16" aria-hidden />
   }
 
@@ -40,6 +44,7 @@ function DetailTrailingSlot({ trailing }: { trailing?: ReactNode }) {
     <div className="flex min-w-16 items-center justify-end gap-2">
       {slotted}
       {trailing}
+      {endSlotted}
     </div>
   )
 }

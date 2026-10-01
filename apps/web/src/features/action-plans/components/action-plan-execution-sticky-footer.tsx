@@ -40,13 +40,14 @@ export const ActionPlanExecutionStickyFooter = forwardRef<
   return (
     <TerrainStickyFooter
       ref={ref}
-      className={cn('flex flex-col gap-2', className)}
+      className={cn('flex flex-col gap-2 px-5', className)}
       data-testid={dataTestId}
     >
       <ActionPlanExecutionLifecycleActions
         hints={hints}
         isTerminal={isTerminal}
         isPending={isPending}
+        placement="dominant"
         onMarkDone={onMarkDone}
         onValidate={onValidate}
         onReopen={onReopen}

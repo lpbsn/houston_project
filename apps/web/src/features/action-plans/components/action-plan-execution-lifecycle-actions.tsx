@@ -18,6 +18,7 @@ import {
   canShowActionPlanExecutionMarkDone,
   canShowActionPlanExecutionReopen,
   canShowActionPlanExecutionValidate,
+  resolveActionPlanExecutionDominantAction,
 } from '../lib/action-plan-permission-hints'
 
 type ActionPlanExecutionLifecycleActionsProps = {
@@ -25,6 +26,7 @@ type ActionPlanExecutionLifecycleActionsProps = {
   isTerminal: boolean
   isPending: boolean
   layout?: 'touch' | 'page'
+  placement?: 'all' | 'dominant'
   onMarkDone: () => void
   onValidate: () => void
   onReopen: () => void
@@ -44,20 +46,12 @@ function getLifecycleButtonClassName(tone: LifecycleTone): string {
   return cn(actionPlanExecutionDetailLifecycleButtonClassName, lifecycleToneClassNames[tone])
 }
 
-function renderMarkDoneLabel() {
-  return (
-    <span className="flex flex-col leading-tight">
-      <span>Marquer</span>
-      <span>terminé</span>
-    </span>
-  )
-}
-
 export function ActionPlanExecutionLifecycleActions({
   hints,
   isTerminal,
   isPending,
   layout = 'touch',
+  placement = 'all',
   onMarkDone,
   onValidate,
   onReopen,
@@ -79,7 +73,7 @@ export function ActionPlanExecutionLifecycleActions({
       key: 'mark-done',
       label: 'Marquer terminé',
       ariaLabel: 'Marquer terminé',
-      content: layout === 'page' ? 'Marquer terminé' : renderMarkDoneLabel(),
+      content: 'Marquer terminé',
       onClick: onMarkDone,
       tone: 'markDone',
     })
@@ -112,7 +106,12 @@ export function ActionPlanExecutionLifecycleActions({
     })
   }
 
-  if (buttons.length === 0) {
+  const visibleButtons =
+    placement === 'dominant'
+      ? buttons.filter((button) => button.tone === resolveActionPlanExecutionDominantAction(hints))
+      : buttons
+
+  if (visibleButtons.length === 0) {
     return null
   }
 
@@ -126,7 +125,7 @@ export function ActionPlanExecutionLifecycleActions({
     const isSecondaryPageAction = layout === 'page' && (tone === 'reopen' || tone === 'cancel')
     const className = cn(
       getLifecycleButtonClassName(tone),
-      layout === 'page' && 'h-9 min-h-9 flex-none rounded-lg px-3 text-sm',
+      layout === 'page' && 'h-9 min-h-9 w-auto flex-none rounded-lg px-3 text-sm',
       isSecondaryPageAction &&
         'bg-transparent text-[#5F5A52] hover:bg-[#F5F4F0] hover:text-[#1a1a1a]',
     )
@@ -163,7 +162,7 @@ export function ActionPlanExecutionLifecycleActions({
 
   return (
     <div className={layout === 'page' ? 'flex flex-wrap justify-end gap-2' : 'flex w-full gap-2'}>
-      {buttons.map(({ key, content, onClick, tone, ariaLabel }) =>
+      {visibleButtons.map(({ key, content, onClick, tone, ariaLabel }) =>
         renderActionButton(content, onClick, key, tone, ariaLabel),
       )}
     </div>
