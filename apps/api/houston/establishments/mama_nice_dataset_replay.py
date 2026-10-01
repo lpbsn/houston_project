@@ -710,6 +710,19 @@ def _replay_plans(*, establishment, actor, buses, resume, result) -> dict[str, A
     return plans
 
 
+def _schedule_assignee_membership(row, memberships):
+    """Resolve the schedule assignee from the named persona or the pole's manager."""
+    persona = row.get("assignee_persona")
+    if persona:
+        member = memberships.get(persona)
+        if member is None:
+            raise MamaNiceDatasetError(
+                [f"{row['seed_key']}: assignee {persona} is missing from replay memberships"]
+            )
+        return member
+    return _active_member_for_pole(memberships, role="manager", pole=row["pole"])
+
+
 def _replay_schedules(*, establishment, actor, plans, memberships, buses, resume, result):
     from houston.action_plans.models import ActionPlanSchedule
 
@@ -720,15 +733,13 @@ def _replay_schedules(*, establishment, actor, plans, memberships, buses, resume
         end_h, end_m = row["end_at"].split(":")
 
         def writer(row=row, at=at):
-            assignees = None
-            if row["assignee_persona"]:
-                member = memberships[row["assignee_persona"]]
-                assignees = [
-                    {
-                        "membership_id": member.id,
-                        "business_unit_id": buses[row["pole"]].id,
-                    }
-                ]
+            member = _schedule_assignee_membership(row, memberships)
+            assignees = [
+                {
+                    "membership_id": member.id,
+                    "business_unit_id": buses[row["pole"]].id,
+                }
+            ]
             with freeze_django_now(at):
                 schedule = create_action_plan_schedule(
                     action_plan=plans[row["plan_seed_key"]],

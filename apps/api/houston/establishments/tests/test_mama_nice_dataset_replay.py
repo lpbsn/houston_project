@@ -33,8 +33,9 @@ from houston.establishments.mama_nice_dataset_replay import (
 from houston.establishments.models import EstablishmentMembership, MamaNiceSeedRecord
 from houston.gamification.models import GamificationSeason
 from houston.gamification.services import open_season
-from houston.testing.factories import create_establishment, create_membership
-from houston.testing.taxonomy import create_business_unit
+from houston.accounts.models import User
+from houston.testing.factories import TEST_PASSWORD, create_establishment, create_membership
+from houston.testing.taxonomy import create_business_unit, create_membership_with_business_unit_scope
 
 
 def test_production_seed_requires_establishment_id():
@@ -133,6 +134,31 @@ def test_replay_seasons_raises_mama_error_when_close_target_missing():
             _replay_seasons(establishment, resume=False, result=result)
 
 
+def _pole_manager_membership(*, establishment, business_unit, email: str):
+    user = User.objects.filter(email=email).first()
+    if user is None:
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=TEST_PASSWORD,
+        )
+    membership = EstablishmentMembership.objects.filter(
+        establishment=establishment,
+        user=user,
+    ).first()
+    if membership is None:
+        membership = create_membership(
+            establishment=establishment,
+            user=user,
+            role=EstablishmentMembership.Role.MANAGER,
+        )
+        create_membership_with_business_unit_scope(
+            membership=membership,
+            business_unit=business_unit,
+        )
+    return membership
+
+
 def _colliding_schedule_rows() -> list[dict]:
     shared = {
         "plan_seed_key": "plan:collision",
@@ -169,6 +195,12 @@ def test_replay_schedules_resolves_by_seed_record_when_window_collides():
     manifest = {"schedules": {"schedules": rows}}
     plans = {"plan:collision": plan}
     buses = {"restaurant": bus}
+    assignee = _pole_manager_membership(
+        establishment=establishment,
+        business_unit=bus,
+        email="mgr.restaurant.demo@example.com",
+    )
+    memberships = {assignee.user.email: assignee}
 
     with patch(
         "houston.establishments.mama_nice_dataset_replay.load_mama_nice_manifest",
@@ -179,7 +211,7 @@ def test_replay_schedules_resolves_by_seed_record_when_window_collides():
             establishment=establishment,
             actor=actor,
             plans=plans,
-            memberships={},
+            memberships=memberships,
             buses=buses,
             resume=False,
             result=first,
@@ -189,7 +221,7 @@ def test_replay_schedules_resolves_by_seed_record_when_window_collides():
             establishment=establishment,
             actor=actor,
             plans=plans,
-            memberships={},
+            memberships=memberships,
             buses=buses,
             resume=True,
             result=resumed,
@@ -245,6 +277,11 @@ def _rh_actor_and_buses(establishment):
 
 
 def _replay_rh_plan_and_schedule(*, establishment, actor, buses, resume, result):
+    assignee = _pole_manager_membership(
+        establishment=establishment,
+        business_unit=buses["rh"],
+        email="mgr.rh.demo@example.com",
+    )
     with patch(
         "houston.establishments.mama_nice_dataset_replay.load_mama_nice_manifest",
         return_value=_rh_only_manifest(),
@@ -260,7 +297,7 @@ def _replay_rh_plan_and_schedule(*, establishment, actor, buses, resume, result)
             establishment=establishment,
             actor=actor,
             plans=plans,
-            memberships={},
+            memberships={assignee.user.email: assignee},
             buses=buses,
             resume=resume,
             result=result,

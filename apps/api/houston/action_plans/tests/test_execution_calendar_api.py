@@ -227,7 +227,6 @@ def test_nested_schedule_create_all_day_accepts_omitted_or_null_clocks(
     schedule_payload = api_recurring_schedule_payload(
         staff_membership=owner_membership,
         business_unit=business_unit,
-        assignees=[],
         use_shared_chronology=True,
         all_day=True,
     )
@@ -264,7 +263,6 @@ def test_nested_schedule_create_rejects_blank_clock_strings(
     schedule_payload = api_recurring_schedule_payload(
         staff_membership=owner_membership,
         business_unit=business_unit,
-        assignees=[],
         use_shared_chronology=True,
         all_day=True,
         start_at="",

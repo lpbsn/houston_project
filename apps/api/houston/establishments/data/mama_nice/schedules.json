@@ -13,7 +13,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 2,
@@ -27,7 +27,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 3,
@@ -41,7 +41,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.hotel.demo@example.com"
     },
     {
       "n": 4,
@@ -55,7 +55,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.pdj.demo@example.com"
     },
     {
       "n": 5,
@@ -69,7 +69,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.pdj.demo@example.com"
     },
     {
       "n": 6,
@@ -83,7 +83,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 7,
@@ -97,7 +97,7 @@
       "start_date": "2026-09-27",
       "end_date": "2027-03-28",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.events.demo@example.com"
     },
     {
       "n": 8,
@@ -111,7 +111,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 9,
@@ -125,7 +125,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 10,
@@ -139,7 +139,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.pdj.demo@example.com"
     },
     {
       "n": 11,
@@ -167,7 +167,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.hotel.demo@example.com"
     },
     {
       "n": 13,
@@ -195,7 +195,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.communication.demo@example.com"
     },
     {
       "n": 15,
@@ -209,7 +209,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.communication.demo@example.com"
     },
     {
       "n": 16,
@@ -223,7 +223,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.events.demo@example.com"
     },
     {
       "n": 17,
@@ -237,7 +237,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.maintenance.demo@example.com"
     },
     {
       "n": 18,
@@ -251,7 +251,7 @@
       "start_date": "2026-04-01",
       "end_date": "2026-10-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 19,
@@ -265,7 +265,7 @@
       "start_date": "2026-04-01",
       "end_date": "2026-10-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.hotel.demo@example.com"
     },
     {
       "n": 20,
@@ -279,7 +279,7 @@
       "start_date": "2026-11-02",
       "end_date": "2026-11-02",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.maintenance.demo@example.com"
     },
     {
       "n": 21,
@@ -307,7 +307,7 @@
       "start_date": "2026-12-07",
       "end_date": "2026-12-07",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.maintenance.demo@example.com"
     },
     {
       "n": 23,
@@ -321,7 +321,7 @@
       "start_date": "2026-09-30",
       "end_date": "2026-09-30",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.maintenance.demo@example.com"
     },
     {
       "n": 24,
@@ -349,7 +349,7 @@
       "start_date": "2026-11-03",
       "end_date": "2026-11-03",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.restaurant.demo@example.com"
     },
     {
       "n": 26,
@@ -363,7 +363,7 @@
       "start_date": "2025-09-23",
       "end_date": "2027-03-31",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.rh.demo@example.com"
     },
     {
       "n": 27,
@@ -391,7 +391,7 @@
       "start_date": "2027-03-01",
       "end_date": "2027-03-01",
       "use_shared_chronology": true,
-      "assignee_persona": null
+      "assignee_persona": "mgr.events.demo@example.com"
     }
   ],
   "out_of_horizon_linked_dates": {

@@ -426,6 +426,23 @@ def _create_individual_schedule(
     )
 
 
+@pytest.mark.parametrize("assignees", [None, []])
+def test_non_staff_shared_schedule_rejects_missing_assignee(
+    owner_membership,
+    catalog_action_plan,
+    assignees,
+):
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
+        create_action_plan_schedule(
+            action_plan=catalog_action_plan,
+            actor=owner_membership,
+            recurrence_days=recurrence_days_for_visible_today(),
+            assignees=assignees,
+            use_shared_chronology=True,
+            **visible_schedule_window(),
+        )
+
+
 def test_individual_schedule_rejects_multiple_assignees(
     owner_membership,
     catalog_action_plan,
