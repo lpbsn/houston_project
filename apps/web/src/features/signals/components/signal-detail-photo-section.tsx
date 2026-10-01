@@ -1,5 +1,5 @@
 import { Camera } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainCard, TerrainFieldLabel } from '@/components/ui/terrain'
@@ -74,17 +74,24 @@ function PhotoPreviewModal({
 }) {
   const titleId = useId()
   const [hasError, setHasError] = useState(false)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const unregister = registerNativeOverlayDismiss(onClose)
+    const dismiss = () => {
+      onCloseRef.current()
+    }
+    const unregister = registerNativeOverlayDismiss(dismiss)
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || !isTopNativeOverlay(onClose)) {
+      if (event.key !== 'Escape' || !isTopNativeOverlay(dismiss)) {
         return
       }
       event.stopImmediatePropagation()
-      onClose()
+      dismiss()
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
@@ -92,7 +99,7 @@ function PhotoPreviewModal({
       unregister()
       document.body.style.overflow = previousOverflow
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

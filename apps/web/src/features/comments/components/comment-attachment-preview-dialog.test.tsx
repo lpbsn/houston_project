@@ -4,7 +4,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain/terrain-bottom-sheet'
-import { resetNativeOverlayDismissForTests } from '@/lib/native-overlay-dismiss'
+import {
+  dismissTopNativeOverlay,
+  registerNativeOverlayDismiss,
+  resetNativeOverlayDismissForTests,
+} from '@/lib/native-overlay-dismiss'
 
 import type { CommentAttachment } from '../types'
 
@@ -67,5 +71,32 @@ describe('CommentAttachmentPreviewDialog', () => {
     expect(sheetClose).not.toHaveBeenCalled()
     expect(underneath).not.toHaveBeenCalled()
     window.removeEventListener('keydown', onUnderneath)
+  })
+
+  it('ignores Escape while a newer overlay is registered, then resumes', () => {
+    const onClose = vi.fn()
+    render(<CommentAttachmentPreviewDialog attachment={attachment} onClose={onClose} />)
+
+    const unregister = registerNativeOverlayDismiss(vi.fn())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+
+    unregister()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('still dismisses from the native back stack, and only when it is top', () => {
+    const onClose = vi.fn()
+    render(<CommentAttachmentPreviewDialog attachment={attachment} onClose={onClose} />)
+
+    const upper = vi.fn()
+    registerNativeOverlayDismiss(upper)
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(upper).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

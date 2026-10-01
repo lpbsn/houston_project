@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
@@ -19,17 +19,24 @@ export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPre
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageError = failedSrc === item.src
   const showError = fetchError || imageError || (!loading && !objectUrl)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const unregister = registerNativeOverlayDismiss(onClose)
+    const dismiss = () => {
+      onCloseRef.current()
+    }
+    const unregister = registerNativeOverlayDismiss(dismiss)
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || !isTopNativeOverlay(onClose)) {
+      if (event.key !== 'Escape' || !isTopNativeOverlay(dismiss)) {
         return
       }
       event.stopImmediatePropagation()
-      onClose()
+      dismiss()
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
@@ -37,7 +44,7 @@ export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPre
       unregister()
       document.body.style.overflow = previousOverflow
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
