@@ -39,7 +39,7 @@ export function ActionPlanExecutionDetailMobileContext({
   ].filter((line): line is string => Boolean(line))
 
   return (
-    <TerrainCard>
+    <TerrainCard className="min-w-0">
       <div data-testid="execution-detail-mobile-context" className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <ActionPlanExecutionDetailLabel>Contexte</ActionPlanExecutionDetailLabel>

@@ -256,6 +256,57 @@ describe('ActionPlanExecutionDetailMobileContext', () => {
     expect(screen.queryByText('+1')).toBeNull()
   })
 
+  it('bounds assignee columns and scrolls them inside the context card', () => {
+    const longName = 'Alexandrine Montmorency-Beauregard'
+    render(
+      <ActionPlanExecutionDetailMobileContext
+        execution={buildExecution({
+          assignees_by_pole: [
+            {
+              business_unit: {
+                id: 'bu-1',
+                specific_name: 'Restaurant',
+                instance_description: '',
+                active: true,
+                generic: {
+                  key: 'restaurant',
+                  label: 'Restaurant',
+                  description: '',
+                  unit_type: 'dedicated',
+                },
+              },
+              assignees: [longName, 'Paul B.', 'Nora E.', 'Luc F.', 'Inès G.'].map(
+                (displayName, index) => ({
+                  membership_id: `m-${index + 1}`,
+                  display_name: displayName,
+                  start_at: '2026-07-07T09:00:00.000Z',
+                  visible_from: '2026-07-07T09:00:00.000Z',
+                  end_at: '2026-07-07T10:15:00.000Z',
+                }),
+              ),
+            },
+          ],
+        })}
+      />,
+    )
+
+    const context = screen.getByTestId('execution-detail-mobile-context')
+    const assignees = screen.getByRole('list', { name: 'Assignés' })
+    const scroller = assignees.parentElement
+    const longNameNode = screen.getByText(longName)
+
+    expect(context.contains(assignees)).toBe(true)
+    expect(context.parentElement?.className).toContain('min-w-0')
+    expect(scroller?.className).toContain('overflow-x-auto')
+    expect(scroller?.className).toContain('min-w-0')
+    expect(assignees.className).toContain('grid-flow-col')
+    expect(assignees.style.gridTemplateRows).toBe('repeat(4, auto)')
+    expect(assignees.style.gridAutoColumns).toBe('11rem')
+    expect(longNameNode.className).toContain('min-w-0')
+    expect(longNameNode.closest('li')?.className).toContain('min-w-0')
+    expect(screen.getByText('Inès G.')).toBeTruthy()
+  })
+
   it('shows the validation and cancellation lines from the feed helpers', () => {
     const { unmount } = render(
       <ActionPlanExecutionDetailMobileContext
