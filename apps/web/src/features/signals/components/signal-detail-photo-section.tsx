@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainCard, TerrainFieldLabel } from '@/components/ui/terrain'
-import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
+import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 import { cn } from '@/lib/utils'
 
 import type { SignalDetail } from '../types'
@@ -80,13 +80,15 @@ function PhotoPreviewModal({
     document.body.style.overflow = 'hidden'
     const unregister = registerNativeOverlayDismiss(onClose)
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose()
+      if (event.key !== 'Escape' || !isTopNativeOverlay(onClose)) {
+        return
       }
+      event.stopImmediatePropagation()
+      onClose()
     }
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
       unregister()
       document.body.style.overflow = previousOverflow
     }

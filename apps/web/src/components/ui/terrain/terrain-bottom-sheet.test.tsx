@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain/terrain-bottom-sheet'
+import { TerrainDialog } from '@/components/ui/terrain/terrain-dialog'
 import {
   dismissTopNativeOverlay,
   resetNativeOverlayDismissForTests,
@@ -149,6 +150,142 @@ describe('TerrainBottomSheet keyboard and safe area', () => {
       </>,
     )
     expect(document.activeElement).toBe(before)
+  })
+
+  it('yields Escape and Tab to the overlay above, then resumes keyboard behavior', () => {
+    const closeSheet = vi.fn()
+    const closeDialog = vi.fn()
+    const { rerender } = render(
+      <>
+        <button type="button">Avant</button>
+        <TerrainBottomSheet title="Actions" open={false} onClose={closeSheet}>
+          <button type="button">Un</button>
+          <button type="button">Deux</button>
+        </TerrainBottomSheet>
+      </>,
+    )
+    const before = screen.getByRole('button', { name: 'Avant' })
+    before.focus()
+
+    rerender(
+      <>
+        <button type="button">Avant</button>
+        <TerrainBottomSheet title="Actions" open onClose={closeSheet}>
+          <button type="button">Un</button>
+          <button type="button">Deux</button>
+        </TerrainBottomSheet>
+      </>,
+    )
+
+    fireEvent.keyDown(window, { key: 'Tab' })
+    const sheetFirst = screen.getByRole('button', { name: 'Un' })
+    expect(document.activeElement).toBe(sheetFirst)
+
+    rerender(
+      <>
+        <button type="button">Avant</button>
+        <TerrainBottomSheet title="Actions" open onClose={closeSheet}>
+          <button type="button">Un</button>
+          <button type="button">Deux</button>
+        </TerrainBottomSheet>
+        <TerrainDialog title="Aperçu" open onClose={closeDialog}>
+          <button type="button">Photo</button>
+        </TerrainDialog>
+      </>,
+    )
+
+    const preview = screen.getByRole('dialog', { name: 'Aperçu' })
+    expect(document.activeElement).toBe(preview)
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(closeDialog).toHaveBeenCalledTimes(1)
+    expect(closeSheet).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(within(preview).getByRole('button', { name: 'Fermer' }))
+
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(within(preview).getByRole('button', { name: 'Photo' }))
+
+    rerender(
+      <>
+        <button type="button">Avant</button>
+        <TerrainBottomSheet title="Actions" open onClose={closeSheet}>
+          <button type="button">Un</button>
+          <button type="button">Deux</button>
+        </TerrainBottomSheet>
+      </>,
+    )
+
+    expect(document.activeElement).toBe(sheetFirst)
+
+    screen.getByRole('button', { name: 'Deux' }).focus()
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(sheetFirst)
+
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Deux' }))
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(closeSheet).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <>
+        <button type="button">Avant</button>
+        <TerrainBottomSheet title="Actions" open={false} onClose={closeSheet}>
+          <button type="button">Un</button>
+          <button type="button">Deux</button>
+        </TerrainBottomSheet>
+      </>,
+    )
+    expect(document.activeElement).toBe(before)
+  })
+
+  it('closes only the top overlay on Escape and leaves a lower listener untouched', () => {
+    const sheetClose = vi.fn()
+    const dialogClose = vi.fn()
+    const underneath = vi.fn()
+    function onUnderneath(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        underneath()
+      }
+    }
+    window.addEventListener('keydown', onUnderneath)
+    render(
+      <>
+        <TerrainBottomSheet title="Sheet" open onClose={sheetClose}>
+          <p>Bas</p>
+        </TerrainBottomSheet>
+        <TerrainDialog title="Dialog" open onClose={dialogClose}>
+          <p>Haut</p>
+        </TerrainDialog>
+      </>,
+    )
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(dialogClose).toHaveBeenCalledTimes(1)
+    expect(sheetClose).not.toHaveBeenCalled()
+    expect(underneath).not.toHaveBeenCalled()
+    window.removeEventListener('keydown', onUnderneath)
+  })
+
+  it('does not close a lower sheet when the top overlay refuses Escape', () => {
+    const sheetClose = vi.fn()
+    const dialogClose = vi.fn()
+    render(
+      <>
+        <TerrainBottomSheet title="Sheet" open onClose={sheetClose}>
+          <p>Bas</p>
+        </TerrainBottomSheet>
+        <TerrainDialog title="Dialog" open dismissible={false} onClose={dialogClose}>
+          <p>Haut</p>
+        </TerrainDialog>
+      </>,
+    )
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(dialogClose).not.toHaveBeenCalled()
+    expect(sheetClose).not.toHaveBeenCalled()
   })
 
   it('keeps focus on the dialog when nothing inside is focusable', () => {

@@ -3,6 +3,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { TerrainBottomSheet } from '@/components/ui/terrain/terrain-bottom-sheet'
+import { resetNativeOverlayDismissForTests } from '@/lib/native-overlay-dismiss'
+
 import type { CommentAttachment } from '../types'
 
 vi.mock('../hooks/use-comment-media-object-url', () => ({
@@ -28,6 +31,7 @@ describe('CommentAttachmentPreviewDialog', () => {
   afterEach(() => {
     document.body.style.overflow = ''
     cleanup()
+    resetNativeOverlayDismissForTests()
   })
 
   it('closes when Escape is pressed', () => {
@@ -37,5 +41,31 @@ describe('CommentAttachmentPreviewDialog', () => {
     expect(screen.getByRole('dialog', { name: 'photo.jpg' })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes only the preview when a sheet and a lower Escape listener are also open', () => {
+    const previewClose = vi.fn()
+    const sheetClose = vi.fn()
+    const underneath = vi.fn()
+    function onUnderneath(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        underneath()
+      }
+    }
+    window.addEventListener('keydown', onUnderneath)
+    render(
+      <>
+        <TerrainBottomSheet title="Infos" open onClose={sheetClose}>
+          <p>Panneau</p>
+        </TerrainBottomSheet>
+        <CommentAttachmentPreviewDialog attachment={attachment} onClose={previewClose} />
+      </>,
+    )
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(previewClose).toHaveBeenCalledTimes(1)
+    expect(sheetClose).not.toHaveBeenCalled()
+    expect(underneath).not.toHaveBeenCalled()
+    window.removeEventListener('keydown', onUnderneath)
   })
 })

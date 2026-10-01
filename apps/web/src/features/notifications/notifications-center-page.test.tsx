@@ -151,6 +151,7 @@ describe('NotificationsCenterPage', () => {
     expect(all.className).toContain('focus-visible:ring-2')
     expect(all.className).toContain('focus-visible:ring-[#1B4FD8]/30')
     expect(all.className).toContain('focus-visible:outline-none')
+    expect(all.parentElement?.className).toContain('py-0.5')
   })
 
   it('switches filter between all and unread', () => {

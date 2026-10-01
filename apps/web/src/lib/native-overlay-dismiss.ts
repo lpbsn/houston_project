@@ -10,6 +10,10 @@ export function registerNativeOverlayDismiss(dismiss: () => void | boolean): () 
   }
 }
 
+export function isTopNativeOverlay(dismiss: () => void | boolean): boolean {
+  return overlayDismissStack.at(-1) === dismiss
+}
+
 export function dismissTopNativeOverlay(): boolean {
   const dismiss = overlayDismissStack.at(-1)
   if (!dismiss) {

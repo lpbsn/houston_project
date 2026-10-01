@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 
-import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
+import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -39,17 +39,25 @@ export function TerrainDialog({
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const overlayDismissRef = useRef<(() => void | boolean) | null>(null)
 
   useEffect(() => {
     if (!open) {
+      overlayDismissRef.current = null
       return
     }
-    if (!dismissible) {
-      return registerNativeOverlayDismiss(() => false)
-    }
-    return registerNativeOverlayDismiss(() => {
+    const dismiss = () => {
+      if (!dismissible) {
+        return false
+      }
       onClose()
-    })
+    }
+    overlayDismissRef.current = dismiss
+    const unregister = registerNativeOverlayDismiss(dismiss)
+    return () => {
+      overlayDismissRef.current = null
+      unregister()
+    }
   }, [dismissible, onClose, open])
 
   useEffect(() => {
@@ -72,7 +80,12 @@ export function TerrainDialog({
       return
     }
     function onKeyDown(event: KeyboardEvent) {
+      const dismiss = overlayDismissRef.current
+      if (!dismiss || !isTopNativeOverlay(dismiss)) {
+        return
+      }
       if (event.key === 'Escape') {
+        event.stopImmediatePropagation()
         if (dismissible) {
           onClose()
         }
@@ -107,8 +120,8 @@ export function TerrainDialog({
         first.focus()
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [dismissible, onClose, open])
 
   if (!open) {

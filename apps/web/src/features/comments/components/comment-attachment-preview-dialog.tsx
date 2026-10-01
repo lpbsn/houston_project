@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
+import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 
 import { useCommentMediaObjectUrl } from '../hooks/use-comment-media-object-url'
 import { isCommentImageAttachment } from '../lib/comment-media'
@@ -32,13 +32,15 @@ export function CommentAttachmentPreviewDialog({
     document.body.style.overflow = 'hidden'
     const unregister = registerNativeOverlayDismiss(onClose)
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose()
+      if (event.key !== 'Escape' || !isTopNativeOverlay(onClose)) {
+        return
       }
+      event.stopImmediatePropagation()
+      onClose()
     }
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
       unregister()
       document.body.style.overflow = previousOverflow
     }

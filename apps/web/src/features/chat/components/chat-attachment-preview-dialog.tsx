@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
+import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 
 import { useChatMediaObjectUrl } from '../hooks/use-chat-media-object-url'
 import type { ChatAttachmentPreviewItem } from '../lib/chat-media'
@@ -25,13 +25,15 @@ export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPre
     document.body.style.overflow = 'hidden'
     const unregister = registerNativeOverlayDismiss(onClose)
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose()
+      if (event.key !== 'Escape' || !isTopNativeOverlay(onClose)) {
+        return
       }
+      event.stopImmediatePropagation()
+      onClose()
     }
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
       unregister()
       document.body.style.overflow = previousOverflow
     }

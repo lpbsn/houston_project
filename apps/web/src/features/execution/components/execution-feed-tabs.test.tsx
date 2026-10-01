@@ -22,9 +22,9 @@ describe('ExecutionFeedTabs', () => {
     expect(screen.getByRole('tab', { name: 'Ma vue' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe('false')
     const tab = screen.getByRole('tab', { name: 'Ma vue' })
-    expect(tab.className).toContain('focus-visible:ring-2')
-    expect(tab.className).toContain('focus-visible:ring-[#1B4FD8]/30')
-    expect(tab.className).toContain('focus-visible:outline-none')
+    expect(tab.className).toContain('focus-visible:outline-2')
+    expect(tab.className).toContain('focus-visible:outline-solid')
+    expect(tab.className).toContain('focus-visible:outline-[#1B4FD8]/30')
   })
 
   it('calls onChange when a tab is clicked', () => {
