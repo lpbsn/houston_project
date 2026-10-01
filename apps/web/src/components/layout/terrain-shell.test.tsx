@@ -165,18 +165,14 @@ describe('TerrainShell', () => {
     expect(main.className).toContain('overflow-y-auto')
   })
 
-  it('owns top safe-area on main only when the topbar is absent', () => {
+  it('does not pad main for the top safe area', () => {
     const { unmount } = renderTerrainShell('auto', { topbar: null })
 
-    expect(screen.getByRole('main').className).toContain(
-      'pt-[var(--app-safe-top)]',
-    )
+    expect(screen.getByRole('main').className).not.toContain('--app-safe-top')
     unmount()
 
     renderTerrainShell('auto')
-    expect(screen.getByRole('main').className).not.toContain(
-      'pt-[var(--app-safe-top)]',
-    )
+    expect(screen.getByRole('main').className).not.toContain('--app-safe-top')
   })
 
   it('renders one shared topbar and a desktop sidebar from shared navigation', () => {

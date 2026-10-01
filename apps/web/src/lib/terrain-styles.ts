@@ -200,6 +200,9 @@ export function terrainFilterSlotClassName(className?: string) {
   )
 }
 
+/** Top inset for terrain chrome. Matches `pt-3` when the safe area is 0. */
+export const terrainSafeTopClassName = 'pt-[max(0.75rem,var(--app-safe-top))]'
+
 export function terrainBackButtonClassName(className?: string) {
   return cn(
     'h-auto border-0 px-0 text-sm font-medium text-[#1B4FD8] shadow-none',
