@@ -1,9 +1,9 @@
-import { useRef } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Reply } from 'lucide-react'
 
+import { resolveApiUrl } from '@/lib/runtime'
 import { cn } from '@/lib/utils'
 
-import { useChatMediaObjectUrl } from '../hooks/use-chat-media-object-url'
 import { formatChatAttachmentSize, formatChatRelativeTime } from '../lib/chat-display'
 import { toChatAttachmentPreviewItem, type ChatAttachmentPreviewItem } from '../lib/chat-media'
 import { splitBodyByMentions } from '../lib/chat-mentions'
@@ -17,18 +17,76 @@ type MessageBubbleProps = {
   onReply?: (payload: { id: string; authorDisplayName: string; excerpt: string }) => void
   onJumpToMessage?: (messageId: string) => void
   onSelectAttachment?: (item: ChatAttachmentPreviewItem) => void
+  onResignPreview?: () => void | Promise<unknown>
 }
 
 function isLocalMessage(message: ChatMessage | LocalChatMessage): message is LocalChatMessage {
   return 'clientMessageId' in message && !('author_membership_id' in message)
 }
 
-export function ChatMediaImage({ src, alt }: { src: string; alt: string }) {
-  const { objectUrl } = useChatMediaObjectUrl(src)
-  if (!objectUrl) {
-    return <span className="text-[13px]">{alt}</span>
+function isInlineMediaSrc(src: string): boolean {
+  return src.startsWith('blob:') || src.startsWith('data:')
+}
+
+export function ChatMediaImage({
+  src,
+  alt,
+  fallbackSrc,
+  onResign,
+  className = 'max-h-48 max-w-full rounded-lg object-cover',
+  errorFallback,
+}: {
+  src: string
+  alt: string
+  fallbackSrc?: string | null
+  onResign?: () => void | Promise<unknown>
+  className?: string
+  errorFallback?: ReactNode
+}) {
+  const [currentSrc, setCurrentSrc] = useState(src)
+  const [failed, setFailed] = useState(false)
+  const [seenSrc, setSeenSrc] = useState(src)
+  const [pendingResignSrc, setPendingResignSrc] = useState<string | null>(null)
+  const resigned = useRef(false)
+
+  if (src !== seenSrc) {
+    setSeenSrc(src)
+    setCurrentSrc(src)
+    setFailed(false)
   }
-  return <img src={objectUrl} alt={alt} className="max-h-48 max-w-full rounded-lg object-cover" />
+  if (pendingResignSrc !== null) {
+    if (pendingResignSrc === src) {
+      setFailed(true)
+    }
+    setPendingResignSrc(null)
+  }
+
+  if (failed) {
+    return errorFallback ?? <span className="text-[13px]">{alt}</span>
+  }
+
+  return (
+    <img
+      src={isInlineMediaSrc(currentSrc) ? currentSrc : resolveApiUrl(currentSrc)}
+      alt={alt}
+      className={className}
+      onError={() => {
+        if (fallbackSrc && currentSrc !== fallbackSrc) {
+          setCurrentSrc(fallbackSrc)
+          return
+        }
+        if (!isInlineMediaSrc(currentSrc) && onResign && !resigned.current) {
+          resigned.current = true
+          const before = src
+          void Promise.resolve(onResign()).finally(() => {
+            setPendingResignSrc(before)
+          })
+          return
+        }
+        setFailed(true)
+      }}
+    />
+  )
 }
 
 function readMessage(message: ChatMessage | LocalChatMessage) {
@@ -89,6 +147,7 @@ export function MessageBubble({
   onReply,
   onJumpToMessage,
   onSelectAttachment,
+  onResignPreview,
 }: MessageBubbleProps) {
   const parsed = readMessage(message)
   const isFailed = parsed.status === 'failed'
@@ -198,7 +257,12 @@ export function MessageBubble({
                         }
                       }}
                     >
-                      <ChatMediaImage src={attachment.previewUrl} alt={attachment.filename} />
+                      <ChatMediaImage
+                        src={attachment.previewUrl}
+                        fallbackSrc={attachment.originalSrc}
+                        alt={attachment.filename}
+                        onResign={onResignPreview}
+                      />
                     </button>
                   ) : attachment.originalSrc ? (
                     <button

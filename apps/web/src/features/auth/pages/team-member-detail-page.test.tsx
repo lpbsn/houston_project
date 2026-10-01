@@ -259,6 +259,37 @@ describe('TeamMemberDetailPage', () => {
     expect(screen.getByText('Inactif')).toBeTruthy()
   })
 
+  it('keeps the member header below the top safe area', () => {
+    render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+
+    const header = screen.getByRole('banner')
+    expect(header.className).toContain('pt-[max(0.75rem,var(--app-safe-top))]')
+    expect(header.className).toContain('pl-[max(1rem,var(--app-safe-left))]')
+    expect(header.className).toContain('pr-[max(1rem,var(--app-safe-right))]')
+    expect(header.className).not.toContain('pt-0')
+  })
+
+  it('insets loading and error states with the top safe area', () => {
+    detailState.current = {
+      ...detailState.current,
+      isPending: true,
+      data: undefined,
+    }
+    const { unmount } = render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+    expect(screen.getByText('Chargement du membre...').className).toContain(
+      'pt-[max(1rem,var(--app-safe-top))]',
+    )
+    unmount()
+
+    detailState.current = {
+      isPending: false,
+      isError: true,
+      data: undefined,
+    }
+    render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+    expect(screen.getByRole('alert').className).toContain('mt-[max(0.75rem,var(--app-safe-top))]')
+  })
+
   it('navigates back to team list', () => {
     render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
 

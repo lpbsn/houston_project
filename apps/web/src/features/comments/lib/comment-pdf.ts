@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 
+import { openNativeDocument } from '@/lib/private-document'
 import { getAppRuntime } from '@/lib/runtime'
 
 import {
@@ -27,12 +28,6 @@ export function commentPdfAlertMessage(reason: CommentPdfOpenReason | undefined)
   return null
 }
 
-function sanitizePdfFilename(filename: string): string {
-  const trimmed = filename.trim() || 'document.pdf'
-  const safe = trimmed.replace(/[^A-Za-z0-9._-]+/g, '_')
-  return safe.endsWith('.pdf') ? safe : `${safe}.pdf`
-}
-
 function downloadPdfOnWeb(href: string, filename: string, revokeAfterClick: boolean) {
   const anchor = document.createElement('a')
   anchor.href = href
@@ -48,38 +43,6 @@ function downloadPdfOnWeb(href: string, filename: string, revokeAfterClick: bool
   }
 }
 
-async function openPdfOnNative(blob: Blob, id: string, filename: string) {
-  try {
-    const { Directory, Filesystem } = await import('@capacitor/filesystem')
-    const { FileViewer } = await import('@capacitor/file-viewer')
-    const path = `comment-pdf-preview/${id}-${sanitizePdfFilename(filename)}`
-    const buffer = await blob.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (const byte of bytes) {
-      binary += String.fromCharCode(byte)
-    }
-    await Filesystem.writeFile({
-      path,
-      data: btoa(binary),
-      directory: Directory.Cache,
-      recursive: true,
-    })
-    const { uri } = await Filesystem.getUri({
-      path,
-      directory: Directory.Cache,
-    })
-    try {
-      await FileViewer.openDocumentFromLocalPath({ path: uri })
-    } catch {
-      return { ok: false as const, reason: 'viewer' as const }
-    }
-    return { ok: true as const }
-  } catch {
-    return { ok: false as const, reason: 'write' as const }
-  }
-}
-
 export async function openCommentPdfAttachment(input: {
   src: string | null | undefined
   filename: string
@@ -91,13 +54,14 @@ export async function openCommentPdfAttachment(input: {
   }
   const native = getAppRuntime() === 'native' && Capacitor.isNativePlatform()
   if (native) {
-    const blob = isInlineCommentMediaHref(href)
-      ? await fetch(href).then((response) => (response.ok ? response.blob() : null))
-      : await fetchAuthenticatedCommentMediaBlob(href)
-    if (!blob) {
-      return { ok: false, reason: 'fetch' }
+    if (isInlineCommentMediaHref(href)) {
+      return { ok: false, reason: 'noop' }
     }
-    return openPdfOnNative(blob, input.id, input.filename)
+    const opened = await openNativeDocument(href)
+    if ('reason' in opened) {
+      return { ok: false, reason: opened.reason }
+    }
+    return { ok: true }
   }
   if (isInlineCommentMediaHref(href)) {
     downloadPdfOnWeb(href, input.filename, false)

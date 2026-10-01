@@ -240,6 +240,7 @@ def _serialize_conversation_list_item(
                 serialize_message(
                     latest_message,
                     history_cutoff_at=viewer.history_cutoff_at if viewer is not None else None,
+                    viewer_membership_id=viewer_membership_id,
                 )
                 if latest_message
                 else None
@@ -361,6 +362,7 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
                 serialize_messages(
                     list(latest_messages_by_conversation_id.values()),
                     history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
+                    viewer_membership_id=membership.id,
                 ),
                 strict=True,
             )
@@ -691,6 +693,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
                         history_cutoff_at=(
                             participant.history_cutoff_at if participant is not None else None
                         ),
+                        viewer_membership_id=membership.id,
                     ),
                     "has_more": has_more,
                 }
@@ -820,6 +823,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
                             if actor_participant is not None
                             else None
                         ),
+                        viewer_membership_id=membership.id,
                     ),
                     "created": result.created,
                 }

@@ -1,9 +1,8 @@
-import { apiClient, fetchWithAuthRetry, withAuthRetry } from '@/api/client'
+import { apiClient, withAuthRetry } from '@/api/client'
 
 import { parseStandardApiError } from '@/lib/api-errors'
+import { PresignedPutError, putPresignedBytes } from '@/lib/presigned-put'
 import { resolveApiUrl } from '@/lib/runtime'
-
-import { isExternalPresignedPutUrl } from './lib/chat-upload-put'
 import type {
   ChatConversationDetail,
   ChatConversationListResponse,
@@ -565,53 +564,25 @@ export async function putChatUploadBytes(options: {
   const houstonContentUrl = resolveApiUrl(
     `/api/v1/establishments/${options.establishmentId}/chat/uploads/${options.uploadId}/content/`,
   )
-  if (isExternalPresignedPutUrl(options.putUrl, houstonContentUrl)) {
-    await new Promise<void>((resolve, reject) => {
-      const request = new XMLHttpRequest()
-      request.open('PUT', options.putUrl)
-      request.setRequestHeader('Content-Type', options.contentType)
-      const abort = () => {
-        request.abort()
-        reject(new ChatApiError({ status: 0, detail: 'Upload cancelled.' }))
-      }
-      if (options.signal?.aborted) {
-        abort()
-        return
-      }
-      options.signal?.addEventListener('abort', abort, { once: true })
-      request.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          options.onProgress?.(event.loaded / event.total)
-        }
-      }
-      request.onload = () => {
-        if (request.status >= 200 && request.status < 300) {
-          options.onProgress?.(1)
-          resolve()
-          return
-        }
-        reject(new ChatApiError({ status: request.status, detail: 'Upload failed.' }))
-      }
-      request.onerror = () => reject(new ChatApiError({ status: 0, detail: 'Upload failed.' }))
-      request.onabort = () => reject(new ChatApiError({ status: 0, detail: 'Upload cancelled.' }))
-      request.send(options.blob)
+  try {
+    await putPresignedBytes({
+      putUrl: options.putUrl,
+      houstonContentUrl,
+      blob: options.blob,
+      contentType: options.contentType,
+      signal: options.signal,
+      onProgress: options.onProgress,
     })
-    return
+  } catch (error) {
+    if (!(error instanceof PresignedPutError)) {
+      throw error
+    }
+    if (error.response) {
+      const payload = await error.response.json().catch(() => ({}))
+      throw parseError(error.response, payload)
+    }
+    throw new ChatApiError({ status: error.status, detail: error.message })
   }
-
-  const response = await fetchWithAuthRetry(houstonContentUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': options.contentType,
-    },
-    body: options.blob,
-    signal: options.signal,
-  })
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}))
-    throw parseError(response, payload)
-  }
-  options.onProgress?.(1)
 }
 
 export async function fetchChatSharedMedia(

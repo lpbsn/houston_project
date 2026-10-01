@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { isTopNativeOverlay, registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 
-import { useCommentMediaObjectUrl } from '../hooks/use-comment-media-object-url'
+import { CommentAttachmentImage } from './comment-attachment-image'
 import { isCommentImageAttachment } from '../lib/comment-media'
 import type { CommentAttachment } from '../types'
 
@@ -20,9 +20,6 @@ export function CommentAttachmentPreviewDialog({
         contentType: attachment.content_type,
       })
     : false
-  const { objectUrl, loading, error } = useCommentMediaObjectUrl(
-    isImage ? attachment?.preview_url : null,
-  )
   const onCloseRef = useRef(onClose)
   useEffect(() => {
     onCloseRef.current = onClose
@@ -76,17 +73,18 @@ export function CommentAttachmentPreviewDialog({
             Fermer
           </Button>
         </div>
-        {objectUrl ? (
-          <img
-            src={objectUrl}
+        {isImage ? (
+          <CommentAttachmentImage
+            src={attachment.preview_url}
             alt={attachment.original_filename}
             className="max-h-[85vh] max-w-full object-contain"
+            errorFallback={
+              <p className="rounded-[12px] bg-white px-4 py-6 text-sm text-[#1a1a1a]" role="alert">
+                Impossible d’afficher cette image.
+              </p>
+            }
           />
-        ) : (
-          <p className="rounded-[12px] bg-white px-4 py-6 text-sm text-[#1a1a1a]" role="alert">
-            {loading ? 'Chargement…' : error ? 'Impossible d’afficher cette image.' : ''}
-          </p>
-        )}
+        ) : null}
       </div>
     </div>
   )

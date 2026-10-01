@@ -1,13 +1,10 @@
 import { Capacitor } from '@capacitor/core'
 
-import { getAppRuntime } from '@/lib/runtime'
 import { subscribeAppForeground } from '@/lib/app-lifecycle'
+import { openNativeDocument } from '@/lib/private-document'
+import { getAppRuntime } from '@/lib/runtime'
 
-import {
-  fetchAuthenticatedChatMediaBlob,
-  isInlineChatMediaHref,
-  resolveChatMediaHref,
-} from './chat-media'
+import { fetchAuthenticatedChatMediaBlob, isInlineChatMediaHref, resolveChatMediaHref } from './chat-media'
 
 export const CHAT_PDF_CACHE_PREFIX = 'chat-pdf-preview'
 export const CHAT_PDF_CACHE_MAX_AGE_MS = 60 * 60 * 1000
@@ -50,29 +47,6 @@ export function chatPdfCacheRelativePath(id: string, filename: string): string {
   return `${CHAT_PDF_CACHE_PREFIX}/${id}-${sanitizePdfFilename(filename)}`
 }
 
-async function blobFromInlineHref(href: string): Promise<Blob | null> {
-  try {
-    const response = await fetch(href)
-    if (!response.ok) {
-      return null
-    }
-    return response.blob()
-  } catch {
-    return null
-  }
-}
-
-async function resolvePdfBlob(src: string): Promise<Blob | null> {
-  const href = resolveChatMediaHref(src)
-  if (!href) {
-    return null
-  }
-  if (isInlineChatMediaHref(href)) {
-    return blobFromInlineHref(href)
-  }
-  return fetchAuthenticatedChatMediaBlob(src)
-}
-
 function downloadPdfOnWeb(href: string, filename: string, revokeAfterClick: boolean) {
   const anchor = document.createElement('a')
   anchor.href = href
@@ -88,38 +62,6 @@ function downloadPdfOnWeb(href: string, filename: string, revokeAfterClick: bool
   }
 }
 
-async function openPdfOnNative(blob: Blob, id: string, filename: string): Promise<ChatPdfOpenResult> {
-  try {
-    const { Directory, Filesystem } = await import('@capacitor/filesystem')
-    const { FileViewer } = await import('@capacitor/file-viewer')
-    const path = chatPdfCacheRelativePath(id, filename)
-    const buffer = await blob.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (const byte of bytes) {
-      binary += String.fromCharCode(byte)
-    }
-    await Filesystem.writeFile({
-      path,
-      data: btoa(binary),
-      directory: Directory.Cache,
-      recursive: true,
-    })
-    const { uri } = await Filesystem.getUri({
-      path,
-      directory: Directory.Cache,
-    })
-    try {
-      await FileViewer.openDocumentFromLocalPath({ path: uri })
-    } catch {
-      return { ok: false, reason: 'viewer' }
-    }
-    return { ok: true }
-  } catch {
-    return { ok: false, reason: 'write' }
-  }
-}
-
 export async function openChatPdfAttachment(input: {
   src: string | null | undefined
   filename: string
@@ -131,11 +73,14 @@ export async function openChatPdfAttachment(input: {
   }
 
   if (isNativePdfRuntime()) {
-    const blob = await resolvePdfBlob(href)
-    if (!blob) {
-      return { ok: false, reason: 'fetch' }
+    if (isInlineChatMediaHref(href)) {
+      return { ok: false, reason: 'noop' }
     }
-    return openPdfOnNative(blob, input.id, input.filename)
+    const opened = await openNativeDocument(href)
+    if ('reason' in opened) {
+      return { ok: false, reason: opened.reason }
+    }
+    return { ok: true }
   }
 
   if (isInlineChatMediaHref(href)) {

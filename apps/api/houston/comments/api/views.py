@@ -226,7 +226,13 @@ class ActionPlanExecutionCommentsView(EstablishmentScopedObservationMixin, APIVi
             )
 
         return Response(
-            CommentItemSerializer(serialize_comment(comment, execution=execution)).data,
+            CommentItemSerializer(
+                serialize_comment(
+                    comment,
+                    execution=execution,
+                    viewer_membership_id=membership.id,
+                )
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 

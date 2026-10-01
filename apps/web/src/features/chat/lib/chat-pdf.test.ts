@@ -11,6 +11,7 @@ const {
   deleteFile,
   readdir,
   stat,
+  openDocumentFromUrl,
   openDocumentFromLocalPath,
   fileViewerOpen,
   subscribeAppForeground,
@@ -23,6 +24,7 @@ const {
   deleteFile: vi.fn(),
   readdir: vi.fn(),
   stat: vi.fn(),
+  openDocumentFromUrl: vi.fn(),
   openDocumentFromLocalPath: vi.fn(),
   fileViewerOpen: vi.fn(),
   subscribeAppForeground: vi.fn(() => () => undefined),
@@ -63,6 +65,7 @@ vi.mock('@capacitor/filesystem', () => ({
 
 vi.mock('@capacitor/file-viewer', () => ({
   FileViewer: {
+    openDocumentFromUrl: (...args: unknown[]) => openDocumentFromUrl(...args),
     openDocumentFromLocalPath: (...args: unknown[]) => openDocumentFromLocalPath(...args),
     open: (...args: unknown[]) => fileViewerOpen(...args),
   },
@@ -72,7 +75,6 @@ import {
   CHAT_PDF_CACHE_PREFIX,
   CHAT_PDF_VIEWER_ALERT,
   chatPdfAlertMessage,
-  chatPdfCacheRelativePath,
   openChatPdfAttachment,
   purgeExpiredChatPdfCache,
   resetChatPdfCachePurgeForTests,
@@ -89,6 +91,7 @@ describe('chat-pdf', () => {
     deleteFile.mockReset()
     readdir.mockReset()
     stat.mockReset()
+    openDocumentFromUrl.mockReset()
     openDocumentFromLocalPath.mockReset()
     fileViewerOpen.mockReset()
     subscribeAppForeground.mockReset()
@@ -154,16 +157,10 @@ describe('chat-pdf', () => {
     expect(document.body.innerHTML).not.toContain('/preview/')
   })
 
-  it('writes Cache then opens via FileViewer.openDocumentFromLocalPath without deleting', async () => {
+  it('opens a remote PDF from the resolved URL without fetching or writing a cache file', async () => {
     getAppRuntime.mockReturnValue('native')
     isNativePlatform.mockReturnValue(true)
-    fetchWithAuthRetry.mockResolvedValue({
-      ok: true,
-      blob: async () => new Blob(['pdf-bytes'], { type: 'application/pdf' }),
-    })
-    writeFile.mockResolvedValue(undefined)
-    getUri.mockResolvedValue({ uri: 'file:///cache/chat-pdf-preview/att-1-note.pdf' })
-    openDocumentFromLocalPath.mockResolvedValue(undefined)
+    openDocumentFromUrl.mockResolvedValue(undefined)
 
     const result = await openChatPdfAttachment({
       src: '/api/v1/chat/preview/',
@@ -172,44 +169,55 @@ describe('chat-pdf', () => {
     })
 
     expect(result).toEqual({ ok: true })
-    expect(writeFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: chatPdfCacheRelativePath('att-1', 'note.pdf'),
-        directory: 'CACHE',
-        recursive: true,
-      }),
-    )
-    expect(getUri).toHaveBeenCalledWith({
-      path: chatPdfCacheRelativePath('att-1', 'note.pdf'),
-      directory: 'CACHE',
+    expect(openDocumentFromUrl).toHaveBeenCalledWith({
+      url: 'https://houston.test/api/v1/chat/preview/',
     })
-    expect(openDocumentFromLocalPath).toHaveBeenCalledWith({
-      path: 'file:///cache/chat-pdf-preview/att-1-note.pdf',
-    })
+    expect(fetchWithAuthRetry).not.toHaveBeenCalled()
+    expect(writeFile).not.toHaveBeenCalled()
+    expect(openDocumentFromLocalPath).not.toHaveBeenCalled()
     expect(fileViewerOpen).not.toHaveBeenCalled()
-    expect(deleteFile).not.toHaveBeenCalled()
   })
 
-  it('returns a viewer failure without throwing when no reader is available', async () => {
+  it('maps native plugin failures onto the existing alerts', async () => {
     getAppRuntime.mockReturnValue('native')
     isNativePlatform.mockReturnValue(true)
-    fetchWithAuthRetry.mockResolvedValue({
-      ok: true,
-      blob: async () => new Blob(['pdf-bytes'], { type: 'application/pdf' }),
-    })
-    writeFile.mockResolvedValue(undefined)
-    getUri.mockResolvedValue({ uri: 'file:///cache/chat-pdf-preview/att-1-note.pdf' })
-    openDocumentFromLocalPath.mockRejectedValue(new Error('no viewer'))
 
-    const result = await openChatPdfAttachment({
+    openDocumentFromUrl.mockRejectedValueOnce({ code: 'OS-PLUG-FLVW-0010', message: 'no app' })
+    await expect(
+      openChatPdfAttachment({ src: '/api/v1/chat/preview/', filename: 'note.pdf', id: 'att-1' }),
+    ).resolves.toEqual({ ok: false, reason: 'viewer' })
+
+    openDocumentFromUrl.mockRejectedValueOnce(new Error('OS-PLUG-FLVW-0012 download failed'))
+    await expect(
+      openChatPdfAttachment({ src: '/api/v1/chat/preview/', filename: 'note.pdf', id: 'att-1' }),
+    ).resolves.toEqual({ ok: false, reason: 'fetch' })
+
+    openDocumentFromUrl.mockRejectedValueOnce(new Error('network'))
+    await expect(
+      openChatPdfAttachment({ src: '/api/v1/chat/preview/', filename: 'note.pdf', id: 'att-1' }),
+    ).resolves.toEqual({ ok: false, reason: 'fetch' })
+
+    openDocumentFromUrl.mockRejectedValueOnce({ code: 'OS-PLUG-FLVW-0013', message: 'missing extension' })
+    const missingExtension = await openChatPdfAttachment({
       src: '/api/v1/chat/preview/',
       filename: 'note.pdf',
       id: 'att-1',
     })
+    expect(missingExtension).toEqual({ ok: false, reason: 'write' })
+    expect(chatPdfAlertMessage('viewer')).toBe(CHAT_PDF_VIEWER_ALERT)
+    expect(fetchWithAuthRetry).not.toHaveBeenCalled()
+    expect(writeFile).not.toHaveBeenCalled()
+  })
 
-    expect(result).toEqual({ ok: false, reason: 'viewer' })
-    expect(chatPdfAlertMessage(result.reason)).toBe(CHAT_PDF_VIEWER_ALERT)
-    expect(deleteFile).not.toHaveBeenCalled()
+  it('does not open an unsent blob PDF on native', async () => {
+    getAppRuntime.mockReturnValue('native')
+    isNativePlatform.mockReturnValue(true)
+
+    await expect(
+      openChatPdfAttachment({ src: 'blob:outbox-pdf', filename: 'pending.pdf', id: 'att-local' }),
+    ).resolves.toEqual({ ok: false, reason: 'noop' })
+    expect(openDocumentFromUrl).not.toHaveBeenCalled()
+    expect(writeFile).not.toHaveBeenCalled()
   })
 
   it('purges only prefix files older than one hour', async () => {

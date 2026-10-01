@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import uuid
 from datetime import timedelta
 
 import pytest
@@ -359,7 +360,11 @@ def test_without_plan_access_cannot_preview(api_client, settings, tmp_path):
     )
     outsider_token = login(api_client, user=outsider.user)
     preview = api_client.get(
-        created.json()["attachments"][0]["preview_url"],
+        _preview_url(
+            staff.establishment_id,
+            execution.id,
+            created.json()["attachments"][0]["id"],
+        ),
         **auth_headers(outsider_token),
     )
     assert preview.status_code == 404
@@ -603,3 +608,88 @@ def test_inherited_signal_comments_have_no_plan_attachments(api_client, settings
     )
     inherited = next(item for item in listed.json() if item["item_type"] == "inherited_signal")
     assert "attachments" not in inherited
+
+
+def _published_comment_attachment(api_client, settings, tmp_path, *, requires_validation=True):
+    settings.HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    owner, staff, execution = _setup_execution(requires_validation=requires_validation)
+    token = login(api_client, user=staff.user)
+    upload_id, _ = _reserve_put_complete(
+        api_client,
+        token=token,
+        establishment_id=staff.establishment_id,
+        execution_id=execution.id,
+    )
+    created = api_client.post(
+        execution_comments_url(staff.establishment_id, execution.id),
+        {"body": "preuve", "attachment_ids": [upload_id]},
+        format="json",
+        **auth_headers(token),
+    )
+    assert created.status_code == 201, created.content
+    attachment = created.json()["attachments"][0]
+    return owner, staff, execution, token, attachment
+
+
+def test_comment_preview_token_authorizes_viewer_without_bearer(api_client, settings, tmp_path):
+    _owner, staff, execution, token, attachment = _published_comment_attachment(
+        api_client, settings, tmp_path
+    )
+    assert "token=" in attachment["preview_url"]
+    preview = api_client.get(attachment["preview_url"])
+    assert preview.status_code == 200
+
+    bearer_preview = api_client.get(
+        _preview_url(staff.establishment_id, execution.id, attachment["id"]),
+        **auth_headers(token),
+    )
+    assert bearer_preview.status_code == 200
+
+
+def test_comment_preview_rejects_other_membership_canceled_retention_and_establishment(
+    api_client, settings, tmp_path
+):
+    from urllib.parse import urlencode
+
+    from houston.comments.constants import ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT
+    from houston.uploads.preview_tokens import sign_upload_preview_token
+
+    owner, staff, execution, _token, attachment = _published_comment_attachment(
+        api_client, settings, tmp_path
+    )
+    bare = _preview_url(staff.establishment_id, execution.id, attachment["id"])
+    other = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_token = sign_upload_preview_token(
+        salt=ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        establishment_id=staff.establishment_id,
+        attachment_id=uuid.UUID(attachment["id"]),
+        membership_id=other.id,
+    )
+    assert api_client.get(f"{bare}?{urlencode({'token': other_token})}").status_code == 404
+
+    foreign_token = sign_upload_preview_token(
+        salt=ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        establishment_id=uuid.uuid4(),
+        attachment_id=uuid.UUID(attachment["id"]),
+        membership_id=staff.id,
+    )
+    assert api_client.get(f"{bare}?{urlencode({'token': foreign_token})}").status_code == 404
+
+    execution.status = EXECUTION_STATUS_CANCELED
+    execution.save(update_fields=["status", "updated_at"])
+    assert api_client.get(attachment["preview_url"]).status_code == 404
+
+
+def test_comment_preview_token_rejects_done_outside_retention(api_client, settings, tmp_path):
+    _owner, staff, execution, _token, attachment = _published_comment_attachment(
+        api_client,
+        settings,
+        tmp_path,
+        requires_validation=False,
+    )
+    mark_action_plan_execution_done(execution_id=execution.id, actor_membership=staff)
+    assert api_client.get(attachment["preview_url"]).status_code == 200
+    execution.refresh_from_db()
+    execution.marked_done_at = timezone.now() - timedelta(days=31)
+    execution.save(update_fields=["marked_done_at", "updated_at"])
+    assert api_client.get(attachment["preview_url"]).status_code == 404

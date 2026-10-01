@@ -110,8 +110,6 @@ export function TerrainShell({
           <main
             className={cn(
               'relative min-h-0 min-w-0 flex-1',
-              !topbar && 'pt-[var(--app-safe-top)]',
-              !topbar && isDesktopWeb && 'pt-0',
               mainScroll === 'hidden'
                 ? 'overflow-hidden'
                 : 'overflow-y-auto overscroll-y-contain',

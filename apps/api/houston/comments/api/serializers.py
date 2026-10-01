@@ -3,6 +3,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.action_plans.models import ActionPlanExecution
+from houston.comments.constants import ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT
 from houston.comments.models import ActionPlanCommentAttachment, Comment
 from houston.comments.permissions import serialize_execution_comment_permission_hints
 from houston.comments.selectors import (
@@ -12,6 +13,7 @@ from houston.comments.selectors import (
 )
 from houston.comments.upload_services import execution_comment_attachments_are_available
 from houston.establishments.models import EstablishmentMembership
+from houston.uploads.preview_tokens import sign_upload_preview_token, with_preview_token
 
 
 def _membership_display_name(membership) -> str:
@@ -30,28 +32,33 @@ def serialize_action_plan_comment_attachment(
     attachment: ActionPlanCommentAttachment,
     *,
     comment: Comment | None = None,
+    viewer_membership_id=None,
 ) -> dict:
     resolved_comment = comment or attachment.comment
     establishment_id = resolved_comment.establishment_id
     thumbnail_key = getattr(attachment.upload, "thumbnail_storage_key", "")
+    token = None
+    if viewer_membership_id is not None:
+        token = sign_upload_preview_token(
+            salt=ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+            establishment_id=establishment_id,
+            attachment_id=attachment.id,
+            membership_id=viewer_membership_id,
+        )
+    preview_url = (
+        f"/api/v1/establishments/{establishment_id}"
+        f"/action-plan-executions/{attachment.action_plan_execution_id}"
+        f"/comment-attachments/{attachment.id}/preview/"
+    )
+    thumbnail_url = f"{preview_url}?variant=thumbnail" if thumbnail_key else None
     return {
         "id": attachment.id,
         "kind": attachment.kind,
         "content_type": attachment.content_type,
         "size_bytes": attachment.size_bytes,
         "original_filename": attachment.original_filename,
-        "preview_url": (
-            f"/api/v1/establishments/{establishment_id}"
-            f"/action-plan-executions/{attachment.action_plan_execution_id}"
-            f"/comment-attachments/{attachment.id}/preview/"
-        ),
-        "thumbnail_url": (
-            f"/api/v1/establishments/{establishment_id}"
-            f"/action-plan-executions/{attachment.action_plan_execution_id}"
-            f"/comment-attachments/{attachment.id}/preview/?variant=thumbnail"
-            if thumbnail_key
-            else None
-        ),
+        "preview_url": with_preview_token(preview_url, token),
+        "thumbnail_url": with_preview_token(thumbnail_url, token) if thumbnail_url else None,
         "comment_id": resolved_comment.id,
         "created_at": attachment.created_at,
         "author_display_name": _membership_display_name(resolved_comment.author_membership),
@@ -62,6 +69,7 @@ def _serialize_comment_attachments(
     comment: Comment,
     *,
     execution: ActionPlanExecution | None = None,
+    viewer_membership_id=None,
 ) -> list[dict]:
     if comment.action_plan_execution_id is None:
         return []
@@ -76,7 +84,11 @@ def _serialize_comment_attachments(
     if attachments is None:
         attachments = list(comment.plan_comment_attachments.select_related("upload").all())
     return [
-        serialize_action_plan_comment_attachment(attachment, comment=comment)
+        serialize_action_plan_comment_attachment(
+            attachment,
+            comment=comment,
+            viewer_membership_id=viewer_membership_id,
+        )
         for attachment in sorted(attachments, key=lambda item: (item.position, item.id))
     ]
 
@@ -86,6 +98,7 @@ def serialize_comment(
     *,
     execution: ActionPlanExecution | None = None,
     include_attachments: bool = False,
+    viewer_membership_id=None,
 ) -> dict:
     mentions = [
         {
@@ -108,7 +121,11 @@ def serialize_comment(
         "created_at": comment.created_at,
     }
     if include_attachments or comment.action_plan_execution_id is not None:
-        payload["attachments"] = _serialize_comment_attachments(comment, execution=execution)
+        payload["attachments"] = _serialize_comment_attachments(
+            comment,
+            execution=execution,
+            viewer_membership_id=viewer_membership_id,
+        )
     return payload
 
 
@@ -137,8 +154,19 @@ def serialize_execution_comment_thread(
     root = entry.root
     return {
         "item_type": "execution_thread",
-        **serialize_comment(root, execution=execution),
-        "replies": [serialize_comment(reply, execution=execution) for reply in entry.replies],
+        **serialize_comment(
+            root,
+            execution=execution,
+            viewer_membership_id=membership.id,
+        ),
+        "replies": [
+            serialize_comment(
+                reply,
+                execution=execution,
+                viewer_membership_id=membership.id,
+            )
+            for reply in entry.replies
+        ],
         "is_resolved": root.resolved_at is not None,
         "resolved_at": root.resolved_at,
         "resolved_by": serialize_resolved_by(root),

@@ -3,15 +3,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../lib/chat-media', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/chat-media')>()
-  return {
-    ...actual,
-    fetchAuthenticatedChatMedia: vi.fn(async (src: string) => src),
-  }
-})
+import { resolveApiUrl } from '@/lib/runtime'
 
-import { MessageBubble } from './message-bubble'
+import { ChatMediaImage, MessageBubble } from './message-bubble'
 import type { ChatMessage } from '../types'
 
 function serverMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
@@ -106,5 +100,67 @@ describe('MessageBubble attachments', () => {
       src: '/api/v1/chat/preview/note.pdf',
     })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('renders a remote image from the resolved preview URL without fetching it', () => {
+    render(
+      <MessageBubble
+        isOwn={false}
+        message={serverMessage({
+          attachments: [
+            {
+              id: 'att-image',
+              kind: 'image',
+              content_type: 'image/jpeg',
+              size_bytes: 1200,
+              original_filename: 'photo.jpg',
+              preview_url: '/api/v1/chat/preview/original',
+              thumbnail_url: '/api/v1/chat/preview/thumb',
+              message_id: 'msg-1',
+              created_at: '2026-07-11T17:16:00.000Z',
+              author_display_name: 'Bob',
+            },
+          ],
+        })}
+      />,
+    )
+
+    const image = screen.getByRole('img', { name: 'photo.jpg' })
+    expect(image.getAttribute('src')).toBe(resolveApiUrl('/api/v1/chat/preview/thumb'))
+    expect(screen.queryByText('photo.jpg')).toBeNull()
+  })
+
+  it('keeps a local blob preview and shows the filename only after the image fails', () => {
+    let finishResign: (() => void) | undefined
+    const onResign = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishResign = resolve
+        }),
+    )
+    const { rerender } = render(
+      <ChatMediaImage src="blob:local-photo" alt="photo.jpg" onResign={onResign} />,
+    )
+    expect(screen.getByRole('img').getAttribute('src')).toBe('blob:local-photo')
+
+    rerender(
+      <ChatMediaImage
+        src="/api/v1/chat/preview/thumb"
+        fallbackSrc="/api/v1/chat/preview/original"
+        alt="photo.jpg"
+        onResign={onResign}
+      />,
+    )
+    fireEvent.error(screen.getByRole('img'))
+    expect(screen.getByRole('img').getAttribute('src')).toBe(
+      resolveApiUrl('/api/v1/chat/preview/original'),
+    )
+    fireEvent.error(screen.getByRole('img'))
+    expect(onResign).toHaveBeenCalledTimes(1)
+    fireEvent.error(screen.getByRole('img'))
+    expect(onResign).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('photo.jpg')).toBeTruthy()
+    finishResign?.()
   })
 })

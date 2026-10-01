@@ -47,7 +47,7 @@ import { toRoleEnum } from '@/features/auth/lib/role'
 import { blockMembership } from '@/features/safety/api'
 import { SafetyReportSheet } from '@/features/safety/safety-report-sheet'
 import type { EstablishmentMembershipDetailResponse, RoleEnum } from '@/features/auth/types'
-import { terrain, terrainBackButtonClassName } from '@/lib/terrain-styles'
+import { terrain, terrainBackButtonClassName, terrainSafeTopClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 const ROLE_PILL_OPTIONS: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
@@ -199,13 +199,17 @@ export function TeamMemberDetailPage({ membershipId, onBack }: TeamMemberDetailP
   }
 
   if (detailQuery.isPending) {
-    return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement du membre...</p>
+    return (
+      <p className={cn('px-3 pb-4 pt-[max(1rem,var(--app-safe-top))] text-sm', terrain.muted)}>
+        Chargement du membre...
+      </p>
+    )
   }
 
   if (detailQuery.isError || !membership || !currentRole) {
     return (
       <TerrainErrorState
-        className="mx-3 mt-3"
+        className="mx-3 mt-[max(0.75rem,var(--app-safe-top))]"
         message="Ce membre est introuvable."
         retryLabel="Retour à l'équipe"
         onRetry={() => (onBack ? onBack() : navigate('/team'))}
@@ -334,7 +338,12 @@ export function TeamMemberDetailPage({ membershipId, onBack }: TeamMemberDetailP
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="shrink-0 border-b border-[#E8E6DF] bg-white px-4 pb-3 pt-3">
+      <header
+        className={cn(
+          'shrink-0 border-b border-[#E8E6DF] bg-white pb-3 pl-[max(1rem,var(--app-safe-left))] pr-[max(1rem,var(--app-safe-right))]',
+          terrainSafeTopClassName,
+        )}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <Button

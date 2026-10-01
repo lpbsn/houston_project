@@ -1,9 +1,8 @@
-import { apiClient, fetchWithAuthRetry, withAuthRetry } from '@/api/client'
+import { apiClient, withAuthRetry } from '@/api/client'
 
 import { parseStandardApiError } from '@/lib/api-errors'
+import { PresignedPutError, putPresignedBytes } from '@/lib/presigned-put'
 import { resolveApiUrl } from '@/lib/runtime'
-
-import { isExternalPresignedPutUrl } from './lib/comment-upload-put'
 import type {
   CommentCreateRequest,
   CommentItem,
@@ -332,24 +331,37 @@ export async function putActionPlanCommentUploadBytes(options: {
   const houstonContentUrl = resolveApiUrl(
     `/api/v1/establishments/${options.establishmentId}/action-plan-executions/${options.executionId}/comment-uploads/${options.uploadId}/content/`,
   )
-  if (isExternalPresignedPutUrl(options.putUrl, houstonContentUrl)) {
-    const response = await fetch(options.putUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': options.contentType },
-      body: options.blob,
+  try {
+    await putPresignedBytes({
+      putUrl: options.putUrl,
+      houstonContentUrl,
+      blob: options.blob,
+      contentType: options.contentType,
     })
-    if (!response.ok) {
-      throw new CommentsApiError({ status: response.status, detail: 'Échec de l’envoi du fichier.' })
+  } catch (error) {
+    if (!(error instanceof PresignedPutError)) {
+      throw error
     }
-    return
+    if (error.response) {
+      const payload = await error.response.json().catch(() => ({}))
+      throw parseError(error.response, payload)
+    }
+    throw commentPresignedPutError(error)
   }
-  const response = await fetchWithAuthRetry(houstonContentUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': options.contentType },
-    body: options.blob,
+}
+
+function commentPresignedPutError(error: PresignedPutError): CommentsApiError {
+  if (error.status === 0 && error.message === 'Upload cancelled.') {
+    return new CommentsApiError({ status: 0, detail: error.message })
+  }
+  if (error.status === 0) {
+    return new CommentsApiError({
+      status: 0,
+      detail: 'Réseau ou CORS du stockage (pas de réponse HTTP).',
+    })
+  }
+  return new CommentsApiError({
+    status: error.status,
+    detail: `Échec de l’envoi du fichier (HTTP ${error.status}).`,
   })
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}))
-    throw parseError(response, payload)
-  }
 }

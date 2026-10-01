@@ -10,7 +10,7 @@ import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-tit
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport } from '@/lib/lg-viewport'
-import { terrainBackButtonClassName } from '@/lib/terrain-styles'
+import { terrainBackButtonClassName, terrainSafeTopClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type TerrainTopbarProps = {
@@ -64,7 +64,7 @@ export function TerrainTopbar({
   const titleAddon = afterTitle ?? slotAfterTitle
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const safeAreaClass = cn(
-    'pt-[max(0.75rem,var(--app-safe-top))]',
+    terrainSafeTopClassName,
     isDesktopWeb && 'pt-0 pb-0',
   )
   const mobileBackHitboxClass = !isDesktopWeb

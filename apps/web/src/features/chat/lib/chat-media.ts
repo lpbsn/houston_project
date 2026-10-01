@@ -69,15 +69,3 @@ export async function fetchAuthenticatedChatMediaBlob(path: string): Promise<Blo
   }
   return response.blob()
 }
-
-export async function fetchAuthenticatedChatMedia(path: string): Promise<string | null> {
-  const href = resolveChatMediaHref(path)
-  if (!href || isInlineChatMediaHref(href)) {
-    return href
-  }
-  const blob = await fetchAuthenticatedChatMediaBlob(path)
-  if (!blob) {
-    return null
-  }
-  return URL.createObjectURL(blob)
-}

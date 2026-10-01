@@ -26,6 +26,7 @@ import { flattenAvailablePlanAttachments } from '../lib/flatten-plan-attachments
 import { commentPdfAlertMessage, openCommentPdfAttachment } from '../lib/comment-pdf'
 import { isCommentPdfAttachment } from '../lib/comment-media'
 import type { CommentAttachment } from '../types'
+import { CommentPreviewResignProvider } from './comment-attachment-image'
 import { CommentAttachmentPreviewDialog } from './comment-attachment-preview-dialog'
 import { CommentComposer, type CommentComposerHandle } from './comment-composer'
 import { CommentList } from './comment-list'
@@ -376,7 +377,27 @@ export function CommentSection({
   )
 
   return (
-    <>
+    <CommentPreviewResignProvider
+      onResign={
+        isExecution
+          ? async () => {
+              const refreshed = await executionQuery.refetch()
+              setPreviewAttachment((current) => {
+                if (!current) {
+                  return current
+                }
+                const next = flattenAvailablePlanAttachments(refreshed?.data).find(
+                  (item) => item.id === current.id,
+                )
+                if (!next || next.preview_url === current.preview_url) {
+                  return current
+                }
+                return next
+              })
+            }
+          : undefined
+      }
+    >
       <OperationalCommentsLayout
         list={list}
         composer={composer}
@@ -406,6 +427,6 @@ export function CommentSection({
         targetMembershipId={reportComment?.membershipId}
         onClose={() => setReportComment(null)}
       />
-    </>
+    </CommentPreviewResignProvider>
   )
 }

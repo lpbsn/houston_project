@@ -6,8 +6,17 @@ from houston.chat.api.serializers import serialize_message
 from houston.chat.models import ChatMessage
 
 
-def serialize_message_for_ws(message: ChatMessage, *, history_cutoff_at=None) -> dict:
-    payload = serialize_message(message, history_cutoff_at=history_cutoff_at)
+def serialize_message_for_ws(
+    message: ChatMessage,
+    *,
+    history_cutoff_at=None,
+    viewer_membership_id=None,
+) -> dict:
+    payload = serialize_message(
+        message,
+        history_cutoff_at=history_cutoff_at,
+        viewer_membership_id=viewer_membership_id,
+    )
     reply_to = payload["reply_to"]
     if reply_to is not None:
         reply_to = {
@@ -49,11 +58,16 @@ def build_message_created_payload(
     conversation_id: UUID,
     message: ChatMessage,
     history_cutoff_at=None,
+    viewer_membership_id=None,
 ) -> dict:
     return {
         "type": "message.created",
         "conversation_id": str(conversation_id),
-        "message": serialize_message_for_ws(message, history_cutoff_at=history_cutoff_at),
+        "message": serialize_message_for_ws(
+            message,
+            history_cutoff_at=history_cutoff_at,
+            viewer_membership_id=viewer_membership_id,
+        ),
     }
 
 

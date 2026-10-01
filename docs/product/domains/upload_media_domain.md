@@ -114,6 +114,7 @@ For transcription audio, the MVP lifecycle is:
 - Viewing media requires visibility of the authorized parent resource.
 - Standalone public media access is forbidden.
 - Houston-hosted `preview_url` / `thumbnail_url` require backend authorization on each GET before 302 or `FileResponse`.
+- Chat and execution-comment previews add a viewer-scoped query token (`establishment_id:attachment_id:membership_id`, TTL 3600 s, 60 s window, salt per domain) only when the response is serialized for an identified membership. Each GET rechecks that membership: an active chat participant, including that participant's `history_cutoff_at`, or execution readability plus comment-attachment retention. A Bearer request without the token keeps the previous chat or execution check. Observation preview tokens stay on their own signer and predicate.
 - Active membership and establishment scoping are mandatory for any media action.
 - Cross-tenant media access is forbidden.
 - Broad support or admin media access is not a default product behavior and must not be assumed.

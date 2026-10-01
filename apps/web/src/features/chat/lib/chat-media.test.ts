@@ -14,7 +14,6 @@ vi.mock('@/lib/runtime', () => ({
 }))
 
 import {
-  fetchAuthenticatedChatMedia,
   fetchAuthenticatedChatMediaBlob,
   isChatImageAttachment,
   isChatPdfAttachment,
@@ -58,31 +57,22 @@ describe('chat-media', () => {
     ).toBeNull()
   })
 
-  it('fetches Houston media through fetchWithAuthRetry and returns a blob URL', async () => {
+  it('fetches Houston media through fetchWithAuthRetry and returns the blob', async () => {
     const blob = new Blob(['image-bytes'], { type: 'image/jpeg' })
     fetchWithAuthRetry.mockResolvedValue({
       ok: true,
       blob: async () => blob,
     })
-    const createObjectURL = vi.fn(() => 'blob:created-1')
-    vi.stubGlobal('URL', { ...URL, createObjectURL })
 
-    const href = await fetchAuthenticatedChatMedia('/api/v1/chat/preview/')
-
+    await expect(fetchAuthenticatedChatMediaBlob('/api/v1/chat/preview/')).resolves.toBe(blob)
     expect(fetchWithAuthRetry).toHaveBeenCalledWith('https://houston.test/api/v1/chat/preview/', {
       method: 'GET',
     })
-    expect(createObjectURL).toHaveBeenCalledWith(blob)
-    expect(href).toBe('blob:created-1')
-    expect(await fetchAuthenticatedChatMediaBlob('/api/v1/chat/preview/')).toBe(blob)
   })
 
-  it('returns blob and data hrefs without fetching', async () => {
-    await expect(fetchAuthenticatedChatMedia('blob:outbox-1')).resolves.toBe('blob:outbox-1')
-    await expect(fetchAuthenticatedChatMedia('data:image/png;base64,abc')).resolves.toBe(
-      'data:image/png;base64,abc',
-    )
+  it('returns no blob for inline hrefs and does not fetch them', async () => {
     await expect(fetchAuthenticatedChatMediaBlob('blob:outbox-1')).resolves.toBeNull()
+    await expect(fetchAuthenticatedChatMediaBlob('data:image/png;base64,abc')).resolves.toBeNull()
     expect(fetchWithAuthRetry).not.toHaveBeenCalled()
   })
 })

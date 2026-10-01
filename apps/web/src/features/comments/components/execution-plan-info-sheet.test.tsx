@@ -3,12 +3,10 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { resolveApiUrl } from '@/lib/runtime'
+
 import type { CommentAttachment } from '../types'
 import { ExecutionPlanInfoSheet } from './execution-plan-info-sheet'
-
-vi.mock('../hooks/use-comment-media-object-url', () => ({
-  useCommentMediaObjectUrl: () => ({ objectUrl: 'blob:thumb', loading: false, error: false }),
-}))
 
 function attachment(overrides: Partial<CommentAttachment> = {}): CommentAttachment {
   return {
@@ -75,6 +73,10 @@ describe('ExecutionPlanInfoSheet', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'photo.jpg' }))
+
+    expect(
+      screen.getByRole('button', { name: 'photo.jpg' }).querySelector('img')?.getAttribute('src'),
+    ).toBe(resolveApiUrl('/api/v1/comment-attachments/att-image/preview/?variant=thumbnail'))
 
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'att-image' }))
     expect(onClose).not.toHaveBeenCalled()
