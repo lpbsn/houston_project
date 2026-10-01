@@ -378,7 +378,25 @@ export function CommentSection({
 
   return (
     <CommentPreviewResignProvider
-      onResign={isExecution ? () => executionQuery.refetch() : undefined}
+      onResign={
+        isExecution
+          ? async () => {
+              const refreshed = await executionQuery.refetch()
+              setPreviewAttachment((current) => {
+                if (!current) {
+                  return current
+                }
+                const next = flattenAvailablePlanAttachments(refreshed?.data).find(
+                  (item) => item.id === current.id,
+                )
+                if (!next || next.preview_url === current.preview_url) {
+                  return current
+                }
+                return next
+              })
+            }
+          : undefined
+      }
     >
       <OperationalCommentsLayout
         list={list}

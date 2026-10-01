@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { resolveApiUrl } from '@/lib/runtime'
 
 import { CommentsApiError } from './api'
 import { CommentList } from './components/comment-list'
@@ -80,6 +82,7 @@ const {
   rootCommentMutation,
   replyCommentMutation,
   executionCommentsQueryData,
+  executionCommentsRefetch,
 } = vi.hoisted(() => ({
   createRootMutate: vi.fn(),
   createReplyMutate: vi.fn(),
@@ -94,6 +97,7 @@ const {
     mutate: vi.fn(),
   },
   executionCommentsQueryData: { current: [] as ExecutionCommentListItem[] },
+  executionCommentsRefetch: vi.fn(),
 }))
 
 let createExecutionCommentMutationCallCount = 0
@@ -111,7 +115,7 @@ vi.mock('./hooks', () => ({
     isError: false,
     isSuccess: true,
     data: executionCommentsQueryData.current,
-    refetch: vi.fn(),
+    refetch: (...args: unknown[]) => executionCommentsRefetch(...args),
   }),
   useCreateSignalCommentMutation: () => ({
     isPending: false,
@@ -169,6 +173,8 @@ beforeEach(() => {
   replyCommentMutation.error = null
   createRootMutate.mockReset()
   createReplyMutate.mockReset()
+  executionCommentsRefetch.mockReset()
+  executionCommentsRefetch.mockResolvedValue({ data: executionCommentsQueryData.current })
 })
 
 afterEach(() => {
@@ -390,6 +396,73 @@ describe('CommentSection', () => {
 
     expect(screen.getByText("Ce commentaire n'est plus disponible.")).toBeTruthy()
     expect(screen.getByText('note execution')).toBeTruthy()
+  })
+
+  it('replaces the open preview with the resigned URL', async () => {
+    const attachment = {
+      id: 'att-1',
+      kind: 'image' as const,
+      content_type: 'image/jpeg',
+      size_bytes: 100,
+      original_filename: 'photo.jpg',
+      preview_url: '/api/v1/comment-attachments/att-1/preview/?token=old',
+      thumbnail_url: '/api/v1/comment-attachments/att-1/preview/?variant=thumbnail&token=old',
+      comment_id: 'execution-root-1',
+      created_at: '2026-06-15T10:30:00Z',
+      author_display_name: 'Bob',
+    }
+    const resigned = {
+      ...attachment,
+      preview_url: '/api/v1/comment-attachments/att-1/preview/?token=new',
+      thumbnail_url: '/api/v1/comment-attachments/att-1/preview/?variant=thumbnail&token=new',
+    }
+    executionCommentsQueryData.current = [
+      {
+        item_type: 'execution_thread',
+        id: 'execution-root-1',
+        origin: 'action_plan_execution',
+        body: 'note execution',
+        author: { membership_id: 'm-2', display_name: 'Bob' },
+        mentions: [],
+        created_at: '2026-06-15T10:30:00Z',
+        attachments: [attachment],
+        replies: [],
+        is_resolved: false,
+        resolved_at: null,
+        resolved_by: null,
+        permission_hints: { can_reply: true, can_resolve: true },
+      },
+    ]
+    executionCommentsRefetch.mockImplementation(async () => {
+      const next = [
+        {
+          ...executionCommentsQueryData.current[0],
+          attachments: [resigned],
+        },
+      ] as ExecutionCommentListItem[]
+      executionCommentsQueryData.current = next
+      return { data: next }
+    })
+
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="action-plan-execution"
+        targetId="exec-1"
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aperçu photo.jpg' }))
+    const dialog = screen.getByRole('dialog', { name: 'photo.jpg' })
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe(resolveApiUrl(attachment.preview_url))
+
+    fireEvent.error(dialog.querySelector('img')!)
+
+    await waitFor(() => {
+      expect(dialog.querySelector('img')?.getAttribute('src')).toBe(resolveApiUrl(resigned.preview_url))
+    })
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(executionCommentsRefetch).toHaveBeenCalledTimes(1)
   })
 })
 
