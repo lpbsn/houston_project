@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   dismissTopNativeOverlay,
+  isTopNativeOverlay,
   registerNativeOverlayDismiss,
   resetNativeOverlayDismissForTests,
 } from './native-overlay-dismiss'
@@ -38,6 +39,23 @@ describe('native overlay dismiss stack', () => {
 
   it('returns false when the stack is empty', () => {
     expect(dismissTopNativeOverlay()).toBe(false)
+  })
+
+  it('reports only the most recently registered overlay as top', () => {
+    const older = vi.fn()
+    const newer = vi.fn()
+    const unregisterOlder = registerNativeOverlayDismiss(older)
+    expect(isTopNativeOverlay(older)).toBe(true)
+    expect(isTopNativeOverlay(newer)).toBe(false)
+
+    const unregisterNewer = registerNativeOverlayDismiss(newer)
+    expect(isTopNativeOverlay(newer)).toBe(true)
+    expect(isTopNativeOverlay(older)).toBe(false)
+
+    unregisterNewer()
+    expect(isTopNativeOverlay(older)).toBe(true)
+    unregisterOlder()
+    expect(isTopNativeOverlay(older)).toBe(false)
   })
 
   it('does not dismiss after unregister', () => {

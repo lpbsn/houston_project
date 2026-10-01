@@ -5,6 +5,7 @@
 
 export { HoustonBadge } from './houston-badge'
 export { TerrainBottomSheet } from './terrain-bottom-sheet'
+export { TerrainDialog } from './terrain-dialog'
 export { TerrainCard } from './terrain-card'
 export { TerrainDetailFieldCard } from './terrain-detail-field-card'
 export { TerrainEmptyState } from './terrain-empty-state'

@@ -15,6 +15,12 @@ vi.mock('../lib/chat-media', async (importOriginal) => {
   }
 })
 
+import {
+  dismissTopNativeOverlay,
+  registerNativeOverlayDismiss,
+  resetNativeOverlayDismissForTests,
+} from '@/lib/native-overlay-dismiss'
+
 import { ChatAttachmentPreviewDialog, CHAT_IMAGE_PREVIEW_ERROR } from './chat-attachment-preview-dialog'
 
 const imageItem = {
@@ -29,6 +35,7 @@ describe('ChatAttachmentPreviewDialog', () => {
   afterEach(() => {
     document.body.style.overflow = ''
     cleanup()
+    resetNativeOverlayDismissForTests()
     fetchAuthenticatedChatMedia.mockReset()
   })
 
@@ -44,6 +51,53 @@ describe('ChatAttachmentPreviewDialog', () => {
     })
     expect(screen.queryByRole('application')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes when Escape is pressed', async () => {
+    fetchAuthenticatedChatMedia.mockResolvedValue('blob:viewer-image')
+    const onClose = vi.fn()
+    render(<ChatAttachmentPreviewDialog item={imageItem} onClose={onClose} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores Escape while a newer overlay is registered, then resumes', async () => {
+    fetchAuthenticatedChatMedia.mockResolvedValue('blob:viewer-image')
+    const onClose = vi.fn()
+    render(<ChatAttachmentPreviewDialog item={imageItem} onClose={onClose} />)
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+
+    const unregister = registerNativeOverlayDismiss(vi.fn())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+
+    unregister()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('still dismisses from the native back stack, and only when it is top', async () => {
+    fetchAuthenticatedChatMedia.mockResolvedValue('blob:viewer-image')
+    const onClose = vi.fn()
+    render(<ChatAttachmentPreviewDialog item={imageItem} onClose={onClose} />)
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+
+    const upper = vi.fn()
+    registerNativeOverlayDismiss(upper)
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(upper).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+
+    expect(dismissTopNativeOverlay()).toBe(true)
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

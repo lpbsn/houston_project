@@ -22,6 +22,7 @@ export function TerrainFilterPill({
     <button
       type="button"
       disabled={disabled}
+      aria-pressed={active}
       className={cn(terrainFilterPillClassName(active, className), disabled && 'opacity-50')}
       onClick={onClick}
     >

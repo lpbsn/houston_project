@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react'
 import { Info, LoaderCircle, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { getAppRuntime } from '@/lib/runtime'
 import { cn } from '@/lib/utils'
 
 import { ChatApiError } from '../api'
@@ -21,6 +22,7 @@ import {
 } from '../lib/chat-display'
 import { chatDesktopColumnHeaderClassName } from '../lib/chat-desktop-surface'
 import { formatChatRetentionNotice } from '../lib/chat-limits'
+import { visualKeyboardOverlap } from '../lib/composer-keyboard-inset'
 import {
   isChatImageAttachment,
   isChatPdfAttachment,
@@ -59,6 +61,8 @@ export function ChatConversationPage({
   } | null>(null)
 
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
+  const composerFocusedRef = useRef(false)
+  const [keyboardInset, setKeyboardInset] = useState(0)
   const detailQuery = useChatConversationDetailQuery(establishmentId, conversationId)
   const messagesQuery = useChatMessagesInfiniteQuery(establishmentId, conversationId)
   const { mutate: markConversationSeen } = useMarkConversationSeenMutation(
@@ -90,6 +94,42 @@ export function ChatConversationPage({
     () => mergeServerAndLocalMessages(serverMessages, localMessages, conversationId),
     [conversationId, localMessages, serverMessages],
   )
+  const composerMounted =
+    Boolean(establishmentId && viewerMembershipId) &&
+    detailQuery.isSuccess &&
+    messagesQuery.isSuccess
+
+  function readKeyboardInset(): number {
+    const viewport = window.visualViewport
+    if (!viewport) {
+      return 0
+    }
+    return visualKeyboardOverlap({
+      innerHeight: window.innerHeight,
+      visualHeight: viewport.height,
+      offsetTop: viewport.offsetTop,
+    })
+  }
+
+  function handleComposerFocus() {
+    if (getAppRuntime() === 'native') {
+      return
+    }
+    composerFocusedRef.current = true
+    setKeyboardInset(readKeyboardInset())
+  }
+
+  function handleComposerBlur(event: FocusEvent<HTMLDivElement>) {
+    if (getAppRuntime() === 'native') {
+      return
+    }
+    const next = event.relatedTarget
+    if (next instanceof Node && event.currentTarget.contains(next)) {
+      return
+    }
+    composerFocusedRef.current = false
+    setKeyboardInset(0)
+  }
 
   async function handleSelectAttachment(item: ChatAttachmentPreviewItem) {
     if (isChatImageAttachment(item)) {
@@ -115,6 +155,36 @@ export function ChatConversationPage({
 
     markConversationSeen()
   }, [conversationId, detailQuery.isSuccess, establishmentId, markConversationSeen])
+
+  useEffect(() => {
+    if (!composerMounted || getAppRuntime() === 'native') {
+      return
+    }
+    const viewport = window.visualViewport
+    if (!viewport) {
+      return
+    }
+
+    function onViewportChange() {
+      if (!composerFocusedRef.current) {
+        return
+      }
+      setKeyboardInset(
+        visualKeyboardOverlap({
+          innerHeight: window.innerHeight,
+          visualHeight: viewport.height,
+          offsetTop: viewport.offsetTop,
+        }),
+      )
+    }
+
+    viewport.addEventListener('resize', onViewportChange)
+    viewport.addEventListener('scroll', onViewportChange)
+    return () => {
+      viewport.removeEventListener('resize', onViewportChange)
+      viewport.removeEventListener('scroll', onViewportChange)
+    }
+  }, [composerMounted])
 
   useEffect(() => {
     const container = messagesScrollRef.current
@@ -173,6 +243,7 @@ export function ChatConversationPage({
       className="relative flex h-full min-h-0 flex-col"
       data-testid="chat-conversation-page"
       data-conversation-id={conversationId}
+      style={keyboardInset > 0 ? { paddingBottom: keyboardInset } : undefined}
     >
       {embedded ? null : <ChatReconnectBanner status={connectionStatus} />}
 
@@ -317,28 +388,34 @@ export function ChatConversationPage({
         )}
       </div>
 
-      <ChatComposer
-        participants={detailQuery.data.participants}
-        viewerMembershipId={viewerMembershipId}
-        userId={auth.bootstrap?.user.id ?? null}
-        establishmentId={establishmentId}
-        conversationId={conversationId}
-        replyTo={replyTo}
-        onClearReply={() => setReplyTo(null)}
-        onRestoreReply={setReplyTo}
-        onSend={(payload) => {
-          sendChatMessage({
-            conversationId,
-            body: payload.body,
-            mentions: payload.mentions,
-            replyToId: payload.replyToId,
-            replyPreview: replyTo,
-            files: payload.files,
-            authorMembershipId: viewerMembershipId,
-            authorDisplayName: viewerDisplayName,
-          })
-        }}
-      />
+      <div
+        className="shrink-0"
+        onFocus={handleComposerFocus}
+        onBlur={handleComposerBlur}
+      >
+        <ChatComposer
+          participants={detailQuery.data.participants}
+          viewerMembershipId={viewerMembershipId}
+          userId={auth.bootstrap?.user.id ?? null}
+          establishmentId={establishmentId}
+          conversationId={conversationId}
+          replyTo={replyTo}
+          onClearReply={() => setReplyTo(null)}
+          onRestoreReply={setReplyTo}
+          onSend={(payload) => {
+            sendChatMessage({
+              conversationId,
+              body: payload.body,
+              mentions: payload.mentions,
+              replyToId: payload.replyToId,
+              replyPreview: replyTo,
+              files: payload.files,
+              authorMembershipId: viewerMembershipId,
+              authorDisplayName: viewerDisplayName,
+            })
+          }}
+        />
+      </div>
 
       <ChatConversationInfoSheet
         establishmentId={establishmentId}

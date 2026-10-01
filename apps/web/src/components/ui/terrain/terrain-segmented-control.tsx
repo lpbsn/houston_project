@@ -48,7 +48,7 @@ export function TerrainSegmentedControl<T extends string>({
             role="tab"
             aria-selected={selected}
             className={cn(
-              'min-w-0 whitespace-nowrap',
+              'min-w-0 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-[#1B4FD8]/30',
               compact
                 ? cn(
                     'min-h-7 rounded-[5px] px-2 py-1 text-[12px] font-medium leading-none',

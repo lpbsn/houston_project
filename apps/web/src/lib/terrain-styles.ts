@@ -185,7 +185,7 @@ export function terrainFilterChipClassName(active: boolean, className?: string) 
 
 export function terrainFilterPillClassName(active: boolean, className?: string) {
   return cn(
-    'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition',
+    'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
     active
       ? 'border-[#1B4FD8] bg-[#1B4FD8] text-white'
       : 'border-[#E8E6DF] bg-transparent text-[#888]',

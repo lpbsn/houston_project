@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { User, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { TerrainBottomSheet } from '@/components/ui/terrain'
+import { TerrainBottomSheet, TerrainDialog } from '@/components/ui/terrain'
 
 import { useCreateDmMutation, useCreateGroupMutation, useEligibleChatMembershipsQuery } from '../hooks'
 import type { ChatEligibleMembership } from '../types'
@@ -69,25 +69,6 @@ export function ChatCreateSheet({
     resetState()
     onClose()
   }
-
-  useEffect(() => {
-    if (!open || presentation !== 'dialog') {
-      return
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setMode('menu')
-        setSearch('')
-        setGroupTitle('')
-        setSelectedMembershipIds([])
-        createDmMutation.reset()
-        createGroupMutation.reset()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [createDmMutation, createGroupMutation, onClose, open, presentation])
 
   function toggleMembership(membership: ChatEligibleMembership) {
     setSelectedMembershipIds((current) =>
@@ -220,29 +201,9 @@ export function ChatCreateSheet({
 
   if (presentation === 'dialog') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="chat-create-dialog-title"
-          data-testid="chat-create-dialog"
-          className="w-full max-w-md rounded-xl border border-[#E8E6DF] bg-white p-4 shadow-lg"
-        >
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 id="chat-create-dialog-title" className="text-sm font-semibold text-[#1a1a1a]">
-              {sheetTitle}
-            </h2>
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-sm font-medium text-[#5c564e] hover:bg-[#F5F4F0]"
-              onClick={handleClose}
-            >
-              Fermer
-            </button>
-          </div>
-          {body}
-        </div>
-      </div>
+      <TerrainDialog title={sheetTitle} open={open} onClose={handleClose} testId="chat-create-dialog">
+        {body}
+      </TerrainDialog>
     )
   }
 

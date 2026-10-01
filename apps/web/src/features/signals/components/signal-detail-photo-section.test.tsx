@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  dismissTopNativeOverlay,
+  registerNativeOverlayDismiss,
+  resetNativeOverlayDismissForTests,
+} from '@/lib/native-overlay-dismiss'
 
 import { SignalDetailPhotoSection } from './signal-detail-photo-section'
 
@@ -20,6 +26,7 @@ const mediaItems = [
 afterEach(() => {
   document.body.style.overflow = ''
   cleanup()
+  resetNativeOverlayDismissForTests()
 })
 
 describe('SignalDetailPhotoSection', () => {
@@ -95,6 +102,46 @@ describe('SignalDetailPhotoSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
     expect(document.body.style.overflow).toBe('')
+  })
+
+  it('closes the enlarged preview modal when Escape is pressed', () => {
+    render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))
+    screen.getByRole('dialog', { name: 'Aperçu photo' })
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('ignores Escape while a newer overlay is registered, then resumes', () => {
+    render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))
+    expect(screen.getByRole('dialog', { name: 'Aperçu photo' })).toBeTruthy()
+
+    const unregister = registerNativeOverlayDismiss(vi.fn())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole('dialog', { name: 'Aperçu photo' })).toBeTruthy()
+
+    unregister()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('still dismisses the preview from the native back stack only when it is top', () => {
+    render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))
+    expect(screen.getByRole('dialog', { name: 'Aperçu photo' })).toBeTruthy()
+
+    const upper = vi.fn()
+    registerNativeOverlayDismiss(upper)
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(upper).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('dialog', { name: 'Aperçu photo' })).toBeTruthy()
+
+    act(() => {
+      expect(dismissTopNativeOverlay()).toBe(true)
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('closes the enlarged preview modal when the backdrop is clicked', () => {

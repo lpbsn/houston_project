@@ -76,7 +76,7 @@ export function NotificationsCenterPage({
         </div>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto">
+      <div className="flex gap-1.5 overflow-x-auto py-0.5">
         <TerrainFilterPill
           active={filter === 'all'}
           onClick={() => setFilter('all')}

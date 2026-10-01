@@ -765,7 +765,6 @@ def test_create_with_schedule_returns_plan_detail(
             "schedule": api_recurring_schedule_payload(
                 staff_membership=owner_membership,
                 business_unit=business_unit,
-                assignees=[],
                 use_shared_chronology=True,
             ),
         },
