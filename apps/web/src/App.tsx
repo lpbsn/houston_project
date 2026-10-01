@@ -15,6 +15,7 @@ import {
   LazyActionPlanHubPage,
   LazyAnalyticsPatternDetailPage,
   LazyActionPlanTemplateDetailPage,
+  LazyActionPlanTemplateUsePage,
   LazyAnalyticsPage,
   LazyComingSoonPage,
   LazyChatConversationPage,
@@ -611,6 +612,10 @@ function App() {
       )
     }
 
+    if (staticRoutePath === '/action-plans' && !isDesktopWeb) {
+      return null
+    }
+
     return (
       <NotificationCenter establishmentId={establishmentId} onNavigate={navigate} />
     )
@@ -618,6 +623,7 @@ function App() {
     auth.hasOperationalAccess,
     establishmentId,
     executionDetailId,
+    isDesktopWeb,
     locationSearch,
     navigate,
     route.kind,
@@ -768,6 +774,10 @@ function App() {
 
     if (route.kind === 'action-plan-template-detail') {
       return <LazyActionPlanTemplateDetailPage actionPlanId={route.actionPlanId} />
+    }
+
+    if (route.kind === 'action-plan-template-use') {
+      return <LazyActionPlanTemplateUsePage actionPlanId={route.actionPlanId} />
     }
 
     if (route.kind === 'action-plan-template-edit') {

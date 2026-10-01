@@ -1,5 +1,13 @@
 import { ActionPlansApiError } from '../api'
-import type { ActionPlanPlanningSubmitRequest } from '../types'
+import type {
+  ActionPlanPlanningSubmitRequest,
+  ActionPlanPlanningSubmitResponse,
+} from '../types'
+import {
+  applyPlanningSubmissionIntent,
+  clearPlanningSubmissionIntent,
+  resolvePlanningSubmissionIntent,
+} from './action-plan-planning-submission-intent'
 import {
   buildOneShotAssigneesFromDraft,
   buildScheduleRequestsFromDraft,
@@ -218,6 +226,33 @@ export function formatPlanningSubmitFeedback(summary: {
     return executions === 1 ? '1 exécution créée.' : `${executions} exécutions créées.`
   }
   return '0 exécution créée.'
+}
+
+export async function submitCatalogPlanningWithIntent(options: {
+  establishmentId: string
+  actionPlanId: string
+  body: ActionPlanPlanningSubmitRequest
+  submit: (body: ActionPlanPlanningSubmitRequest) => Promise<ActionPlanPlanningSubmitResponse>
+}): Promise<ActionPlanPlanningSubmitResponse> {
+  const intent = await resolvePlanningSubmissionIntent({
+    establishmentId: options.establishmentId,
+    actionPlanId: options.actionPlanId,
+    body: {
+      use_shared_chronology: options.body.use_shared_chronology,
+      items: options.body.items,
+    },
+  })
+  const response = await options.submit(
+    applyPlanningSubmissionIntent(
+      {
+        use_shared_chronology: options.body.use_shared_chronology,
+        items: options.body.items,
+      },
+      intent,
+    ),
+  )
+  clearPlanningSubmissionIntent(options.establishmentId, options.actionPlanId)
+  return response
 }
 
 export function resolveCatalogPlanningSubmitFallbackMessage(

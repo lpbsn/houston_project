@@ -8,6 +8,7 @@ import {
   canCreateCatalogActionPlanFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
+import { TerrainDetailTrailingSlot } from '@/components/layout/terrain-detail-trailing-slot'
 import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
@@ -30,16 +31,14 @@ import {
 } from '../lib/action-plan-management-access'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
+import { resolvePlanningSuccessPath } from '../lib/action-plan-create-response'
 import type { CatalogPlanningSubmit } from '../lib/action-plan-catalog-planning-submit'
 import {
   formatPlanningSubmitFeedback,
   resolveCatalogPlanningSubmitFallbackMessage,
+  submitCatalogPlanningWithIntent,
 } from '../lib/action-plan-catalog-planning-submit'
-import {
-  applyPlanningSubmissionIntent,
-  clearPlanningSubmissionIntent,
-  resolvePlanningSubmissionIntent,
-} from '../lib/action-plan-planning-submission-intent'
+import { clearPlanningSubmissionIntent } from '../lib/action-plan-planning-submission-intent'
 import type { ActionPlanCatalogListFilters } from '../types'
 
 type ActionPlanHubPageProps = {
@@ -133,31 +132,22 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
 
     setUseError(null)
     try {
-      const intent = await resolvePlanningSubmissionIntent({
+      const response = await submitCatalogPlanningWithIntent({
         establishmentId,
         actionPlanId: usePlanId,
-        body: {
-          use_shared_chronology: result.body.use_shared_chronology,
-          items: result.body.items,
-        },
+        body: result.body,
+        submit: (body) =>
+          planningMutation.mutateAsync({
+            actionPlanId: usePlanId,
+            body,
+          }),
       })
-      const response = await planningMutation.mutateAsync({
-        actionPlanId: usePlanId,
-        body: applyPlanningSubmissionIntent(
-          {
-            use_shared_chronology: result.body.use_shared_chronology,
-            items: result.body.items,
-          },
-          intent,
-        ),
-      })
-      clearPlanningSubmissionIntent(establishmentId, usePlanId)
       setUsePlanId(null)
       notifySuccess({
         message: formatPlanningSubmitFeedback(response.summary),
         kind: 'created',
       })
-      navigateTo('/execution')
+      navigateTo(resolvePlanningSuccessPath(response))
     } catch (error) {
       const message = resolveCatalogPlanningSubmitFallbackMessage(result, error)
       setUseError(resolveActionPlanErrorMessage(error, message))
@@ -172,19 +162,12 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
         isDesktopWeb && 'lg:mx-auto lg:max-w-7xl lg:px-6 lg:pt-4 lg:pb-8',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-[#1a1a1a]">Bibliothèque</h1>
-          <p className="mt-1 text-sm text-[#7D7B75]">
-            Modèles de plans d&apos;action prêts à lancer sur le terrain.
-          </p>
-        </div>
-        {canCreate ? (
+      {!isDesktopWeb && canCreate ? (
+        <TerrainDetailTrailingSlot>
           <Button
             type="button"
             className={cn(
               'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white',
-              isDesktopWeb && 'lg:w-auto lg:gap-2 lg:px-4',
               terrainBrandAction.bg,
               terrainBrandAction.hover,
               terrainBrandAction.shadow,
@@ -193,9 +176,32 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
             onClick={() => navigateTo('/action-plans/new')}
           >
             <Plus className="h-5 w-5" aria-hidden />
-            <span className={cn('hidden', isDesktopWeb && 'lg:inline')} aria-hidden>
-              Créer un plan d’action
-            </span>
+          </Button>
+        </TerrainDetailTrailingSlot>
+      ) : null}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {isDesktopWeb ? (
+            <h1 className="text-2xl font-bold text-[#1a1a1a]">Bibliothèque</h1>
+          ) : null}
+          <p className={cn('text-sm text-[#7D7B75]', isDesktopWeb && 'mt-1')}>
+            Modèles de plans d&apos;action prêts à lancer sur le terrain.
+          </p>
+        </div>
+        {isDesktopWeb && canCreate ? (
+          <Button
+            type="button"
+            className={cn(
+              'inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-white',
+              terrainBrandAction.bg,
+              terrainBrandAction.hover,
+              terrainBrandAction.shadow,
+            )}
+            aria-label="Créer un plan d’action"
+            onClick={() => navigateTo('/action-plans/new')}
+          >
+            <Plus className="h-5 w-5" aria-hidden />
+            <span>Créer un plan d’action</span>
           </Button>
         ) : null}
       </div>
@@ -243,13 +249,19 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
               key={item.id}
               item={item}
               onOpen={(id) => navigateTo(`/action-plans/${id}`)}
-              onUse={setUsePlanId}
+              onUse={(id) => {
+                if (isDesktopWeb) {
+                  setUsePlanId(id)
+                  return
+                }
+                navigateTo(`/action-plans/${id}/use`)
+              }}
             />
           ))}
         </div>
       )}
 
-      {usePlan ? (
+      {isDesktopWeb && usePlan ? (
         <ActionPlanUseSheet
           open={usePlanId != null}
           establishmentId={establishmentId ?? ''}

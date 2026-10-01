@@ -62,6 +62,7 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'signal-action-create',
   'action-plan-create',
   'action-plan-template-detail',
+  'action-plan-template-use',
   'action-plan-template-edit',
   'action-plan-execution-detail',
   'action-plan-execution-edit',
@@ -125,6 +126,7 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-template-use' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-edit' ||
     route.kind === 'chat-conversation-detail' ||
@@ -147,6 +149,7 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-template-use' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
     route.kind === 'action-plan-execution-edit' ||
@@ -453,6 +456,16 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
+  if (route.kind === 'action-plan-template-use') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Lancer',
+      backPath: `/action-plans/${route.actionPlanId}`,
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
   if (route.kind === 'action-plan-template-edit') {
     return {
       topbarVariant: 'detail',
@@ -556,6 +569,10 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'action-plan-template-detail') {
     return `action-plan-template-detail-${route.actionPlanId}`
+  }
+
+  if (route.kind === 'action-plan-template-use') {
+    return `action-plan-template-use-${route.actionPlanId}`
   }
 
   if (route.kind === 'action-plan-template-edit') {

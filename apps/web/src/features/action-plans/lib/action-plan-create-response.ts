@@ -15,6 +15,14 @@ export function isActionPlanExecutionDetail(
   )
 }
 
+export function resolvePlanningSuccessPath(response: ActionPlanPlanningSubmitResponse): string {
+  const execution = response.executions.length === 1 ? response.executions[0] : null
+  if (execution && response.schedules.length === 0 && execution.id) {
+    return `/action-plans/executions/${execution.id}`
+  }
+  return '/execution'
+}
+
 export function isActionPlanPlanningSubmitResponse(
   data: unknown,
 ): data is ActionPlanPlanningSubmitResponse {

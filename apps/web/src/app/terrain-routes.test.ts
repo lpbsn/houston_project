@@ -41,6 +41,9 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       true,
     )
+    expect(usesTerrainShell({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' })).toBe(
+      true,
+    )
     expect(usesTerrainShell({ kind: 'action-plan-template-edit', actionPlanId: 'plan-1' })).toBe(
       true,
     )
@@ -223,6 +226,15 @@ describe('getTerrainRouteConfig', () => {
       topbarVariant: 'detail',
       title: 'Détail du plan',
       backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Lancer',
+      backPath: '/action-plans/plan-1',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -546,6 +558,9 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       'action-plan-template-detail-plan-1',
     )
+    expect(getTerrainContentKey({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' })).toBe(
+      'action-plan-template-use-plan-1',
+    )
     expect(getTerrainContentKey({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       'action-plan-execution-detail-exec-1',
     )
@@ -681,6 +696,9 @@ describe('requiresActiveMembership', () => {
     expect(requiresActiveMembership({ kind: 'action-plan-create', origin: 'library' })).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
+    ).toBe(true)
+    expect(
+      requiresActiveMembership({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' }),
     ).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),

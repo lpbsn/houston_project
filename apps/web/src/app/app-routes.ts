@@ -51,6 +51,7 @@ export type AppRoute =
   | { kind: 'signal-action-create'; signalId: string }
   | { kind: 'action-plan-create'; origin: ActionPlanCreateOrigin }
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
+  | { kind: 'action-plan-template-use'; actionPlanId: string }
   | { kind: 'action-plan-template-edit'; actionPlanId: string }
   | { kind: 'action-plan-execution-detail'; executionId: string; scope?: TerrainScope }
   | { kind: 'action-plan-execution-edit'; executionId: string }
@@ -88,6 +89,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return `action-plan-create:${route.origin}`
     case 'action-plan-template-detail':
       return `action-plan-template-detail:${route.actionPlanId}`
+    case 'action-plan-template-use':
+      return `action-plan-template-use:${route.actionPlanId}`
     case 'action-plan-template-edit':
       return `action-plan-template-edit:${route.actionPlanId}`
     case 'action-plan-execution-detail':
@@ -186,6 +189,14 @@ function parseActionPlanRoute(pathname: string, input: string): AppRoute | null 
     return {
       kind: 'action-plan-template-edit',
       actionPlanId: editMatch[1],
+    }
+  }
+
+  const useMatch = pathname.match(/^\/action-plans\/([^/]+)\/use$/)
+  if (useMatch?.[1] && !['executions', 'new'].includes(useMatch[1])) {
+    return {
+      kind: 'action-plan-template-use',
+      actionPlanId: useMatch[1],
     }
   }
 
@@ -347,6 +358,8 @@ export function serializeAppRoute(route: AppRoute): string {
         : '/action-plans/new'
     case 'action-plan-template-detail':
       return `/action-plans/${route.actionPlanId}`
+    case 'action-plan-template-use':
+      return `/action-plans/${route.actionPlanId}/use`
     case 'action-plan-template-edit':
       return `/action-plans/${route.actionPlanId}/edit`
     case 'action-plan-execution-detail':

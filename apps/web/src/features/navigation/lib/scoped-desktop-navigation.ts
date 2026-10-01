@@ -299,6 +299,7 @@ function resolveDesktopNavFunction(
   }
   if (
     route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-template-use' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'team-member-detail' ||
     (route.kind === 'static' &&
