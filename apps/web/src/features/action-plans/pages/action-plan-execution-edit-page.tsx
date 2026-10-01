@@ -20,7 +20,7 @@ import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
 import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
-import { terrainBrandAction } from '@/lib/terrain-styles'
+import { terrainBrandAction, terrainSectionLabelClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ActionPlanAssigneesSheet } from '../components/action-plan-assignees-sheet'
@@ -495,7 +495,7 @@ export function ActionPlanExecutionEditPage({
               aria-expanded={treatedTasksOpen}
               onClick={() => setTreatedTasksOpen((open) => !open)}
             >
-              <TerrainSectionLabel>Tâches déjà traitées</TerrainSectionLabel>
+              <span className={terrainSectionLabelClassName()}>Tâches déjà traitées</span>
               <span className="flex items-center gap-1 text-sm text-[#7D7B75]">
                 {form.treatedTasks.length}
                 <ChevronRight
