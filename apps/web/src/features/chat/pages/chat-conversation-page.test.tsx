@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -163,6 +163,7 @@ describe('ChatConversationPage', () => {
     cleanup()
     vi.clearAllMocks()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('anchors the message list to the bottom of the scroll area', () => {
@@ -262,5 +263,104 @@ describe('ChatConversationPage', () => {
 
     expect(screen.queryByRole('status')).toBeNull()
     expect(screen.getByTestId('chat-conversation-page')).toBeTruthy()
+  })
+
+  describe('composer keyboard inset', () => {
+    function installVisualViewport(initial: { height: number; offsetTop: number }) {
+      const listeners = new Set<EventListener>()
+      const viewport = {
+        height: initial.height,
+        offsetTop: initial.offsetTop,
+        addEventListener: vi.fn((type: string, listener: EventListener) => {
+          if (type === 'resize' || type === 'scroll') {
+            listeners.add(listener)
+          }
+        }),
+        removeEventListener: vi.fn(),
+        emit() {
+          for (const listener of listeners) {
+            listener(new Event('resize'))
+          }
+        },
+      }
+      Object.defineProperty(window, 'visualViewport', {
+        configurable: true,
+        value: viewport,
+      })
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: 800,
+      })
+      return viewport
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, 'visualViewport')
+    })
+
+    it('pads the conversation column while the composer is focused on web', () => {
+      vi.stubEnv('VITE_APP_RUNTIME', 'web')
+      detailQueryMock.mockReturnValue(buildDetailQueryState())
+      messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+      const viewport = installVisualViewport({ height: 800, offsetTop: 0 })
+
+      renderConversationPage()
+
+      const page = screen.getByTestId('chat-conversation-page')
+      const textarea = screen.getByPlaceholderText('Écrire un message…')
+      expect(page.style.paddingBottom).toBe('')
+
+      fireEvent.focusIn(textarea)
+      viewport.height = 500
+      viewport.offsetTop = 20
+      act(() => {
+        viewport.emit()
+      })
+
+      expect(page.style.paddingBottom).toBe('280px')
+      expect(viewport.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function))
+      expect(viewport.addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function))
+
+      viewport.height = 800
+      viewport.offsetTop = 0
+      act(() => {
+        viewport.emit()
+      })
+      expect(page.style.paddingBottom).toBe('')
+
+      viewport.height = 500
+      viewport.offsetTop = 20
+      act(() => {
+        viewport.emit()
+      })
+      expect(page.style.paddingBottom).toBe('280px')
+
+      const attach = screen.getByRole('button', { name: 'Joindre un fichier' })
+      fireEvent.focusOut(textarea, { relatedTarget: attach })
+      expect(page.style.paddingBottom).toBe('280px')
+
+      fireEvent.focusOut(attach)
+      expect(page.style.paddingBottom).toBe('')
+    })
+
+    it('does not listen to the visual viewport or apply an inset on native', () => {
+      vi.stubEnv('VITE_APP_RUNTIME', 'native')
+      detailQueryMock.mockReturnValue(buildDetailQueryState())
+      messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+      const viewport = installVisualViewport({ height: 800, offsetTop: 0 })
+
+      renderConversationPage()
+
+      const page = screen.getByTestId('chat-conversation-page')
+      const textarea = screen.getByPlaceholderText('Écrire un message…')
+      fireEvent.focusIn(textarea)
+      viewport.height = 500
+      act(() => {
+        viewport.emit()
+      })
+
+      expect(viewport.addEventListener).not.toHaveBeenCalled()
+      expect(page.style.paddingBottom).toBe('')
+    })
   })
 })
