@@ -35,6 +35,7 @@ from houston.chat.upload_services import (
     store_chat_upload_content,
 )
 from houston.establishments.permissions import HasActiveMembership
+from houston.uploads.permissions import IsAuthenticatedOrSignedUploadPreviewToken
 from houston.uploads.preview_tokens import unsign_upload_preview_token
 from houston.uploads.private_storage import (
     PRIVATE_MEDIA_BACKEND_S3,
@@ -278,10 +279,12 @@ def _render_chat_attachment_preview(request, attachment):
 
 class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.AllowAny]
+    preview_token_salt = CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT
+    permission_classes = [IsAuthenticatedOrSignedUploadPreviewToken]
 
     @extend_schema(
         tags=["chat"],
+        auth=[{"BearerAccessToken": []}, {}],
         parameters=[
             OpenApiParameter(
                 name="variant",
