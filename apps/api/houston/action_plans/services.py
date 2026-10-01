@@ -1771,6 +1771,7 @@ def create_execution_from_action_plan(
     visible_from: datetime | None = None,
     occurrence_date=None,
     all_day: bool = False,
+    requires_validation: bool | None = None,
     emit_side_effects: bool = True,
 ) -> ActionPlanExecution:
     action_plan = ActionPlan.objects.select_for_update().filter(id=action_plan_id).first()
@@ -1806,6 +1807,8 @@ def create_execution_from_action_plan(
     plan_tasks = list(action_plan.tasks.order_by("position", "created_at"))
 
     requested_assignees = assignees or []
+    if actor.role != EstablishmentMembership.Role.STAFF and not requested_assignees:
+        raise ActionPlanValidationError("At least one assignee is required.")
     if not requested_assignees:
         use_shared_chronology = True
     elif not use_shared_chronology and len(requested_assignees) > 1:
@@ -1882,7 +1885,11 @@ def create_execution_from_action_plan(
         pilot_business_unit=action_plan.pilot_business_unit,
         title=action_plan.title,
         description=action_plan.description,
-        requires_validation=action_plan.requires_validation,
+        requires_validation=(
+            action_plan.requires_validation
+            if requires_validation is None
+            else requires_validation
+        ),
         chronology_owner_membership=chronology_owner,
         use_shared_chronology=use_shared_chronology,
         start_at=resolved_start_at,

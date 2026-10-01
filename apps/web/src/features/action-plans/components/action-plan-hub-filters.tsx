@@ -1,4 +1,5 @@
 import { Input } from '@/components/ui/input'
+import { TerrainFilterChip } from '@/components/ui/terrain'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport } from '@/lib/lg-viewport'
@@ -39,6 +40,29 @@ export function ActionPlanHubFilters({
     label: unit.specific_name,
   }))
 
+  function renderChip(label: string, pressed: boolean, onClick: () => void, shrink = false) {
+    if (isDesktopWeb) {
+      return (
+        <button
+          type="button"
+          className={cn(filterButtonClass(pressed), shrink && 'shrink-0')}
+          onClick={onClick}
+        >
+          {label}
+        </button>
+      )
+    }
+    return (
+      <TerrainFilterChip
+        pressed={pressed}
+        onClick={onClick}
+        className={shrink ? 'shrink-0' : undefined}
+      >
+        {label}
+      </TerrainFilterChip>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <Input
@@ -55,31 +79,19 @@ export function ActionPlanHubFilters({
           isDesktopWeb && 'lg:flex-wrap lg:overflow-visible',
         )}
       >
-        <button
-          type="button"
-          className={cn(filterButtonClass(!businessUnitId), 'shrink-0')}
-          onClick={() => onBusinessUnitIdChange('')}
-        >
-          Tous les pôles
-        </button>
+        {renderChip('Tous les pôles', !businessUnitId, () => onBusinessUnitIdChange(''), true)}
         {businessUnits.map((unit) => (
-          <button
-            key={unit.id}
-            type="button"
-            className={cn(filterButtonClass(businessUnitId === unit.id), 'shrink-0')}
-            onClick={() => onBusinessUnitIdChange(unit.id)}
-          >
-            {unit.label}
-          </button>
+          <span key={unit.id} className="contents">
+            {renderChip(
+              unit.label,
+              businessUnitId === unit.id,
+              () => onBusinessUnitIdChange(unit.id),
+              true,
+            )}
+          </span>
         ))}
       </div>
-      <button
-        type="button"
-        className={filterButtonClass(createdByMe)}
-        onClick={() => onCreatedByMeChange(!createdByMe)}
-      >
-        Créés par moi
-      </button>
+      {renderChip('Créés par moi', createdByMe, () => onCreatedByMeChange(!createdByMe))}
     </div>
   )
 }

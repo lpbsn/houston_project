@@ -56,6 +56,27 @@ export function isActionPlanTaskAdvancedFieldKey(key: string): boolean {
   )
 }
 
+const PLANNING_SECTION_ERROR_KEYS = new Set([
+  'startDate',
+  'startTime',
+  'endDate',
+  'endTime',
+  'startAt',
+  'endAt',
+  'recurrenceEndDate',
+  'recurrenceDays',
+  'repeatEnabled',
+])
+
+/** Planning fields that live behind the mobile planning disclosure. */
+export function actionPlanPlanningSectionNeedsExpand(
+  fieldErrors: Record<string, string>,
+): boolean {
+  return Object.keys(fieldErrors).some(
+    (key) => PLANNING_SECTION_ERROR_KEYS.has(key) || key.startsWith('assignee.'),
+  )
+}
+
 export function taskIdsNeedingAdvancedExpand(
   fieldErrors: Record<string, string>,
 ): string[] {

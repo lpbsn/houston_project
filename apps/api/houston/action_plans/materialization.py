@@ -461,7 +461,11 @@ def materialize_execution_from_schedule(
                 pilot_business_unit=action_plan.pilot_business_unit,
                 title=action_plan.title,
                 description=action_plan.description,
-                requires_validation=action_plan.requires_validation,
+                requires_validation=(
+                    action_plan.requires_validation
+                    if schedule.requires_validation_override is None
+                    else schedule.requires_validation_override
+                ),
                 use_shared_chronology=schedule.use_shared_chronology,
                 start_at=occurrence_start,
                 end_at=occurrence_end,

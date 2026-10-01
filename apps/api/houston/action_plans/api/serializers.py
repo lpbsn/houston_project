@@ -357,6 +357,7 @@ class ActionPlanUpdateRequestSerializer(serializers.Serializer):
 class ActionPlanPlanningSubmitRequestSerializer(serializers.Serializer):
     submission_id = serializers.UUIDField()
     use_shared_chronology = serializers.BooleanField(required=False, default=False)
+    requires_validation = serializers.BooleanField(required=False, allow_null=True)
     items = ActionPlanPlanningItemSerializer(many=True)
 
 

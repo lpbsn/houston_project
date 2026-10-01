@@ -569,6 +569,7 @@ describe('ActionPlanTaskDraftEditor', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Détails de la tâche' })[0])
 
     expect(screen.getByLabelText('Description de la tâche')).toBeTruthy()
+    expect(screen.getByText('Description')).toBeTruthy()
     expect(screen.getByText('Assigné')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Options avancées' })).toBeNull()
   })

@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   isActionPlanExecutionDetail,
   isActionPlanPlanningSubmitResponse,
+  resolveDirectCreateSuccessPath,
+  resolvePlanningSuccessPath,
 } from '@/features/action-plans/lib/action-plan-create-response'
+import type { ActionPlanPlanningSubmitResponse } from '@/features/action-plans/types'
 import type {
   ActionPlanCreate201Response,
   ActionPlanDetail,
@@ -43,6 +46,95 @@ describe('isActionPlanExecutionDetail', () => {
         schedules: [],
       } as ActionPlanCreate201Response),
     ).toBe(false)
+  })
+})
+
+function planningResponse(
+  partial: Partial<ActionPlanPlanningSubmitResponse>,
+): ActionPlanPlanningSubmitResponse {
+  return {
+    replayed: false,
+    action_plan_id: 'plan-1',
+    summary: { executions_created: 0, schedules_created: 0 },
+    executions: [],
+    schedules: [],
+    ...partial,
+  }
+}
+
+describe('resolvePlanningSuccessPath', () => {
+  it('opens the execution when the launch created exactly one and no schedule', () => {
+    expect(
+      resolvePlanningSuccessPath(
+        planningResponse({
+          summary: { executions_created: 1, schedules_created: 0 },
+          executions: [
+            { item_id: 'i1', id: 'exec-1', primary_membership_id: null, status: 'in_progress' },
+          ],
+        }),
+      ),
+    ).toBe('/action-plans/executions/exec-1')
+  })
+
+  it('stays on the execution feed when a schedule or several executions were created', () => {
+    expect(
+      resolvePlanningSuccessPath(
+        planningResponse({
+          summary: { executions_created: 0, schedules_created: 1 },
+          schedules: [{ item_id: 'i1', id: 'sched-1', primary_membership_id: null, status: 'active' }],
+        }),
+      ),
+    ).toBe('/execution')
+    expect(
+      resolvePlanningSuccessPath(
+        planningResponse({
+          summary: { executions_created: 2, schedules_created: 0 },
+          executions: [
+            { item_id: 'i1', id: 'exec-1', primary_membership_id: null, status: 'in_progress' },
+            { item_id: 'i2', id: 'exec-2', primary_membership_id: null, status: 'in_progress' },
+          ],
+        }),
+      ),
+    ).toBe('/execution')
+    expect(resolvePlanningSuccessPath(planningResponse({}))).toBe('/execution')
+  })
+})
+
+describe('resolveDirectCreateSuccessPath', () => {
+  it('opens one execution and keeps a schedule or a template on the feed', () => {
+    expect(
+      resolveDirectCreateSuccessPath({
+        id: 'exec-1',
+        action_plan_id: 'plan-1',
+        status: 'in_progress',
+      } as ActionPlanExecutionDetail),
+    ).toBe('/action-plans/executions/exec-1')
+    expect(
+      resolveDirectCreateSuccessPath(
+        planningResponse({
+          summary: { executions_created: 1, schedules_created: 0 },
+          executions: [
+            { item_id: 'i1', id: 'exec-9', primary_membership_id: null, status: 'scheduled' },
+          ],
+        }),
+      ),
+    ).toBe('/action-plans/executions/exec-9')
+    expect(
+      resolveDirectCreateSuccessPath(
+        planningResponse({
+          summary: { executions_created: 0, schedules_created: 1 },
+          schedules: [{ item_id: 'i1', id: 'sched-1', primary_membership_id: null, status: 'active' }],
+        }),
+      ),
+    ).toBe('/execution')
+    expect(
+      resolveDirectCreateSuccessPath({
+        id: 'plan-1',
+        title: 'Plan',
+        is_reusable: true,
+        tasks: [],
+      } as ActionPlanDetail),
+    ).toBe('/execution')
   })
 })
 

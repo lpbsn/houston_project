@@ -26,6 +26,24 @@ vi.mock('@/lib/success-toast', async () => {
   }
 })
 
+function enableDesktopWeb() {
+  vi.stubEnv('VITE_APP_RUNTIME', 'web')
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('1024') || query.includes('1280'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 function renderPage(ui: ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -153,34 +171,42 @@ describe('ActionPlanTemplateDetailPage', () => {
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
-  it('renders read-only template detail with execution action', () => {
+  it('renders read-only template detail with a single use action', () => {
     renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     expect(screen.getByRole('heading', { name: 'Plan catalogue' })).toBeTruthy()
     expect(screen.getByText('Contrôler la température')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Exécution' })).toBeTruthy()
+    expect(screen.getByText('Validation requise')).toBeTruthy()
+    const heading = screen.getByRole('heading', { name: 'Plan catalogue' })
+    const informations = screen.getByRole('button', { name: 'Informations' })
+    const task = screen.getByText('Contrôler la température')
+    expect(
+      heading.compareDocumentPosition(informations) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      informations.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(informations.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button', { name: 'Utiliser ce modèle' }).closest('footer')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByText('Actif')).toBeNull()
+    expect(screen.queryByText('Répéter')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Informations' }))
+    expect(screen.getByText('Alice')).toBeTruthy()
+    expect(screen.getByText('Actif')).toBeTruthy()
   })
 
-  it('renders deactivate in header card and execution in sticky footer', () => {
+  it('keeps activate and deactivate out of the mobile page', () => {
     renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
-    const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
-    const deactivateButton = screen.getByRole('button', { name: 'Désactiver' })
-    const executionButton = screen.getByRole('button', { name: 'Exécution' })
-    const footer = executionButton.closest('footer')
-
-    expect(headerCard).toBeTruthy()
-    expect(headerCard!.contains(deactivateButton)).toBe(true)
-    expect(deactivateButton.closest('footer')).toBeNull()
-    expect(footer).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Exécution' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Désactiver' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
-    expect(screen.queryByText('Activer dans la bibliothèque')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Utiliser ce modèle' }).closest('footer')).toBeTruthy()
   })
 
-  it('renders activate in header card for inactive plan', () => {
+  it('keeps activate off the mobile page for an inactive plan', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -200,16 +226,9 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
-    const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
-    const activateButton = screen.getByRole('button', { name: 'Activer' })
-    const executionButton = screen.getByRole('button', { name: 'Exécution' })
-
-    expect(headerCard).toBeTruthy()
-    expect(headerCard!.contains(activateButton)).toBe(true)
-    expect(activateButton.closest('footer')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Désactiver' })).toBeNull()
-    expect(screen.queryByText('Activer dans la bibliothèque')).toBeNull()
-    expect(executionButton.closest('footer')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Utiliser ce modèle' }).closest('footer')).toBeTruthy()
   })
 
   it('hides sticky footer when inactive plan cannot be used', () => {
@@ -232,12 +251,13 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
-    expect(screen.getByRole('button', { name: 'Activer' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Utiliser ce modèle' })).toBeNull()
     expect(screen.queryByRole('contentinfo')).toBeNull()
   })
 
   it('calls activate mutation when activate button is clicked', async () => {
+    enableDesktopWeb()
     const activateMutateAsync = vi.fn().mockResolvedValue(undefined)
     activateMutationMock.mockReturnValue({
       mutateAsync: activateMutateAsync,
@@ -275,6 +295,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('disables activate button while activation is pending', () => {
+    enableDesktopWeb()
     activateMutationMock.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: true,
@@ -301,78 +322,18 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Activer' })).toHaveProperty('disabled', true)
   })
 
-  it('opens planning panel and sticky launch actions', () => {
+  it('opens the launch route from the footer', () => {
     renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Utiliser ce modèle' }))
 
-    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
-    expect(screen.getByText('Répéter')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
-  })
-
-  it('hides repeat toggle when schedule is not allowed', () => {
-    detailQueryMock.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: buildPlan({
-        permission_hints: {
-          can_update: true,
-          can_activate: false,
-          can_deactivate: true,
-          can_delete: false,
-          can_use: true,
-          can_schedule: false,
-        },
-      }),
-      refetch: vi.fn(),
-    })
-
-    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
-
+    expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/use')
     expect(screen.queryByText('Répéter')).toBeNull()
-  })
-
-  it('shows launch actions in sticky footer when execution panel is open', () => {
-    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
-
-    const cancelButton = screen.getByRole('button', { name: 'Annuler' })
-    const launchButton = screen.getByRole('button', { name: "Lancer l'exécution" })
-
-    expect(cancelButton.closest('footer')).toBeTruthy()
-    expect(launchButton.closest('footer')).toBeTruthy()
-    expect(screen.getByText('Planification')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
-  })
-
-  it('shows static launch label when execution panel is open', () => {
-    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
-
-    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
-    expect(
-      screen.queryByText('Une exécution ponctuelle sera lancée immédiatement.'),
-    ).toBeNull()
-  })
-
-  it('shows primary launch action when per-assignee chronology is enabled', () => {
-    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
-
-    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Lancer pour cet assigné' })).toBeNull()
+    expect(screen.queryByRole('button', { name: "Lancer l'exécution" })).toBeNull()
   })
 
   it('navigates to operational feed after planning success', async () => {
+    enableDesktopWeb()
     const planningMutateAsync = vi.fn().mockResolvedValue({
       replayed: false,
       summary: { executions_created: 0, schedules_created: 1 },
@@ -384,6 +345,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       isPending: false,
     })
     vi.spyOn(catalogPlanningSubmit, 'validateCatalogPlanningDraft').mockReturnValue({})
+    vi.spyOn(catalogPlanningSubmit, 'isCatalogPlanningPrimaryDisabled').mockReturnValue(false)
     vi.spyOn(catalogPlanningSubmit, 'resolveCatalogPlanningSubmit').mockReturnValue({
       kind: 'planning',
       body: {
@@ -404,10 +366,21 @@ describe('ActionPlanTemplateDetailPage', () => {
       },
     })
 
-    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(
+      createElement(
+        'div',
+        null,
+        createElement(TerrainTopbar, {
+          variant: 'detail',
+          title: 'Détail du plan',
+          onBack: () => undefined,
+        }),
+        createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }),
+      ),
+    )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
-    fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Utiliser' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Programmer' }))
 
     await vi.waitFor(() => {
       expect(planningMutateAsync).toHaveBeenCalled()
@@ -419,6 +392,60 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(notifySuccess).toHaveBeenCalledWith({
       message: '1 planification créée.',
       kind: 'created',
+    })
+  })
+
+  it('opens the created execution after a single desktop launch', async () => {
+    enableDesktopWeb()
+    const planningMutateAsync = vi.fn().mockResolvedValue({
+      replayed: false,
+      summary: { executions_created: 1, schedules_created: 0 },
+      executions: [{ item_id: 'i1', id: 'exec-9', primary_membership_id: null, status: 'in_progress' }],
+      schedules: [],
+    })
+    planningMutationMock.mockReturnValue({
+      mutateAsync: planningMutateAsync,
+      isPending: false,
+    })
+    vi.spyOn(catalogPlanningSubmit, 'validateCatalogPlanningDraft').mockReturnValue({})
+    vi.spyOn(catalogPlanningSubmit, 'isCatalogPlanningPrimaryDisabled').mockReturnValue(false)
+    vi.spyOn(catalogPlanningSubmit, 'resolveCatalogPlanningSubmit').mockReturnValue({
+      kind: 'planning',
+      body: {
+        submission_id: 'sub-1',
+        use_shared_chronology: true,
+        items: [
+          {
+            item_id: 'i1',
+            kind: 'execution',
+            assignees: [],
+            start_at: null,
+            end_at: null,
+            visible_from: null,
+            all_day: false,
+          },
+        ],
+      },
+    })
+
+    renderPage(
+      createElement(
+        'div',
+        null,
+        createElement(TerrainTopbar, {
+          variant: 'detail',
+          title: 'Détail du plan',
+          onBack: () => undefined,
+        }),
+        createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }),
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Utiliser' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }))
+
+    await vi.waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/action-plans/executions/exec-9')
     })
   })
 
@@ -613,7 +640,7 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(side.contains(context)).toBe(true)
   })
 
-  it('keeps the execution footer on a large native template detail', () => {
+  it('keeps the use footer on a large native template detail', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
@@ -632,7 +659,7 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
-    expect(screen.getByRole('button', { name: 'Exécution' }).closest('footer')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Utiliser ce modèle' }).closest('footer')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Utiliser' })).toBeNull()
   })
 })

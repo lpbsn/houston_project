@@ -1,5 +1,13 @@
 import { ActionPlansApiError } from '../api'
-import type { ActionPlanPlanningSubmitRequest } from '../types'
+import type {
+  ActionPlanPlanningSubmitRequest,
+  ActionPlanPlanningSubmitResponse,
+} from '../types'
+import {
+  applyPlanningSubmissionIntent,
+  clearPlanningSubmissionIntent,
+  resolvePlanningSubmissionIntent,
+} from './action-plan-planning-submission-intent'
 import {
   buildOneShotAssigneesFromDraft,
   buildScheduleRequestsFromDraft,
@@ -23,6 +31,7 @@ export type CatalogPlanningSubmit = {
 export type CatalogPlanningOptions = {
   canSchedule: boolean
   staffMode?: boolean
+  requiresValidation?: boolean
 }
 
 export type CatalogPlanningPrimaryKind = 'planning'
@@ -45,7 +54,7 @@ export function validateCatalogPlanningDraft(
   }
 
   return validateActionPlanEventPlanningDraft(draft, {
-    requireAssignees: false,
+    requireAssignees: !options.staffMode,
     allowRepeat: options.canSchedule,
   })
 }
@@ -162,6 +171,9 @@ export function resolveCatalogPlanningSubmit(
     body: {
       submission_id: crypto.randomUUID(),
       use_shared_chronology: !draft.usePerAssigneeChronology,
+      ...(options.requiresValidation === undefined
+        ? {}
+        : { requires_validation: options.requiresValidation }),
       items,
     },
   }
@@ -172,6 +184,11 @@ export function isCatalogPlanningPrimaryDisabled(
   options: CatalogPlanningOptions & { isPending: boolean },
 ): boolean {
   if (options.isPending) {
+    return true
+  }
+
+  const hasAssignee = draft.assignees.some((assignee) => assignee.membershipId)
+  if (!options.staffMode && !hasAssignee) {
     return true
   }
 
@@ -218,6 +235,39 @@ export function formatPlanningSubmitFeedback(summary: {
     return executions === 1 ? '1 exécution créée.' : `${executions} exécutions créées.`
   }
   return '0 exécution créée.'
+}
+
+export async function submitCatalogPlanningWithIntent(options: {
+  establishmentId: string
+  actionPlanId: string
+  body: ActionPlanPlanningSubmitRequest
+  submit: (body: ActionPlanPlanningSubmitRequest) => Promise<ActionPlanPlanningSubmitResponse>
+}): Promise<ActionPlanPlanningSubmitResponse> {
+  const intent = await resolvePlanningSubmissionIntent({
+    establishmentId: options.establishmentId,
+    actionPlanId: options.actionPlanId,
+    body: {
+      use_shared_chronology: options.body.use_shared_chronology,
+      ...('requires_validation' in options.body
+        ? { requires_validation: options.body.requires_validation }
+        : {}),
+      items: options.body.items,
+    },
+  })
+  const response = await options.submit(
+    applyPlanningSubmissionIntent(
+      {
+        use_shared_chronology: options.body.use_shared_chronology,
+        ...('requires_validation' in options.body
+          ? { requires_validation: options.body.requires_validation }
+          : {}),
+        items: options.body.items,
+      },
+      intent,
+    ),
+  )
+  clearPlanningSubmissionIntent(options.establishmentId, options.actionPlanId)
+  return response
 }
 
 export function resolveCatalogPlanningSubmitFallbackMessage(

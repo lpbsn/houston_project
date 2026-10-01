@@ -2,6 +2,7 @@
 
 import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
@@ -152,6 +153,31 @@ vi.mock('../hooks/use-action-plan-execution-edit-submit', () => ({
   }),
 }))
 
+function renderEditPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const view = render(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }),
+    ),
+  )
+  return {
+    ...view,
+    rerenderPage() {
+      view.rerender(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }),
+        ),
+      )
+    },
+  }
+}
+
 describe('ActionPlanExecutionEditPage guards', () => {
   beforeEach(() => {
     submitHookState.hasAttemptedSubmit = false
@@ -189,9 +215,9 @@ describe('ActionPlanExecutionEditPage guards', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
-    expect(screen.queryByRole('button', { name: 'Enregistrer les modifications' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
   })
 
   it('blocks edit when execution is not in_progress', () => {
@@ -202,32 +228,107 @@ describe('ActionPlanExecutionEditPage guards', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
-    expect(screen.queryByRole('button', { name: 'Enregistrer les modifications' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
   })
 
   it('renders edit form when update is allowed for in_progress execution', async () => {
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
     const saveButtons = await screen.findAllByRole('button', {
-      name: 'Enregistrer les modifications',
+      name: 'Enregistrer',
     })
     expect(saveButtons).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
     const footer = saveButtons[0]?.closest('footer')
     const form = footer?.closest('form')
     expect(form).toBeTruthy()
     expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
   })
 
-  it('returns to the detail with calendar search', async () => {
+  it('returns to the detail with calendar search from the desktop frame', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('1024'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     editRouteState.search = '?layout=calendar&granularity=week&anchor=2026-09-08'
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Retour' }))
     expect(navigateMock).toHaveBeenCalledWith(
       '/action-plans/executions/exec-1?layout=calendar&granularity=week&anchor=2026-09-08',
     )
+  })
+
+  it('keeps treated tasks collapsed and read-only on mobile', async () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        task_executions: [
+          {
+            id: 'task-done',
+            task: 'Done task',
+            description: '',
+            deadline_at: null,
+            assigned_membership_id: null,
+            assigned_display_name: null,
+            position: 1,
+            status: 'done',
+            observation_id: null,
+            skipped_reason: null,
+            completed_at: '2026-07-01T10:00:00.000Z',
+            skipped_at: null,
+            observation_created_at: null,
+            permission_hints: {
+              can_mark_done: false,
+              can_unmark_done: true,
+              can_skip: false,
+              can_create_observation: false,
+            },
+            business_unit: {
+              id: 'bu-1',
+              specific_name: 'Restaurant',
+              instance_description: '',
+              active: true,
+              generic: {
+                key: 'restaurant',
+                label: 'Restaurant',
+                description: '',
+                unit_type: 'dedicated',
+              },
+            },
+          },
+        ],
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderEditPage()
+
+    expect(await screen.findByText('Tâches restantes')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Tâches déjà traitées/ })).toHaveProperty(
+      'ariaExpanded',
+      'false',
+    )
+    expect(screen.queryByText('Done task')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Tâches déjà traitées/ }))
+    expect(screen.getByText('Done task')).toBeTruthy()
+    expect(screen.queryByDisplayValue('Done task')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Quand/ }))
+    expect(screen.queryByRole('tab', { name: 'Maintenant' })).toBeNull()
   })
 
   it('keeps local draft edits when detail refetch returns a newer updated_at', async () => {
@@ -239,9 +340,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
       refetch: vi.fn(),
     }))
 
-    const { rerender } = render(
-      createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }),
-    )
+    const { rerenderPage } = renderEditPage()
 
     const titleInput = await screen.findByDisplayValue('Titre serveur')
     fireEvent.change(titleInput, { target: { value: 'Titre local' } })
@@ -251,7 +350,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
       title: 'Titre concurrent',
       updated_at: '2026-07-01T10:00:00.000Z',
     })
-    rerender(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    rerenderPage()
 
     expect(screen.getByDisplayValue('Titre local')).toBeTruthy()
     expect(screen.queryByDisplayValue('Titre concurrent')).toBeNull()
@@ -266,7 +365,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
     const titleInput = await screen.findByDisplayValue('Titre initial')
     const descriptionInput = screen.getByDisplayValue('Desc initiale')
@@ -348,7 +447,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
     expect(await screen.findByRole('heading', { name: 'Modifier l’exécution' })).toBeTruthy()
     expect((screen.getByDisplayValue('Plan nettoyage') as HTMLInputElement).value).toBe(
@@ -377,9 +476,9 @@ describe('ActionPlanExecutionEditPage guards', () => {
     })
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
 
-    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+    renderEditPage()
 
-    const saveButton = await screen.findByRole('button', { name: 'Enregistrer les modifications' })
+    const saveButton = await screen.findByRole('button', { name: 'Enregistrer' })
     expect(saveButton.closest('footer')).toBeTruthy()
   })
 })

@@ -41,6 +41,9 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       true,
     )
+    expect(usesTerrainShell({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' })).toBe(
+      true,
+    )
     expect(usesTerrainShell({ kind: 'action-plan-template-edit', actionPlanId: 'plan-1' })).toBe(
       true,
     )
@@ -223,6 +226,15 @@ describe('getTerrainRouteConfig', () => {
       topbarVariant: 'detail',
       title: 'Détail du plan',
       backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Lancer',
+      backPath: '/action-plans/plan-1',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -415,6 +427,18 @@ describe('resolveTerrainTopbarPlacement', () => {
       'mobile-only',
     )
     expect(resolveTerrainTopbarPlacement(signal, getTerrainRouteConfig(signal))).toBe('mobile-only')
+
+    const templateEdit = { kind: 'action-plan-template-edit' as const, actionPlanId: 'plan-1' }
+    const executionEdit = {
+      kind: 'action-plan-execution-edit' as const,
+      executionId: 'exec-1',
+    }
+    expect(resolveTerrainTopbarPlacement(templateEdit, getTerrainRouteConfig(templateEdit))).toBe(
+      'mobile-only',
+    )
+    expect(
+      resolveTerrainTopbarPlacement(executionEdit, getTerrainRouteConfig(executionEdit)),
+    ).toBe('mobile-only')
   })
 
   it('keeps a mobile-only shell topbar on /analytics', () => {
@@ -424,20 +448,9 @@ describe('resolveTerrainTopbarPlacement', () => {
 
   it('hides the shared topbar on pages that own an in-page back control', () => {
     const teamMember = { kind: 'team-member-detail' as const, membershipId: 'member-1' }
-    const templateEdit = { kind: 'action-plan-template-edit' as const, actionPlanId: 'plan-1' }
-    const executionEdit = {
-      kind: 'action-plan-execution-edit' as const,
-      executionId: 'exec-1',
-    }
     expect(resolveTerrainTopbarPlacement(teamMember, getTerrainRouteConfig(teamMember))).toBe(
       'hidden',
     )
-    expect(resolveTerrainTopbarPlacement(templateEdit, getTerrainRouteConfig(templateEdit))).toBe(
-      'hidden',
-    )
-    expect(
-      resolveTerrainTopbarPlacement(executionEdit, getTerrainRouteConfig(executionEdit)),
-    ).toBe('hidden')
   })
 })
 
@@ -545,6 +558,9 @@ describe('getTerrainContentKey', () => {
     )
     expect(getTerrainContentKey({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       'action-plan-template-detail-plan-1',
+    )
+    expect(getTerrainContentKey({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' })).toBe(
+      'action-plan-template-use-plan-1',
     )
     expect(getTerrainContentKey({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       'action-plan-execution-detail-exec-1',
@@ -681,6 +697,9 @@ describe('requiresActiveMembership', () => {
     expect(requiresActiveMembership({ kind: 'action-plan-create', origin: 'library' })).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
+    ).toBe(true)
+    expect(
+      requiresActiveMembership({ kind: 'action-plan-template-use', actionPlanId: 'plan-1' }),
     ).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),

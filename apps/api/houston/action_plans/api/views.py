@@ -846,6 +846,7 @@ class ActionPlanPlanningSubmitView(EstablishmentScopedActionPlanMixin, APIView):
                 use_shared_chronology=data.get("use_shared_chronology", False),
                 items=items or [],
                 action_plan=action_plan,
+                requires_validation=data.get("requires_validation"),
             )
         except (
             PlanningSubmissionPayloadConflict,

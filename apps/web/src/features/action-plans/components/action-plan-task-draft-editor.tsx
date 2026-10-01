@@ -1,7 +1,7 @@
 import { ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainCard, TerrainFieldLabel, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,6 +46,7 @@ type ActionPlanTaskDraftEditorProps = {
   expandAdvancedNonce?: number
   expandAdvancedTaskIds?: ReadonlySet<string> | readonly string[]
   density?: 'default' | 'compact'
+  sectionLabel?: string
   onTasksChange: (
     update: ActionPlanTaskDraft[] | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[]),
   ) => void
@@ -240,6 +241,7 @@ function ActionPlanTaskDraftCard({
 
   const descriptionField = (
     <div {...{ [ACTION_PLAN_FIELD_ATTR]: descriptionKey }}>
+      {isCompact ? <TerrainFieldLabel>Description</TerrainFieldLabel> : null}
       <Textarea
         value={task.description}
         onChange={(event) => {
@@ -444,6 +446,7 @@ export function ActionPlanTaskDraftEditor({
   expandAdvancedNonce = 0,
   expandAdvancedTaskIds,
   density = 'default',
+  sectionLabel = 'Tâches',
   onTasksChange,
   onTaskFieldChange,
 }: ActionPlanTaskDraftEditorProps) {
@@ -513,7 +516,7 @@ export function ActionPlanTaskDraftEditor({
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
             </button>
-            <TerrainSectionLabel>Tâches</TerrainSectionLabel>
+            <TerrainSectionLabel>{sectionLabel}</TerrainSectionLabel>
             <span className="ml-auto text-xs text-[#7D7B75]">Facultatives</span>
           </div>
           {tasks.length === 0 ? (
@@ -525,7 +528,7 @@ export function ActionPlanTaskDraftEditor({
       ) : (
         <>
       <div className="flex items-center gap-2">
-        <TerrainSectionLabel>Tâches</TerrainSectionLabel>
+        <TerrainSectionLabel>{sectionLabel}</TerrainSectionLabel>
       </div>
         <div className="space-y-2">
           {taskRows}

@@ -68,6 +68,7 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyActionPlanExecutionEditPage: () => createElement(Page, { name: 'execution-edit' }),
     LazyActionPlanHubPage: () => createElement(Page, { name: 'action-plan-hub' }),
     LazyActionPlanTemplateDetailPage: () => createElement(Page, { name: 'template-detail' }),
+    LazyActionPlanTemplateUsePage: () => createElement(Page, { name: 'template-use' }),
     LazyAnalyticsPage: () => createElement(Page, { name: 'analytics' }),
     LazyAnalyticsPatternDetailPage: () => createElement(Page, { name: 'analytics-pattern-detail' }),
     LazyChatConversationPage: () => createElement(Page, { name: 'chat-conversation' }),
@@ -92,7 +93,7 @@ vi.mock('@/features/establishment-config/pages/operational-config-page', () => (
 }))
 
 vi.mock('@/features/notifications/components/notification-center', () => ({
-  NotificationCenter: () => null,
+  NotificationCenter: () => createElement('div', { 'data-testid': 'notification-center' }),
 }))
 
 vi.mock('@/components/layout/network-status-banner', () => ({
@@ -625,6 +626,26 @@ describe('App terrain active membership routing', () => {
 
     expect(switchEstablishment).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('omits notifications on the mobile library and keeps them on desktop', () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/action-plans' }
+
+    const mobile = render(wrapApp())
+
+    expect(screen.getByText('action-plan-hub')).toBeTruthy()
+    expect(screen.queryByTestId('notification-center')).toBeNull()
+    mobile.unmount()
+
+    stubLgViewport(true)
+    render(wrapApp())
+
+    expect(screen.getByTestId('notification-center')).toBeTruthy()
   })
 
   it('does not switch on a session-scoped chat route', async () => {

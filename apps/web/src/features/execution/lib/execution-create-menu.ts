@@ -17,7 +17,7 @@ export function getExecutionCreateMenuOptions(
   if (permissionHints?.can_create_action_plan === true) {
     options.push({
       id: 'action_plan',
-      label: "Créer un plan d'action",
+      label: 'Créer un plan',
       disabled: false,
     })
   }
@@ -25,7 +25,7 @@ export function getExecutionCreateMenuOptions(
   if (permissionHints?.can_view_action_plan_catalog === true) {
     options.push({
       id: 'catalog',
-      label: 'Choisir un modèle existant',
+      label: 'Utiliser la bibliothèque',
       disabled: false,
     })
   }

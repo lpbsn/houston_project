@@ -286,6 +286,7 @@ vi.mock('@/app/lazy-terrain-pages', async () => {
     LazyActionPlanExecutionEditPage: () => createElement(Page, { name: 'execution-edit' }),
     LazyActionPlanHubPage: () => createElement(Page, { name: 'action-plan-hub' }),
     LazyActionPlanTemplateDetailPage: () => createElement(Page, { name: 'template-detail' }),
+    LazyActionPlanTemplateUsePage: () => createElement(Page, { name: 'template-use' }),
     LazyAnalyticsPage: () => createElement(Page, { name: 'analytics' }),
     LazyAnalyticsPatternDetailPage: () => createElement(Page, { name: 'analytics-pattern-detail' }),
     LazyChatConversationPage: ChatConversationPage,

@@ -7,6 +7,7 @@ import {
 import {
   isActionPlanExecutionDetail,
   isActionPlanPlanningSubmitResponse,
+  resolveDirectCreateSuccessPath,
 } from '../lib/action-plan-create-response'
 import {
   buildActionPlanCreateRequest,
@@ -157,7 +158,7 @@ export function useActionPlanCreateSubmit({
           message: formatPlanningSubmitFeedback(response.summary),
           kind: 'created',
         })
-        onNavigate('/execution')
+        onNavigate(resolveDirectCreateSuccessPath(response))
         return true
       }
 
@@ -175,7 +176,7 @@ export function useActionPlanCreateSubmit({
         }),
         kind: 'created',
       })
-      onNavigate('/execution')
+      onNavigate(resolveDirectCreateSuccessPath(response))
       return true
     } catch (error) {
       const mapped = mapActionPlanApiErrors(error, {

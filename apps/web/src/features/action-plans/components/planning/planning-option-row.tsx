@@ -1,3 +1,5 @@
+import { ChevronRight } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 
 import { PlanningOptionPicker } from './planning-option-picker'
@@ -22,6 +24,7 @@ type PlanningOptionRowProps = {
   className?: string
   inset?: boolean
   wrapValue?: boolean
+  summary?: boolean
 }
 
 export function PlanningOptionRow({
@@ -39,6 +42,7 @@ export function PlanningOptionRow({
   className,
   inset = false,
   wrapValue = false,
+  summary = false,
 }: PlanningOptionRowProps) {
   const pickerActive = !disabled && openPicker?.rowId === rowId
   const resolvedDisplayValue =
@@ -57,10 +61,20 @@ export function PlanningOptionRow({
 
   return (
     <div
-      className={cn(inset && 'border-b border-[#E8E6DF] px-3 py-3 last:border-b-0', className)}
+      className={cn(
+        inset && 'border-b border-[#E8E6DF] px-3 py-3 last:border-b-0',
+        summary && 'border-b border-[#E8E6DF] last:border-b-0',
+        className,
+      )}
       {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
     >
-      <div className={cn('flex justify-between gap-3', wrapValue ? 'items-start' : 'items-center')}>
+      <div
+        className={cn(
+          'flex justify-between gap-3',
+          wrapValue ? 'items-start' : 'items-center',
+          summary && 'px-3 py-3',
+        )}
+      >
         <span className="shrink-0 text-sm text-[#1a1a1a]">{label}</span>
         {disabled ? (
           <span
@@ -71,6 +85,20 @@ export function PlanningOptionRow({
           >
             {resolvedDisplayValue}
           </span>
+        ) : summary ? (
+          <button
+            type="button"
+            aria-label={label}
+            aria-pressed={pickerActive}
+            className="flex min-w-0 items-center gap-1.5 text-sm text-[#7D7B75]"
+            onClick={togglePicker}
+          >
+            <span className="truncate">{resolvedDisplayValue}</span>
+            <ChevronRight
+              className={cn('size-4 shrink-0 transition-transform', pickerActive && 'rotate-90')}
+              aria-hidden
+            />
+          </button>
         ) : (
           <PlanningPill
             active={pickerActive}
@@ -97,7 +125,9 @@ export function PlanningOptionRow({
           onChange={onChange}
         />
       ) : null}
-      {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <p className={cn('mt-1 text-xs text-destructive', summary && 'px-3 pb-2')}>{error}</p>
+      ) : null}
     </div>
   )
 }

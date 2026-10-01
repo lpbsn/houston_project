@@ -34,7 +34,9 @@ describe('action plan desktop form', () => {
     expect(resolveDesktopLibraryPersistence('execution', true, true)).toBe(false)
     expect(resolveDesktopLibraryPersistence('signal-linked', true, true)).toBe(false)
     expect(resolveDesktopLibraryPersistence('catalog', true, false)).toBe(true)
+    expect(resolveDesktopLibraryPersistence('catalog', false, false)).toBe(true)
     expect(resolveDesktopLibraryPersistence('execution', true, false)).toBe(true)
+    expect(resolveDesktopLibraryPersistence('execution', false, false)).toBe(false)
     expect(ACTION_PLAN_DESKTOP_SAVE_LABEL).toBe('Enregistrer')
   })
 

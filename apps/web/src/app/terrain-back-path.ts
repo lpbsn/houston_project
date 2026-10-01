@@ -198,6 +198,10 @@ export function sameNavigationDestination(left: AppRoute, right: AppRoute): bool
       return (
         right.kind === 'action-plan-template-detail' && left.actionPlanId === right.actionPlanId
       )
+    case 'action-plan-template-use':
+      return (
+        right.kind === 'action-plan-template-use' && left.actionPlanId === right.actionPlanId
+      )
     case 'analytics-pattern-detail':
       return right.kind === 'analytics-pattern-detail' && left.patternId === right.patternId
     case 'chat-conversation-detail':

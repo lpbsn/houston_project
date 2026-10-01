@@ -1562,7 +1562,7 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.getByTestId('execution-create-menu-dialog')).toBeTruthy()
     expect(screen.queryByTestId('execution-create-menu-sheet')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: "Créer un plan d'action" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer un plan' }))
     expect(onNavigate).toHaveBeenCalledWith('/action-plans/new?from=execution')
   })
 

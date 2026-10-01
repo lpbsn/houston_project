@@ -61,13 +61,45 @@ function renderTrailing(ui: ReactNode) {
   return render(createElement(QueryClientProvider, { client: queryClient }, ui))
 }
 
+const activateMutateAsyncMock = vi.fn()
+const deactivateMutateAsyncMock = vi.fn()
+
+function enableDesktopWeb() {
+  vi.stubEnv('VITE_APP_RUNTIME', 'web')
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 vi.mock('../hooks', () => ({
   useActionPlanDetailQuery: () => detailQueryMock(),
   useDeleteActionPlanMutation: () => deleteMutationMock(),
+  useActivateActionPlanMutation: () => ({
+    mutateAsync: activateMutateAsyncMock,
+    isPending: false,
+  }),
+  useDeactivateActionPlanMutation: () => ({
+    mutateAsync: deactivateMutateAsyncMock,
+    isPending: false,
+  }),
 }))
 
 describe('ActionPlanTemplateDetailTopbarTrailing', () => {
   beforeEach(() => {
+    enableDesktopWeb()
+    activateMutateAsyncMock.mockResolvedValue(undefined)
+    deactivateMutateAsyncMock.mockResolvedValue(undefined)
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -86,6 +118,8 @@ describe('ActionPlanTemplateDetailTopbarTrailing', () => {
     cleanup()
     vi.clearAllMocks()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('shows edit pencil when can_update is granted', () => {
@@ -261,6 +295,86 @@ describe('ActionPlanTemplateDetailTopbarTrailing', () => {
     await vi.waitFor(() => {
       expect(deleteMutateAsyncMock).toHaveBeenCalledTimes(1)
     })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('opens model actions on mobile and keeps pencil actions off the bar', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+
+    renderTrailing(
+      createElement(ActionPlanTemplateDetailTopbarTrailing, {
+        establishmentId: 'est-1',
+        actionPlanId: 'plan-1',
+        onNavigate: navigateMock,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: 'Modifier' })).toBeNull()
+    const trigger = screen.getByRole('button', { name: 'Actions du modèle' })
+    expect(trigger.className.includes('border')).toBe(false)
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    fireEvent.click(trigger)
+    expect(screen.getByText('Plan catalogue')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
+    expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/edit')
+  })
+
+  it('activates from the mobile actions sheet', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        catalog_status: 'inactive',
+        permission_hints: {
+          can_update: false,
+          can_activate: true,
+          can_deactivate: false,
+          can_delete: false,
+          can_use: false,
+          can_schedule: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderTrailing(
+      createElement(ActionPlanTemplateDetailTopbarTrailing, {
+        establishmentId: 'est-1',
+        actionPlanId: 'plan-1',
+        onNavigate: navigateMock,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du modèle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Activer' }))
+
+    await vi.waitFor(() => {
+      expect(activateMutateAsyncMock).toHaveBeenCalled()
+      expect(notifySuccess).toHaveBeenCalledWith({
+        message: 'Modèle activé.',
+        kind: 'activated',
+      })
+    })
+  })
+
+  it('shows a delete failure inside the mobile actions sheet', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    deleteMutateAsyncMock.mockRejectedValueOnce(new Error('Observation blocks delete'))
+
+    renderTrailing(
+      createElement(ActionPlanTemplateDetailTopbarTrailing, {
+        establishmentId: 'est-1',
+        actionPlanId: 'plan-1',
+        onNavigate: navigateMock,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du modèle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe('Observation blocks delete')
     expect(navigateMock).not.toHaveBeenCalled()
   })
 })

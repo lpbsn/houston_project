@@ -36,18 +36,22 @@ export function resolveActionPlanDesktopJourneyTitle(
 }
 
 /**
- * Desktop web fixes the library outcome from the route.
- * Mobile keeps the toggle value.
+ * Catalog creation always persists a library template.
+ * Desktop web fixes every other mode from the route.
+ * Mobile execution keeps the toggle value.
  */
 export function resolveDesktopLibraryPersistence(
   mode: ActionPlanCreateMode,
   saveToLibrary: boolean,
   isDesktopWeb: boolean,
 ): boolean {
+  if (mode === 'catalog') {
+    return true
+  }
   if (!isDesktopWeb) {
     return saveToLibrary
   }
-  return mode === 'catalog'
+  return false
 }
 
 /** Matches the 5-minute snap used by “Maintenant”, so that slot still starts now. */

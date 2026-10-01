@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { ChevronRight, LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -19,11 +19,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
-import { terrainBrandAction } from '@/lib/terrain-styles'
+import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
+import { terrainBrandAction, terrainSectionLabelClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+import { ActionPlanAssigneesSheet } from '../components/action-plan-assignees-sheet'
 import { ActionPlanFormDesktopFrame } from '../components/action-plan-form-desktop-frame'
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
+import { ActionPlanLaunchPlanning } from '../components/action-plan-launch-planning'
+import {
+  ActionPlanAssigneeSummaryRow,
+  ActionPlanMobilePlanningSection,
+} from '../components/action-plan-mobile-planning-section'
 import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-editor'
 import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
 import { PlanningOptionRow } from '../components/planning/planning-option-row'
@@ -41,8 +48,14 @@ import {
   hydrateActionPlanExecutionEditForm,
   type ActionPlanExecutionEditFormValues,
 } from '../lib/action-plan-execution-edit-form'
-import type { ActionPlanEventPlanningDraft } from '../lib/action-plan-event-planning-form'
-import { taskIdsNeedingAdvancedExpand } from '../lib/action-plan-field-errors'
+import {
+  formatAssigneeSummary,
+  type ActionPlanEventPlanningDraft,
+} from '../lib/action-plan-event-planning-form'
+import {
+  actionPlanPlanningSectionNeedsExpand,
+  taskIdsNeedingAdvancedExpand,
+} from '../lib/action-plan-field-errors'
 import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
 import { canDefineCrossPoleTasks } from '../lib/action-plan-management-access'
 import { canShowActionPlanExecutionUpdate } from '../lib/action-plan-permission-hints'
@@ -61,6 +74,7 @@ export function ActionPlanExecutionEditPage({
   const { navigate, search } = useAppRoute()
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const placeFormColumns = useXlViewport()
+  const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const auth = useAuth()
   const establishmentId = auth.activeMembership?.establishment_id ?? null
   const role = auth.activeMembership?.role ?? null
@@ -81,6 +95,9 @@ export function ActionPlanExecutionEditPage({
 
   const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
   const [form, setForm] = useState<ActionPlanExecutionEditFormValues | null>(null)
+  const [planningOpen, setPlanningOpen] = useState(false)
+  const [treatedTasksOpen, setTreatedTasksOpen] = useState(false)
+  const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
   const formRootRef = useRef<HTMLFormElement>(null)
   const lastGuidanceNonceRef = useRef(0)
 
@@ -411,6 +428,12 @@ export function ActionPlanExecutionEditPage({
     )
   }
 
+  const staffDisplayName = auth.bootstrap?.user?.username ?? 'Moi'
+  const assigneeSummary = formatAssigneeSummary(form.planningDraft.assignees, {
+    staffMode,
+    staffDisplayName,
+  })
+
   return (
     <form
       ref={formRootRef}
@@ -418,7 +441,7 @@ export function ActionPlanExecutionEditPage({
       className="flex min-h-full w-full flex-col"
       onSubmit={handleFormSubmit}
     >
-      <div className="flex flex-col gap-3 px-3 pb-28 pt-2 lg:gap-4 lg:px-6 lg:pt-4">
+      <div className="flex flex-col gap-3 px-3 pb-28 pt-2">
         <TerrainCard className="space-y-3">
           <div data-action-plan-field="title">
             <TerrainFieldLabel>Titre</TerrainFieldLabel>
@@ -446,116 +469,173 @@ export function ActionPlanExecutionEditPage({
               className="min-h-20 border-[#E8E6DF]"
             />
           </div>
-          <PlanningOptionRow
-            rowId="pilot-business-unit"
-            label="Pôle d'activité pilote"
-            value={form.pilotBusinessUnitId}
-            displayValue={form.pilotBusinessUnitLabel}
-            options={[]}
-            disabled
-            openPicker={null}
-            onOpenPickerChange={() => undefined}
-            onChange={() => undefined}
-            fieldKey="pilotBusinessUnitId"
-          />
         </TerrainCard>
 
-        {!staffMode ? (
+        <ActionPlanTaskDraftEditor
+          tasks={form.pendingTasks}
+          establishmentId={establishmentId}
+          pilotBusinessUnitId={form.pilotBusinessUnitId}
+          canDefineCrossPoleTasks={canCrossPole}
+          staffMode={staffMode}
+          businessUnits={visibleBusinessUnits}
+          fieldErrors={fieldErrors}
+          expandAdvancedNonce={guidanceNonce}
+          expandAdvancedTaskIds={expandAdvancedTaskIds}
+          density="compact"
+          sectionLabel="Tâches restantes"
+          onTasksChange={setPendingTasks}
+          onTaskFieldChange={clearApiFieldError}
+        />
+
+        {form.treatedTasks.length > 0 ? (
           <section className="space-y-2">
-            <TerrainSectionLabel>Options</TerrainSectionLabel>
-            <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-left"
+              aria-expanded={treatedTasksOpen}
+              onClick={() => setTreatedTasksOpen((open) => !open)}
+            >
+              <span className={terrainSectionLabelClassName()}>Tâches déjà traitées</span>
+              <span className="flex items-center gap-1 text-sm text-[#7D7B75]">
+                {form.treatedTasks.length}
+                <ChevronRight
+                  className={cn('size-4 transition-transform', treatedTasksOpen && 'rotate-90')}
+                  aria-hidden
+                />
+              </span>
+            </button>
+            {treatedTasksOpen ? (
+              <div className="space-y-2">
+                {form.treatedTasks.map((task) => (
+                  <ActionPlanTaskReadOnlyRow
+                    key={task.id}
+                    task={task}
+                    statusLabel={formatActionPlanTaskStatusLabel(task.status)}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        <section className="space-y-2" data-testid="action-plan-mobile-organization">
+          <TerrainSectionLabel>Organisation</TerrainSectionLabel>
+          <TerrainCard className="overflow-hidden p-0">
+            <PlanningOptionRow
+              rowId="pilot-business-unit"
+              label="Pôle pilote"
+              summary
+              value={form.pilotBusinessUnitId}
+              displayValue={form.pilotBusinessUnitLabel}
+              options={[]}
+              disabled
+              openPicker={null}
+              onOpenPickerChange={() => undefined}
+              onChange={() => undefined}
+              fieldKey="pilotBusinessUnitId"
+            />
+            <ActionPlanAssigneeSummaryRow
+              summary={assigneeSummary}
+              editable={!staffMode}
+              error={fieldErrors.assignees}
+              onOpen={() => setAssigneeSheetOpen(true)}
+            />
+            {!staffMode ? (
               <TerrainSwitch
+                variant="bordered"
                 label="Validation requise"
                 checked={form.requiresValidation}
                 onCheckedChange={(requiresValidation) => patchForm({ requiresValidation })}
               />
-            </TerrainCard>
-          </section>
-        ) : null}
+            ) : null}
+          </TerrainCard>
+        </section>
 
-        {form.treatedTasks.length > 0 ? (
-          <section className="space-y-2">
-            <TerrainSectionLabel>Tâches traitées</TerrainSectionLabel>
-            <div className="space-y-2">
-              {form.treatedTasks.map((task) => (
-                <ActionPlanTaskReadOnlyRow
-                  key={task.id}
-                  task={task}
-                  statusLabel={formatActionPlanTaskStatusLabel(task.status)}
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
+        <ActionPlanMobilePlanningSection
+          draft={form.planningDraft}
+          timing="locked"
+          open={planningOpen}
+          onOpenChange={setPlanningOpen}
+          expandNonce={guidanceNonce}
+          shouldExpand={actionPlanPlanningSectionNeedsExpand(fieldErrors)}
+        >
+          {form.planningDraft.usePerAssigneeChronology ? (
+            <ActionPlanEventPlanningForm
+              draft={form.planningDraft}
+              config={{
+                canEditAssignees: !staffMode,
+                canSchedule: false,
+                staffMode,
+                showAdvancedChronology: false,
+                lockChronologyMode: true,
+                lockStart: true,
+                hideAssignees: true,
+                staffDisplayName,
+                assigneeActionsEnabled: false,
+              }}
+              establishmentId={establishmentId}
+              pilotBusinessUnitId={form.pilotBusinessUnitId}
+              fieldErrors={fieldErrors}
+              onDraftChange={setPlanningDraft}
+            />
+          ) : (
+            <ActionPlanLaunchPlanning
+              draft={form.planningDraft}
+              config={{
+                canEditAssignees: false,
+                canSchedule: false,
+                staffMode,
+                showAdvancedChronology: false,
+                lockChronologyMode: true,
+                lockStart: true,
+                hideAssignees: true,
+                staffDisplayName,
+                assigneeActionsEnabled: false,
+              }}
+              establishmentId={establishmentId}
+              pilotBusinessUnitId={form.pilotBusinessUnitId}
+              fieldErrors={fieldErrors}
+              timing="schedule"
+              advancedOpen={false}
+              onTimingChange={() => undefined}
+              onAdvancedOpenChange={() => undefined}
+              onDraftChange={setPlanningDraft}
+            />
+          )}
+        </ActionPlanMobilePlanningSection>
 
-        <div>
-          <ActionPlanTaskDraftEditor
-            tasks={form.pendingTasks}
-            establishmentId={establishmentId}
-            pilotBusinessUnitId={form.pilotBusinessUnitId}
-            canDefineCrossPoleTasks={canCrossPole}
-            staffMode={staffMode}
-            businessUnits={visibleBusinessUnits}
-            fieldErrors={fieldErrors}
-            expandAdvancedNonce={guidanceNonce}
-            expandAdvancedTaskIds={expandAdvancedTaskIds}
-            onTasksChange={setPendingTasks}
-            onTaskFieldChange={clearApiFieldError}
-          />
-        </div>
-
-        <div>
-          <ActionPlanEventPlanningForm
-            draft={form.planningDraft}
-            config={{
-              canEditAssignees: !staffMode,
-              canSchedule: false,
-              staffMode,
-              showAdvancedChronology: false,
-              lockChronologyMode: true,
-              lockStart: true,
-              hideAssignees: false,
-              staffDisplayName: auth.bootstrap?.user?.username ?? 'Moi',
-              assigneeActionsEnabled: false,
-            }}
-            establishmentId={establishmentId}
-            pilotBusinessUnitId={form.pilotBusinessUnitId}
-            fieldErrors={fieldErrors}
-            onDraftChange={setPlanningDraft}
-          />
-        </div>
-
-        {submitError ? (
-          <div>
-            <TerrainFeedback variant="error" message={submitError} />
-          </div>
-        ) : null}
+        {submitError ? <TerrainFeedback variant="error" message={submitError} /> : null}
       </div>
 
-      <TerrainStickyFooter className="lg:px-6">
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 flex-1 rounded-xl"
-            disabled={isSubmitting}
-            onClick={() => leaveDetail()}
-          >
-            Retour
-          </Button>
+      {isNativeKeyboardOpen ? null : (
+        <TerrainStickyFooter>
           <Button
             type="submit"
             className={cn(
-              'h-11 flex-1 rounded-xl text-white',
+              'h-11 w-full rounded-xl text-white',
               terrainBrandAction.bg,
               terrainBrandAction.hover,
             )}
             disabled={isSubmitting}
           >
-            Enregistrer les modifications
+            Enregistrer
           </Button>
-        </div>
-      </TerrainStickyFooter>
+        </TerrainStickyFooter>
+      )}
+
+      {!staffMode && assigneeSheetOpen ? (
+        <ActionPlanAssigneesSheet
+          open
+          establishmentId={establishmentId}
+          pilotBusinessUnitId={form.pilotBusinessUnitId}
+          assignees={form.planningDraft.assignees}
+          onAssigneesChange={(assignees) =>
+            setPlanningDraft((previous) => ({ ...previous, assignees }))
+          }
+          onClose={() => setAssigneeSheetOpen(false)}
+          onConfirm={() => setAssigneeSheetOpen(false)}
+        />
+      ) : null}
     </form>
   )
 }

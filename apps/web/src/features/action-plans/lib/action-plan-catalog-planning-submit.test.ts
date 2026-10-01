@@ -154,6 +154,38 @@ describe('action-plan-catalog-planning-submit', () => {
     expect(submit?.body.items.every((item) => item.kind === 'schedule')).toBe(true)
   })
 
+  it('keeps launch disabled without an assignee and sends an explicit validation override', () => {
+    const empty = createActionPlanEventPlanningDraft()
+    expect(
+      isCatalogPlanningPrimaryDisabled(empty, { canSchedule: true, isPending: false }),
+    ).toBe(true)
+    expect(
+      isCatalogPlanningPrimaryDisabled(empty, {
+        canSchedule: true,
+        staffMode: true,
+        isPending: false,
+      }),
+    ).toBe(false)
+    expect(validateCatalogPlanningDraft(empty, { canSchedule: true }).assignees).toBeTruthy()
+
+    const draft = {
+      ...empty,
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm1',
+          businessUnitId: 'bu1',
+        }),
+      ],
+    }
+    const inherited = resolveCatalogPlanningSubmit(draft, { canSchedule: true })
+    expect(inherited?.body.requires_validation).toBeUndefined()
+    const overridden = resolveCatalogPlanningSubmit(draft, {
+      canSchedule: true,
+      requiresValidation: false,
+    })
+    expect(overridden?.body.requires_validation).toBe(false)
+  })
+
   it('disables primary action for incomplete global repeat schedule', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),

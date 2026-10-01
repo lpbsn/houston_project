@@ -102,6 +102,12 @@ export const LazyActionPlanTemplateDetailPage = lazy(() =>
   })),
 )
 
+export const LazyActionPlanTemplateUsePage = lazy(() =>
+  import('@/features/action-plans/pages/action-plan-template-use-page').then((module) => ({
+    default: module.ActionPlanTemplateUsePage,
+  })),
+)
+
 export const LazyActionPlanExecutionDetailPage = lazy(() =>
   import('@/features/action-plans/pages/action-plan-execution-detail-page').then((module) => ({
     default: module.ActionPlanExecutionDetailPage,

@@ -17,8 +17,11 @@ import { cn } from '@/lib/utils'
 
 import { ActionPlanExecutionDetailLabel } from '../components/action-plan-execution-detail-label'
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
-import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
-import { ActionPlanTemplateDetailHeader } from '../components/action-plan-template-detail-header'
+import {
+  ActionPlanTemplateDetailDescription,
+  ActionPlanTemplateDetailHeader,
+  ActionPlanTemplateDetailSecondary,
+} from '../components/action-plan-template-detail-header'
 import { ActionPlanTemplateDetailStickyFooter } from '../components/action-plan-template-detail-sticky-footer'
 import {
   deleteActionPlanMutationKey,
@@ -34,21 +37,19 @@ import {
   resolveDesktopLaunchLabel,
   summarizeCatalogPlanningLaunch,
 } from '../lib/action-plan-desktop-form'
+import { resolvePlanningSuccessPath } from '../lib/action-plan-create-response'
 import {
   formatPlanningSubmitFeedback,
   isCatalogPlanningPrimaryDisabled,
   resolveCatalogPlanningSubmit,
   resolveCatalogPlanningSubmitFallbackMessage,
+  submitCatalogPlanningWithIntent,
   validateCatalogPlanningDraft,
 } from '../lib/action-plan-catalog-planning-submit'
 import { formatActionPlanCreatedAtLabel, formatActionPlanTaskAssigneePoleLine, formatActionPlanTaskDeadlineLabel, formatCatalogStatusLabel } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
-import {
-  applyPlanningSubmissionIntent,
-  clearPlanningSubmissionIntent,
-  resolvePlanningSubmissionIntent,
-} from '../lib/action-plan-planning-submission-intent'
+import { clearPlanningSubmissionIntent } from '../lib/action-plan-planning-submission-intent'
 import {
   createActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -176,8 +177,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     deactivateMutation.isPending ||
     planningMutation.isPending
 
-  const showStickyFooter = executionPanelOpen || canUse
-
   function resetExecutionPanel() {
     clearPlanningSubmissionIntent(establishmentId, actionPlanId)
     setExecutionPanelOpen(false)
@@ -226,31 +225,18 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
     setFeedback(null)
     try {
-      const intent = await resolvePlanningSubmissionIntent({
+      const response = await submitCatalogPlanningWithIntent({
         establishmentId,
         actionPlanId,
-        body: {
-          use_shared_chronology: submit.body.use_shared_chronology,
-          items: submit.body.items,
-        },
+        body: submit.body,
+        submit: (body) => planningMutation.mutateAsync({ actionPlanId, body }),
       })
-      const response = await planningMutation.mutateAsync({
-        actionPlanId,
-        body: applyPlanningSubmissionIntent(
-          {
-            use_shared_chronology: submit.body.use_shared_chronology,
-            items: submit.body.items,
-          },
-          intent,
-        ),
-      })
-      clearPlanningSubmissionIntent(establishmentId, actionPlanId)
       resetExecutionPanel()
       notifySuccess({
         message: formatPlanningSubmitFeedback(response.summary),
         kind: 'created',
       })
-      navigate('/execution')
+      navigate(resolvePlanningSuccessPath(response))
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -548,7 +534,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         data-testid="action-plan-template-detail-frame"
         className="flex min-h-full w-full flex-1 flex-col"
       >
-        <div className={cn('flex flex-col gap-3 px-3 pt-2', showStickyFooter ? 'pb-40' : 'pb-4')}>
+        <div className={cn('flex flex-col gap-3 px-3 pt-2', canUse ? 'pb-40' : 'pb-4')}>
           {displayedFeedback ? (
             <div>
               <TerrainFeedback
@@ -558,74 +544,48 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            <ActionPlanTemplateDetailHeader
-              plan={plan}
-              showActivate={canShowActionPlanActivate(hints)}
-              showDeactivate={canShowActionPlanDeactivate(hints)}
-              isActivatePending={activateMutation.isPending}
-              isDeactivatePending={deactivateMutation.isPending}
-              onActivate={() => void handleActivate()}
-              onDeactivate={() => void handleDeactivate()}
-            />
-          </div>
-
-          <div className="space-y-3">
-            <section className="space-y-2">
+          <div className="flex flex-col gap-3">
+            <ActionPlanTemplateDetailHeader plan={plan} />
+            <ActionPlanTemplateDetailSecondary plan={plan} />
+            <ActionPlanTemplateDetailDescription plan={plan} />
+            <section className="flex flex-col gap-1.5">
               <TerrainSectionLabel>Tâches</TerrainSectionLabel>
               {sortedTasks.length === 0 ? (
-                <TerrainCard className="p-0">
-                  <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Aucune tâche.</p>
-                </TerrainCard>
+                <p className={cn('border border-transparent px-4 text-sm', terrain.muted)}>
+                  Aucune tâche.
+                </p>
               ) : (
-                <div className="space-y-1">
-                  {sortedTasks.map((task) => (
-                    <TerrainCard key={task.id} className="p-0">
-                      <ActionPlanTaskReadOnlyRow task={task} />
-                    </TerrainCard>
-                  ))}
-                </div>
+                <ul className="divide-y divide-[#E8E6DF] border border-transparent px-4">
+                  {sortedTasks.map((task) => {
+                    const assigneePoleLine = formatActionPlanTaskAssigneePoleLine({
+                      assigneeDisplayName: task.assigned_display_name,
+                      poleLabel: task.business_unit?.specific_name?.trim() || null,
+                    })
+                    const taskDescription = task.description?.trim() ?? ''
+                    return (
+                      <li key={task.id} className="py-2.5">
+                        <p className="text-sm text-[#1a1a1a]">{task.task}</p>
+                        {assigneePoleLine ? (
+                          <p className="mt-0.5 text-xs text-[#7D7B75]">{assigneePoleLine}</p>
+                        ) : null}
+                        {taskDescription ? (
+                          <p className="mt-0.5 whitespace-pre-wrap text-xs text-[#9a958c]">
+                            {taskDescription}
+                          </p>
+                        ) : null}
+                      </li>
+                    )
+                  })}
+                </ul>
               )}
             </section>
           </div>
-
-          {executionPanelOpen ? (
-            <div ref={planningFormRootRef}>
-              <ActionPlanEventPlanningForm
-                draft={planningDraft}
-                config={{
-                  canEditAssignees: !staffUseMode,
-                  canSchedule,
-                  staffMode: staffUseMode,
-                  showAdvancedChronology: !staffUseMode,
-                  hideAssignees: false,
-                  staffDisplayName,
-                  assigneeActionsEnabled: false,
-                }}
-                establishmentId={establishmentId}
-                pilotBusinessUnitId={plan.pilot_business_unit.id}
-                fieldErrors={planningFieldErrors}
-                onDraftChange={(update) => {
-                  setPlanningDraft((previous) =>
-                    typeof update === 'function' ? update(previous) : update,
-                  )
-                }}
-              />
-            </div>
-          ) : null}
         </div>
 
-        {showStickyFooter ? (
+        {canUse ? (
           <ActionPlanTemplateDetailStickyFooter
-            hints={hints}
-            executionPanelOpen={executionPanelOpen}
-            canUse={canUse}
-            isBusy={isBusy}
-            primaryActionDisabled={primaryActionDisabled}
-            isPrimaryPending={isPrimaryPending}
-            onOpenExecutionPanel={() => setExecutionPanelOpen(true)}
-            onCloseExecutionPanel={resetExecutionPanel}
-            onLaunchExecution={() => void handleLaunchExecution()}
+            disabled={isBusy}
+            onUse={() => navigate(`/action-plans/${actionPlanId}/use`)}
           />
         ) : null}
       </div>

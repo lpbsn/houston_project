@@ -149,6 +149,10 @@ describe('parseAppRoute', () => {
       kind: 'action-plan-template-edit',
       actionPlanId: 'plan-1',
     })
+    expect(parseAppRoute('/action-plans/plan-1/use')).toEqual({
+      kind: 'action-plan-template-use',
+      actionPlanId: 'plan-1',
+    })
     expect(parseAppRoute('/action-plans/executions/exec-1')).toEqual({
       kind: 'action-plan-execution-detail',
       executionId: 'exec-1',
@@ -289,6 +293,7 @@ describe('serializeAppRoute', () => {
       '/action-plans/new',
       '/action-plans/new?from=execution',
       '/action-plans/plan-1',
+      '/action-plans/plan-1/use',
       '/action-plans/plan-1/edit',
       '/action-plans/executions/exec-1',
       '/action-plans/executions/exec-1/edit',

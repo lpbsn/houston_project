@@ -544,6 +544,7 @@ def _create_action_plan_schedule_core(
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
     all_day: bool = False,
+    requires_validation_override: bool | None = None,
     emit_side_effects: bool = True,
 ) -> ActionPlanSchedule:
     """Schedule write path without catalog/use gates (caller already authorized)."""
@@ -584,6 +585,8 @@ def _create_action_plan_schedule_core(
         raise ActionPlanValidationError(
             "Individual chronology schedules require exactly one assignee.",
         )
+    if not validated_assignees:
+        raise ActionPlanValidationError("At least one assignee is required.")
     task_count = ActionPlanTask.objects.filter(action_plan=action_plan).count()
     _validate_execution_has_content(
         task_count=task_count,
@@ -601,6 +604,7 @@ def _create_action_plan_schedule_core(
         end_at=resolved_end_at,
         all_day=all_day,
         recurrence_days=normalized_recurrence_days,
+        requires_validation_override=requires_validation_override,
         status=SCHEDULE_STATUS_ACTIVE,
     )
     _create_schedule_assignees(schedule=schedule, validated_assignees=validated_assignees)
@@ -627,6 +631,7 @@ def create_action_plan_schedule(
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
     all_day: bool = False,
+    requires_validation_override: bool | None = None,
     emit_side_effects: bool = True,
 ) -> ActionPlanSchedule:
     if not can_create_action_plan_schedule(actor, action_plan):
@@ -646,6 +651,7 @@ def create_action_plan_schedule(
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
         all_day=all_day,
+        requires_validation_override=requires_validation_override,
         emit_side_effects=emit_side_effects,
     )
 
@@ -662,6 +668,7 @@ def create_action_plan_schedule_for_planning_engine(
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
     all_day: bool = False,
+    requires_validation_override: bool | None = None,
     emit_side_effects: bool = False,
 ) -> ActionPlanSchedule:
     """Internal planning-engine schedule create (catalog readiness already decided by caller)."""
@@ -676,6 +683,7 @@ def create_action_plan_schedule_for_planning_engine(
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
         all_day=all_day,
+        requires_validation_override=requires_validation_override,
         emit_side_effects=emit_side_effects,
     )
 
