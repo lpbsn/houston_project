@@ -97,6 +97,15 @@ describe('SignalDetailPhotoSection', () => {
     expect(document.body.style.overflow).toBe('')
   })
 
+  it('closes the enlarged preview modal when Escape is pressed', () => {
+    render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))
+    screen.getByRole('dialog', { name: 'Aperçu photo' })
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('closes the enlarged preview modal when the backdrop is clicked', () => {
     render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
     fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))

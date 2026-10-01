@@ -178,6 +178,8 @@ describe('AnalyticsPage', () => {
     expect(screen.queryByText('Motif 6 caché')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Voir tout' }))
     expect(screen.getByText('Motif 6 caché')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByText('Motif 6 caché')).toBeNull()
   })
 
   it('omits the coverage banner when every comparison is complete', () => {

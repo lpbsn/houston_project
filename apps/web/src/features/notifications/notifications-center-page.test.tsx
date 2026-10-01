@@ -141,6 +141,18 @@ describe('NotificationsCenterPage', () => {
     expect(screen.getByText('2 notifications non lues')).toBeTruthy()
   })
 
+  it('exposes the pressed state and keyboard focus ring on filter pills', () => {
+    render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
+
+    const all = screen.getByRole('button', { name: 'Toutes' })
+    const unread = screen.getByRole('button', { name: /Non lues/ })
+    expect(all.getAttribute('aria-pressed')).toBe('true')
+    expect(unread.getAttribute('aria-pressed')).toBe('false')
+    expect(all.className).toContain('focus-visible:ring-2')
+    expect(all.className).toContain('focus-visible:ring-[#1B4FD8]/30')
+    expect(all.className).toContain('focus-visible:outline-none')
+  })
+
   it('switches filter between all and unread', () => {
     render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
 

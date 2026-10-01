@@ -24,7 +24,14 @@ export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPre
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const unregister = registerNativeOverlayDismiss(onClose)
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
     return () => {
+      window.removeEventListener('keydown', onKeyDown)
       unregister()
       document.body.style.overflow = previousOverflow
     }

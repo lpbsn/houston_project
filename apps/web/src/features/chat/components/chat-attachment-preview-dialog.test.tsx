@@ -47,6 +47,18 @@ describe('ChatAttachmentPreviewDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('closes when Escape is pressed', async () => {
+    fetchAuthenticatedChatMedia.mockResolvedValue('blob:viewer-image')
+    const onClose = vi.fn()
+    render(<ChatAttachmentPreviewDialog item={imageItem} onClose={onClose} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('shows a fetch error inside the overlay', async () => {
     fetchAuthenticatedChatMedia.mockResolvedValue(null)
     render(<ChatAttachmentPreviewDialog item={imageItem} onClose={() => undefined} />)

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, Download, Info } from 'lucide-react'
 import { Popover } from 'radix-ui'
 
@@ -277,6 +277,16 @@ function RankingOverlay({
   children: ReactNode
   onClose: () => void
 }) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal>
       <div className="flex h-full w-full max-w-lg flex-col bg-white shadow-xl">

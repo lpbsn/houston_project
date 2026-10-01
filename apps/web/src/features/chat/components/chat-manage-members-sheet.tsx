@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { LoaderCircle, UserPlus, UserMinus, Shield } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { TerrainBottomSheet } from '@/components/ui/terrain'
+import { TerrainBottomSheet, TerrainDialog } from '@/components/ui/terrain'
 
 import {
   invalidateConversationStructureQueries,
@@ -111,38 +111,6 @@ export function ChatManageMembersSheet({
     resetTransientState()
     onClose()
   }
-
-  useEffect(() => {
-    if (!open || presentation !== 'dialog') {
-      return
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        if (isPending) {
-          return
-        }
-        setMode('members')
-        setSearch('')
-        setSelectedToAdd([])
-        setSelectedToRemove([])
-        setSummary(null)
-        addMutation.reset()
-        removeMutation.reset()
-        promoteMutation.reset()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [
-    addMutation,
-    isPending,
-    onClose,
-    open,
-    presentation,
-    promoteMutation,
-    removeMutation,
-  ])
 
   async function refreshConversation() {
     invalidateConversationStructureQueries(queryClient, establishmentId, conversation.id)
@@ -421,30 +389,15 @@ export function ChatManageMembersSheet({
 
   if (presentation === 'dialog') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="chat-manage-members-title"
-          data-testid="chat-manage-members-dialog"
-          className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-[#E8E6DF] bg-white p-4 shadow-lg"
-        >
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 id="chat-manage-members-title" className="text-sm font-semibold text-[#1a1a1a]">
-              Gérer les membres
-            </h2>
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-sm font-medium text-[#5c564e] hover:bg-[#F5F4F0] disabled:opacity-60"
-              disabled={isPending}
-              onClick={handleClose}
-            >
-              Fermer
-            </button>
-          </div>
-          {body}
-        </div>
-      </div>
+      <TerrainDialog
+        title="Gérer les membres"
+        open={open}
+        dismissible={!isPending}
+        onClose={handleClose}
+        testId="chat-manage-members-dialog"
+      >
+        {body}
+      </TerrainDialog>
     )
   }
 
