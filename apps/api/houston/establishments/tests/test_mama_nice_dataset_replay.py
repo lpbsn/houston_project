@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from houston.accounts.models import User
 from houston.action_plans.constants import CATALOG_STATUS_ACTIVE
 from houston.action_plans.models import ActionPlan, ActionPlanSchedule
 from houston.action_plans.permissions import can_use_action_plan
@@ -33,9 +34,11 @@ from houston.establishments.mama_nice_dataset_replay import (
 from houston.establishments.models import EstablishmentMembership, MamaNiceSeedRecord
 from houston.gamification.models import GamificationSeason
 from houston.gamification.services import open_season
-from houston.accounts.models import User
 from houston.testing.factories import TEST_PASSWORD, create_establishment, create_membership
-from houston.testing.taxonomy import create_business_unit, create_membership_with_business_unit_scope
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 
 def test_production_seed_requires_establishment_id():
