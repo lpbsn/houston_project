@@ -5,7 +5,7 @@ Last reviewed: 2026-09-03
 
 Manual, reproducible path from this repo to a **Play-ready Android App Bundle**. No Fastlane, no CI `cap sync`, no store upload automation.
 
-Daily Native development stays on `make web-cap-sync` and the repo-root `.env` (loopback API). **Never** use that target for a store artefact.
+Daily Native sync (`make web-cap-sync`) and store sync (`make web-cap-sync-release`) both bake Vite mode `native` (`.env.native`, `https://app.spore-os.com`). Exported process environment overrides that file. Web production builds stay on mode `production`.
 
 ## Production Native config
 
@@ -16,7 +16,7 @@ VITE_API_BASE_URL=https://app.spore-os.com
 VITE_PUBLIC_APP_URL=https://app.spore-os.com
 ```
 
-`make web-cap-sync-release` exports these **before** Vite so they override `.env`. `scripts/validate-native-release-build.mjs` then requires that origin in `dist-native/` and rejects baked loopback API URLs (`http://localhost`, `10.0.2.2`, …).
+`make web-cap-sync-release` exports these **before** Vite so they override `.env` and `.env.native`. `scripts/validate-native-release-build.mjs` loads the same mode `native` env Vite used, then requires that origin in `dist-native/` and rejects baked loopback API URLs (`http://localhost`, `10.0.2.2`, …).
 
 ## Operator prerequisites
 
@@ -114,7 +114,7 @@ Short, Release-specific. Do not substitute [`smoke_checklist.md`](smoke_checklis
 
 1. `make android-bundle-release` (runs `validate-native-release-build.mjs`). Confirm the AAB exists at the path above. Do not commit it.
 2. Confirm the bundle is a store identity: `applicationId` / package `app.spore`, `targetSdk` 36, Release signing (Gradle fails closed without the upload keystore and `google-services.json`).
-3. Do **not** use `make web-cap-sync` (loopback `.env`) for this artefact.
+3. Use `make web-cap-sync-release` for this artefact so `validate-native-release-build.mjs` runs. Daily `make web-cap-sync` bakes the same mode `native` origins but skips that store check.
 4. iOS: `make web-cap-sync-release` is enough for an in-repo Release bake. No App Store IPA. Production push and archive wait on ADP.
 5. Device login against production on a sideloaded Release binary is optional QA. OS-verified App Links, Play Closed Testing, and App Review sandbox are console / identity follow-up.
 

@@ -31,15 +31,9 @@ Optional scheduler (action plan horizon beat): `make up-scheduler`.
 
 After `.env` changes with stack running: `make recreate-backend` (reloads api and worker env). `make restart-backend` does **not** reload `.env`.
 
-`make web-dev` loads `VITE_*` from the repo-root `.env` (`Vite envDir`). With `VITE_API_BASE_URL=http://localhost:8000`, the browser calls the API on `:8000` directly (CORS via `HOUSTON_CLIENT_ORIGINS`). In Web runtime, when the page and configured API hosts are the local loopbacks `localhost` and `127.0.0.1`, the client aligns the API hostname with the page hostname so `SameSite=Lax` auth cookies remain same-site. The origin allowlist alone does not make cross-site cookies attach. Leave the base URL empty to keep relative `/api` paths and the Vite proxy.
+`make web-dev` loads Vite mode `development`. `VITE_*` still comes from the repo-root `.env` (`Vite envDir`), and `.env.development` overrides `VITE_API_BASE_URL` to `http://localhost:8000`, so the browser calls the API on `:8000` directly (CORS via `HOUSTON_CLIENT_ORIGINS`). In Web runtime, when the page and configured API hosts are the local loopbacks `localhost` and `127.0.0.1`, the client aligns the API hostname with the page hostname so `SameSite=Lax` auth cookies remain same-site. The origin allowlist alone does not make cross-site cookies attach.
 
-Native Capacitor (`make web-cap-sync`) copies `dist-native/` into the iOS and Android projects. `VITE_API_BASE_URL` is baked at native build time — rebuild and sync after changing it. Store / Play AAB builds must not use this daily target: [`docs/deploy/native_release.md`](../deploy/native_release.md) (`make web-cap-sync-release`).
-
-| Target | `VITE_API_BASE_URL` |
-|--------|---------------------|
-| iOS Simulator | `http://localhost:8000` (default `.env.example`) |
-| Android emulator | `http://10.0.2.2:8000` then `make web-cap-sync` |
-| Physical device | LAN IP or HTTPS API host (not `localhost`) |
+Native Capacitor (`make web-cap-sync`) builds with Vite mode `native` (`.env.native` → `https://app.spore-os.com` for `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL`) and copies `dist-native/` into the iOS and Android projects. A variable already exported in the process environment still wins over both files. Store checks stay on [`docs/deploy/native_release.md`](../deploy/native_release.md) (`make web-cap-sync-release`). Web production builds stay on mode `production` and do not load these files; an empty `VITE_API_BASE_URL` there keeps relative `/api` paths.
 
 Set `VITE_PUBLIC_APP_URL` to the public HTTP(S) origin (same value as `HOUSTON_PUBLIC_APP_URL`, no path/query/hash) so in-app invitation copy links are usable outside the WebView. Native builds require it. Native deep-link parsing is strict HTTPS against that origin.
 

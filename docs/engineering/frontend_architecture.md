@@ -65,7 +65,7 @@ Network banner (`navigator.onLine` on Web; `@capacitor/network` on Native) and W
 One React tree, two Vite pipelines in [`vite.config.ts`](../../apps/web/vite.config.ts):
 
 - **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest. Boot unregisters leftover service-worker registrations.
-- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (absolute http(s) origin) are required at Vite startup (dev and build).
+- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, Vite `--mode native` (`.env.native`), `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (absolute http(s) origin) are required at Vite startup (dev and build).
 
 `tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Native projects live in [`apps/web/ios`](../../apps/web/ios) and [`apps/web/android`](../../apps/web/android); sync with `npm run cap:sync`. Store builds use `make web-cap-sync-release` (pinned `https://app.spore-os.com`) and `make android-bundle-release` — [`docs/deploy/native_release.md`](../deploy/native_release.md). Committed `capacitor.config.ts` keeps `allowMixedContent: false` and no `server.cleartext`; Android debug Gradle overlays local HTTP mixed content for the emulator.
 
@@ -76,7 +76,7 @@ cd apps/web && npm run typecheck
 cd apps/web && npm run lint
 cd apps/web && npm test
 cd apps/web && npm run build
-cd apps/web && npm run build:native   # requires VITE_API_BASE_URL and VITE_PUBLIC_APP_URL
+cd apps/web && npm run build:native   # Vite mode native; origins from .env.native
 cd apps/web && npm run cap:sync
 make web-cap-sync-release   # production Native bake; see docs/deploy/native_release.md
 make web-api-generate   # after make schema

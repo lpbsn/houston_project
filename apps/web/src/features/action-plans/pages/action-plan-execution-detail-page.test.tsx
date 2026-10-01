@@ -300,6 +300,8 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
         targetType: 'action-plan-execution',
         targetId: 'exec-1',
         highlightCommentId: null,
+        attachTrigger: 'icon',
+        pinComposer: true,
       }),
       undefined,
     )

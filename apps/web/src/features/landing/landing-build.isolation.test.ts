@@ -35,10 +35,10 @@ describe('app and landing build isolation', () => {
       'VITE_APP_RUNTIME=web vite build && node scripts/validate-web-build.mjs',
     )
     expect(pkg.scripts['build:native']).toBe(
-      'tsc -b && VITE_APP_RUNTIME=native vite build && node scripts/validate-native-build.mjs',
+      'tsc -b && VITE_APP_RUNTIME=native vite build --mode native && node scripts/validate-native-build.mjs',
     )
     expect(pkg.scripts['build:native:bundle']).toBe(
-      'VITE_APP_RUNTIME=native vite build && node scripts/validate-native-build.mjs',
+      'VITE_APP_RUNTIME=native vite build --mode native && node scripts/validate-native-build.mjs',
     )
     expect(pkg.scripts['build:native:release']).toContain('validate-native-release-build.mjs')
     expect(pkg.scripts['cap:sync:release']).toContain('build:native:release')
