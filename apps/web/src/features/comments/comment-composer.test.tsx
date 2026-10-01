@@ -172,7 +172,10 @@ describe('CommentComposer', () => {
         onSubmit={vi.fn()}
       />,
     )
-    expect(screen.getByRole('button', { name: 'Joindre un fichier' })).toBeTruthy()
+    const textarea = screen.getByLabelText('Ajouter un commentaire')
+    const attach = screen.getByRole('button', { name: 'Joindre un fichier' })
+    expect(textarea.parentElement?.contains(attach)).toBe(true)
     expect(screen.queryByText('Joindre un fichier')).toBeNull()
+    expect(screen.queryByText(/10 Mo max/)).toBeNull()
   })
 })

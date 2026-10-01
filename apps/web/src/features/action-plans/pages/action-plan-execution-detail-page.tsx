@@ -455,7 +455,7 @@ function ActionPlanExecutionDetailPageContent({
         ) : undefined
       }
       pinComposer={!isDesktopWeb}
-      attachTrigger={isDesktopWeb ? 'icon' : 'label'}
+      attachTrigger="icon"
       attachEnabled={
         source !== 'cross' &&
         (execution.status === 'in_progress' || execution.status === 'pending_validation')
