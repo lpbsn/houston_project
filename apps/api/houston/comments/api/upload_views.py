@@ -17,6 +17,7 @@ from houston.comments.api.serializers import (
     ActionPlanCommentReserveUploadResponseSerializer,
     ActionPlanCommentUploadCompleteResponseSerializer,
 )
+from houston.comments.constants import ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT
 from houston.comments.exceptions import CommentValidationError
 from houston.comments.models import ActionPlanCommentAttachment
 from houston.comments.selectors import get_action_plan_execution_for_comments
@@ -29,9 +30,11 @@ from houston.comments.upload_services import (
     reserve_action_plan_comment_upload,
     store_action_plan_comment_upload_content,
 )
-from houston.establishments.permissions import HasActiveMembership
+from houston.establishments.models import EstablishmentMembership
+from houston.establishments.permissions import HasActiveMembership, is_valid_membership
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
+from houston.uploads.preview_tokens import unsign_upload_preview_token
 from houston.uploads.private_storage import (
     PRIVATE_MEDIA_BACKEND_S3,
     get_action_plan_comment_private_media_storage,
@@ -225,9 +228,69 @@ class ActionPlanCommentCompleteUploadView(EstablishmentScopedObservationMixin, A
         )
 
 
+def _comment_preview_token_allows(
+    *,
+    establishment_id,
+    execution_id,
+    attachment,
+    token: str,
+) -> bool:
+    parsed = unsign_upload_preview_token(
+        salt=ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        token=token,
+    )
+    if parsed is None:
+        return False
+    token_establishment_id, token_attachment_id, membership_id = parsed
+    if token_establishment_id != establishment_id or token_attachment_id != attachment.id:
+        return False
+    if attachment.action_plan_execution_id != execution_id:
+        return False
+    if attachment.upload.establishment_id != establishment_id:
+        return False
+    membership = (
+        EstablishmentMembership.objects.select_related("establishment", "user")
+        .filter(id=membership_id, establishment_id=establishment_id)
+        .first()
+    )
+    if membership is None or not is_valid_membership(membership):
+        return False
+    execution = get_action_plan_execution_for_comments(
+        membership=membership,
+        execution_id=execution_id,
+    )
+    if execution is None or not execution_comment_attachments_are_available(execution):
+        return False
+    return True
+
+
+def _render_comment_attachment_preview(request, attachment):
+    variant = request.query_params.get("variant") or "full"
+    if variant == "thumbnail":
+        storage_key = attachment.upload.thumbnail_storage_key
+        content_type = "image/jpeg"
+    else:
+        storage_key = attachment.upload.storage_key
+        content_type = attachment.content_type
+    if not storage_key:
+        raise Http404
+    if _is_s3():
+        url = generate_action_plan_comment_attachment_presigned_get(storage_key=storage_key)
+        response = HttpResponseRedirect(url)
+    else:
+        storage = get_action_plan_comment_private_media_storage()
+        if not storage.exists(storage_key):
+            raise Http404
+        handle = storage.open(storage_key, "rb")
+        response = FileResponse(handle, content_type=content_type)
+    response["Referrer-Policy"] = "no-referrer"
+    response["Cache-Control"] = "private, max-age=60, must-revalidate"
+    return response
+
+
 class ActionPlanCommentAttachmentPreviewView(EstablishmentScopedObservationMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(
         tags=["comments"],
@@ -246,42 +309,31 @@ class ActionPlanCommentAttachmentPreviewView(EstablishmentScopedObservationMixin
         },
     )
     def get(self, request, establishment_id, execution_id, attachment_id):
-        membership, execution = _load_execution(request, self.establishment_id, execution_id)
-        if membership is None or execution is None:
-            raise Http404
-        if not execution_comment_attachments_are_available(execution):
-            raise Http404
+        execution_uuid = uuid.UUID(str(execution_id))
         attachment = (
             ActionPlanCommentAttachment.objects.select_related("upload", "comment")
             .filter(
                 id=attachment_id,
-                action_plan_execution_id=execution.id,
+                action_plan_execution_id=execution_uuid,
                 upload__establishment_id=self.establishment_id,
             )
             .first()
         )
         if attachment is None:
             raise Http404
-        variant = request.query_params.get("variant") or "full"
-        if variant == "thumbnail":
-            storage_key = attachment.upload.thumbnail_storage_key
-            content_type = "image/jpeg"
-        else:
-            storage_key = attachment.upload.storage_key
-            content_type = attachment.content_type
-        if not storage_key:
+        token = (request.query_params.get("token") or "").strip()
+        if token and _comment_preview_token_allows(
+            establishment_id=self.establishment_id,
+            execution_id=execution_uuid,
+            attachment=attachment,
+            token=token,
+        ):
+            return _render_comment_attachment_preview(request, attachment)
+        if not getattr(request.user, "is_authenticated", False):
             raise Http404
-        if _is_s3():
-            url = generate_action_plan_comment_attachment_presigned_get(storage_key=storage_key)
-            response = HttpResponseRedirect(url)
-            response["Referrer-Policy"] = "no-referrer"
-            response["Cache-Control"] = "private, max-age=60, must-revalidate"
-            return response
-        storage = get_action_plan_comment_private_media_storage()
-        if not storage.exists(storage_key):
+        membership, execution = _load_execution(request, self.establishment_id, execution_id)
+        if membership is None or execution is None:
             raise Http404
-        handle = storage.open(storage_key, "rb")
-        response = FileResponse(handle, content_type=content_type)
-        response["Referrer-Policy"] = "no-referrer"
-        response["Cache-Control"] = "private, max-age=60, must-revalidate"
-        return response
+        if not execution_comment_attachments_are_available(execution):
+            raise Http404
+        return _render_comment_attachment_preview(request, attachment)

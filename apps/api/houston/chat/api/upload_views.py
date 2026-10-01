@@ -22,7 +22,7 @@ from houston.chat.api.views import (
     _resolve_membership,
     _viewer_participant,
 )
-from houston.chat.constants import CHAT_GALLERY_PAGE_SIZE
+from houston.chat.constants import CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT, CHAT_GALLERY_PAGE_SIZE
 from houston.chat.exceptions import ChatError, ChatValidationError
 from houston.chat.models import ChatMessageAttachment
 from houston.chat.selectors import get_conversation_for_participant
@@ -35,6 +35,7 @@ from houston.chat.upload_services import (
     store_chat_upload_content,
 )
 from houston.establishments.permissions import HasActiveMembership
+from houston.uploads.preview_tokens import unsign_upload_preview_token
 from houston.uploads.private_storage import (
     PRIVATE_MEDIA_BACKEND_S3,
     get_chat_private_media_storage,
@@ -226,13 +227,58 @@ class ChatCompleteUploadView(EstablishmentScopedChatMixin, APIView):
         )
 
 
+def _chat_preview_token_allows(*, establishment_id, attachment, token: str) -> bool:
+    parsed = unsign_upload_preview_token(salt=CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT, token=token)
+    if parsed is None:
+        return False
+    token_establishment_id, token_attachment_id, membership_id = parsed
+    if token_establishment_id != establishment_id or token_attachment_id != attachment.id:
+        return False
+    if attachment.upload.establishment_id != establishment_id:
+        return False
+    conversation = get_conversation_for_participant(
+        establishment_id=establishment_id,
+        conversation_id=attachment.message.conversation_id,
+        membership_id=membership_id,
+    )
+    if conversation is None:
+        return False
+    viewer = _viewer_participant(conversation, membership_id)
+    if viewer is None:
+        return False
+    history_cutoff_at = viewer.history_cutoff_at
+    if history_cutoff_at is not None and attachment.message.created_at <= history_cutoff_at:
+        return False
+    return True
+
+
+def _render_chat_attachment_preview(request, attachment):
+    variant = request.query_params.get("variant") or "full"
+    if variant == "thumbnail":
+        storage_key = attachment.upload.thumbnail_storage_key
+        content_type = "image/jpeg"
+    else:
+        storage_key = attachment.upload.storage_key
+        content_type = attachment.content_type
+    if not storage_key:
+        raise Http404
+    if _is_s3():
+        url = generate_chat_attachment_presigned_get(storage_key=storage_key)
+        response = HttpResponseRedirect(url)
+    else:
+        storage = get_chat_private_media_storage()
+        if not storage.exists(storage_key):
+            raise Http404
+        handle = storage.open(storage_key, "rb")
+        response = FileResponse(handle, content_type=content_type)
+    response["Referrer-Policy"] = "no-referrer"
+    response["Cache-Control"] = "private, max-age=60, must-revalidate"
+    return response
+
+
 class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [
-        permissions.IsAuthenticated,
-        HasActiveMembership,
-        CanAccessChat,
-    ]
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(
         tags=["chat"],
@@ -251,9 +297,6 @@ class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id, attachment_id):
-        membership = _resolve_membership(request, self.establishment_id)
-        if isinstance(membership, Response):
-            return membership
         attachment = (
             ChatMessageAttachment.objects.select_related(
                 "upload",
@@ -264,6 +307,18 @@ class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
         )
         if attachment is None:
             raise Http404
+        token = (request.query_params.get("token") or "").strip()
+        if token and _chat_preview_token_allows(
+            establishment_id=self.establishment_id,
+            attachment=attachment,
+            token=token,
+        ):
+            return _render_chat_attachment_preview(request, attachment)
+        if not getattr(request.user, "is_authenticated", False):
+            raise Http404
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
         conversation = get_conversation_for_participant(
             establishment_id=self.establishment_id,
             conversation_id=attachment.message.conversation_id,
@@ -278,29 +333,7 @@ class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
             and attachment.message.created_at <= history_cutoff_at
         ):
             raise Http404
-        variant = request.query_params.get("variant") or "full"
-        if variant == "thumbnail":
-            storage_key = attachment.upload.thumbnail_storage_key
-            content_type = "image/jpeg"
-        else:
-            storage_key = attachment.upload.storage_key
-            content_type = attachment.content_type
-        if not storage_key:
-            raise Http404
-        if _is_s3():
-            url = generate_chat_attachment_presigned_get(storage_key=storage_key)
-            response = HttpResponseRedirect(url)
-            response["Referrer-Policy"] = "no-referrer"
-            response["Cache-Control"] = "private, max-age=60, must-revalidate"
-            return response
-        storage = get_chat_private_media_storage()
-        if not storage.exists(storage_key):
-            raise Http404
-        handle = storage.open(storage_key, "rb")
-        response = FileResponse(handle, content_type=content_type)
-        response["Referrer-Policy"] = "no-referrer"
-        response["Cache-Control"] = "private, max-age=60, must-revalidate"
-        return response
+        return _render_chat_attachment_preview(request, attachment)
 
 
 class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
@@ -372,7 +405,10 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
         page = list(queryset[: CHAT_GALLERY_PAGE_SIZE + 1])
         has_more = len(page) > CHAT_GALLERY_PAGE_SIZE
         page = page[:CHAT_GALLERY_PAGE_SIZE]
-        items = [serialize_attachment(attachment) for attachment in page]
+        items = [
+            serialize_attachment(attachment, viewer_membership_id=membership.id)
+            for attachment in page
+        ]
         next_cursor = None
         if has_more and page:
             last = page[-1]

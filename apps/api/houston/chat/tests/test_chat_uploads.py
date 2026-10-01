@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from django.core.files.base import ContentFile
 from django.utils import timezone
-from houston.chat.models import ChatMessage, ChatMessageAttachment, ChatUpload
+from houston.chat.models import ChatMessage, ChatMessageAttachment, ChatParticipant, ChatUpload
 from houston.chat.services import create_message
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.helpers import chat_url, create_dm, send_message
@@ -987,3 +987,180 @@ def test_attachment_position_follows_client_attachment_ids(api_client, settings,
     )
     assert [str(item.upload_id) for item in stored] == [first_id, second_id]
     assert [item.position for item in stored] == [0, 1]
+
+
+def _publish_chat_image(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    (
+        establishment,
+        sender,
+        receiver,
+        sender_membership,
+        receiver_membership,
+        token,
+        conversation_id,
+    ) = _setup(api_client)
+    payload = _png_bytes()
+    reserved = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="note.png",
+        content_type="image/png",
+        size_bytes=len(payload),
+    )
+    upload_id = reserved.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=upload_id,
+        payload=payload,
+    )
+    sent = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(uuid.uuid4()),
+            "body": "",
+            "attachment_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert sent.status_code == 201, sent.content
+    return {
+        "establishment": establishment,
+        "sender": sender,
+        "receiver": receiver,
+        "sender_membership": sender_membership,
+        "receiver_membership": receiver_membership,
+        "token": token,
+        "conversation_id": conversation_id,
+        "message_id": sent.json()["message"]["id"],
+        "attachment_id": sent.json()["message"]["attachments"][0]["id"],
+        "sender_preview_url": sent.json()["message"]["attachments"][0]["preview_url"],
+    }
+
+
+def _receiver_preview_url(api_client, published):
+    receiver_token = login(api_client, user=published["receiver"])
+    listed = api_client.get(
+        chat_url(
+            published["establishment"].id,
+            f"conversations/{published['conversation_id']}/messages/",
+        ),
+        HTTP_AUTHORIZATION=f"Bearer {receiver_token}",
+    )
+    assert listed.status_code == 200, listed.content
+    attachment = listed.json()["items"][-1]["attachments"][0]
+    return receiver_token, attachment["preview_url"]
+
+
+def test_chat_preview_token_authorizes_viewer_without_bearer(api_client, settings, tmp_path):
+    published = _publish_chat_image(api_client, settings, tmp_path)
+    _receiver_token, preview_url = _receiver_preview_url(api_client, published)
+    assert "token=" in preview_url
+    assert preview_url != published["sender_preview_url"]
+
+    preview = api_client.get(preview_url)
+    assert preview.status_code == 200
+
+    bare = preview_url.split("?", 1)[0]
+    bearer_preview = api_client.get(
+        bare,
+        HTTP_AUTHORIZATION=f"Bearer {_receiver_token}",
+    )
+    assert bearer_preview.status_code == 200
+
+
+def test_chat_preview_rejects_other_membership_left_participant_cutoff_and_establishment(
+    api_client, settings, tmp_path
+):
+    from urllib.parse import urlencode
+
+    from houston.chat.constants import CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT
+    from houston.uploads.preview_tokens import sign_upload_preview_token
+
+    published = _publish_chat_image(api_client, settings, tmp_path)
+    _receiver_token, preview_url = _receiver_preview_url(api_client, published)
+    bare = preview_url.split("?", 1)[0]
+    attachment_id = uuid.UUID(published["attachment_id"])
+    establishment_id = published["establishment"].id
+
+    other = create_membership(
+        user=create_user(username=f"chat_other_{uuid.uuid4().hex[:8]}"),
+        establishment=published["establishment"],
+    )
+    other_token = sign_upload_preview_token(
+        salt=CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        establishment_id=establishment_id,
+        attachment_id=attachment_id,
+        membership_id=other.id,
+    )
+    other_preview = api_client.get(f"{bare}?{urlencode({'token': other_token})}")
+    assert other_preview.status_code == 404
+
+    ChatParticipant.objects.filter(
+        conversation_id=published["conversation_id"],
+        membership_id=published["receiver_membership"].id,
+    ).update(left_at=timezone.now())
+    left_preview = api_client.get(preview_url)
+    assert left_preview.status_code == 404
+
+    ChatParticipant.objects.filter(
+        conversation_id=published["conversation_id"],
+        membership_id=published["receiver_membership"].id,
+    ).update(left_at=None, history_cutoff_at=timezone.now())
+    cutoff_preview = api_client.get(preview_url)
+    assert cutoff_preview.status_code == 404
+
+    foreign_token = sign_upload_preview_token(
+        salt=CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        establishment_id=uuid.uuid4(),
+        attachment_id=attachment_id,
+        membership_id=published["receiver_membership"].id,
+    )
+    foreign_preview = api_client.get(f"{bare}?{urlencode({'token': foreign_token})}")
+    assert foreign_preview.status_code == 404
+
+
+def test_chat_ws_preview_tokens_differ_per_recipient(api_client, settings, tmp_path, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    published = _publish_chat_image(api_client, settings, tmp_path)
+    captured: list[dict] = []
+
+    class DummyLayer:
+        def group_send(self, group, event):
+            captured.append(event["payload"])
+
+    monkeypatch.setattr("houston.chat.ws_notify.get_channel_layer", lambda: DummyLayer())
+    monkeypatch.setattr("houston.chat.ws_notify.async_to_sync", lambda fn: fn)
+    from houston.chat.ws_notify import notify_message_created
+
+    message = (
+        ChatMessage.objects.select_related(
+            "author_membership",
+            "author_membership__user",
+            "conversation",
+        )
+        .prefetch_related("mentions__membership__user", "attachments__upload")
+        .get(id=published["message_id"])
+    )
+    notify_message_created(
+        establishment_id=published["establishment"].id,
+        conversation_id=published["conversation_id"],
+        message=message,
+        recipient_membership_ids=[
+            published["sender_membership"].id,
+            published["receiver_membership"].id,
+        ],
+    )
+    tokens = []
+    for payload in captured:
+        preview_url = payload["message"]["attachments"][0]["preview_url"]
+        tokens.append(parse_qs(urlparse(preview_url).query)["token"][0])
+    assert len(tokens) == 2
+    assert tokens[0] != tokens[1]

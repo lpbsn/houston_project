@@ -235,6 +235,7 @@ def notify_message_created(
             conversation_id=conversation_id,
             message=message,
             history_cutoff_at=history_cutoffs_by_membership_id.get(membership_id),
+            viewer_membership_id=membership_id,
         )
         async_to_sync(channel_layer.group_send)(
             membership_group_name(

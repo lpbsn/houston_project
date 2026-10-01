@@ -3,12 +3,14 @@ from __future__ import annotations
 import uuid
 
 from houston.chat.constants import (
+    CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT,
     CHAT_GROUP_TITLE_MAX_LENGTH,
     CHAT_MESSAGE_BODY_MAX_LENGTH,
     CHAT_REPLY_EXCERPT_MAX_LENGTH,
 )
 from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.establishments.models import EstablishmentMembership
+from houston.uploads.preview_tokens import sign_upload_preview_token, with_preview_token
 from rest_framework import serializers
 
 
@@ -309,38 +311,55 @@ def _serialize_mentions(message: ChatMessage) -> list[dict]:
     return items
 
 
-def serialize_attachment(attachment, *, message: ChatMessage | None = None) -> dict:
+def serialize_attachment(
+    attachment,
+    *,
+    message: ChatMessage | None = None,
+    viewer_membership_id: uuid.UUID | None = None,
+) -> dict:
     resolved_message = message or attachment.message
     establishment_id = resolved_message.conversation.establishment_id
     thumbnail_key = getattr(attachment.upload, "thumbnail_storage_key", "")
+    token = None
+    if viewer_membership_id is not None:
+        token = sign_upload_preview_token(
+            salt=CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+            establishment_id=establishment_id,
+            attachment_id=attachment.id,
+            membership_id=viewer_membership_id,
+        )
+    preview_url = (
+        f"/api/v1/establishments/{establishment_id}/chat/attachments/{attachment.id}/preview/"
+    )
+    thumbnail_url = f"{preview_url}?variant=thumbnail" if thumbnail_key else None
     return {
         "id": attachment.id,
         "kind": attachment.kind,
         "content_type": attachment.content_type,
         "size_bytes": attachment.size_bytes,
         "original_filename": attachment.original_filename,
-        "preview_url": (
-            f"/api/v1/establishments/{establishment_id}"
-            f"/chat/attachments/{attachment.id}/preview/"
-        ),
-        "thumbnail_url": (
-            f"/api/v1/establishments/{establishment_id}"
-            f"/chat/attachments/{attachment.id}/preview/?variant=thumbnail"
-            if thumbnail_key
-            else None
-        ),
+        "preview_url": with_preview_token(preview_url, token),
+        "thumbnail_url": with_preview_token(thumbnail_url, token) if thumbnail_url else None,
         "message_id": resolved_message.id,
         "created_at": attachment.created_at,
         "author_display_name": membership_display_name(resolved_message.author_membership),
     }
 
 
-def _serialize_attachments(message: ChatMessage) -> list[dict]:
+def _serialize_attachments(
+    message: ChatMessage,
+    *,
+    viewer_membership_id: uuid.UUID | None = None,
+) -> list[dict]:
     attachments = getattr(message, "_prefetched_objects_cache", {}).get("attachments")
     if attachments is None:
         attachments = list(message.attachments.select_related("upload").all())
     return [
-        serialize_attachment(attachment, message=message)
+        serialize_attachment(
+            attachment,
+            message=message,
+            viewer_membership_id=viewer_membership_id,
+        )
         for attachment in sorted(attachments, key=lambda item: (item.position, item.id))
     ]
 
@@ -351,6 +370,7 @@ def serialize_message(
     parent: ChatMessage | None = None,
     parents_by_id: dict | None = None,
     history_cutoff_at=None,
+    viewer_membership_id: uuid.UUID | None = None,
 ) -> dict:
     reply_to_id = getattr(message, "reply_to_id", None)
     resolved_parent = parent
@@ -376,7 +396,10 @@ def serialize_message(
         "is_reply": reply_to_id is not None,
         "reply_to": _serialize_reply_to(message, parent=resolved_parent),
         "mentions": _serialize_mentions(message),
-        "attachments": _serialize_attachments(message),
+        "attachments": _serialize_attachments(
+            message,
+            viewer_membership_id=viewer_membership_id,
+        ),
     }
 
 
@@ -385,6 +408,7 @@ def serialize_messages(
     *,
     history_cutoff_at=None,
     history_cutoffs_by_conversation_id: dict | None = None,
+    viewer_membership_id: uuid.UUID | None = None,
 ) -> list[dict]:
     parent_ids = [
         message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)
@@ -407,6 +431,7 @@ def serialize_messages(
                 history_cutoff_at=history_cutoff_at,
                 history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
             ),
+            viewer_membership_id=viewer_membership_id,
         )
         for message in messages
     ]
