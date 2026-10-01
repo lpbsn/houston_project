@@ -121,7 +121,7 @@ export function ActionPlanEventPlanningForm({
   onAssigneeSchedule,
   onAssigneeLaunch,
 }: ActionPlanEventPlanningFormProps) {
-  const showNowAction = config.planningPersisted !== false
+  const showNowAction = config.planningPersisted !== false && config.lockStart !== true
   const endAtLabel = layout === 'split' ? ACTION_PLAN_DESKTOP_END_LABEL : 'Fin'
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)

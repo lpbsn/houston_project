@@ -23,6 +23,17 @@ export function resolvePlanningSuccessPath(response: ActionPlanPlanningSubmitRes
   return '/execution'
 }
 
+/** Direct create, outside the library branch. A lone execution opens its detail. */
+export function resolveDirectCreateSuccessPath(response: ActionPlanCreate201Response): string {
+  if (isActionPlanPlanningSubmitResponse(response)) {
+    return resolvePlanningSuccessPath(response)
+  }
+  if (isActionPlanExecutionDetail(response) && response.id) {
+    return `/action-plans/executions/${response.id}`
+  }
+  return '/execution'
+}
+
 export function isActionPlanPlanningSubmitResponse(
   data: unknown,
 ): data is ActionPlanPlanningSubmitResponse {

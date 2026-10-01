@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  actionPlanPlanningSectionNeedsExpand,
   clearActionPlanFieldErrorKey,
   isActionPlanTaskDraftActive,
   isActionPlanTaskDraftEmpty,
@@ -31,6 +32,12 @@ describe('action-plan-field-errors', () => {
     expect(clearActionPlanFieldErrorKey({ title: 'a', tasks: 'b' }, 'title')).toEqual({
       tasks: 'b',
     })
+  })
+
+  it('opens planning for chronology and recurrence errors only', () => {
+    expect(actionPlanPlanningSectionNeedsExpand({ title: 'x', assignees: 'y' })).toBe(false)
+    expect(actionPlanPlanningSectionNeedsExpand({ startDate: 'x' })).toBe(true)
+    expect(actionPlanPlanningSectionNeedsExpand({ 'assignee.a1.endDate': 'x' })).toBe(true)
   })
 
   it('collects task ids that need advanced expand', () => {

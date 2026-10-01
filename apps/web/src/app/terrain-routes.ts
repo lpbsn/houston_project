@@ -510,7 +510,10 @@ export function resolveTerrainTopbarPlacement(
 ): TerrainTopbarPlacement {
   if (
     config.hideTopbar &&
-    (route.kind === 'action-plan-create' || route.kind === 'signal-action-create')
+    (route.kind === 'action-plan-create' ||
+      route.kind === 'signal-action-create' ||
+      route.kind === 'action-plan-template-edit' ||
+      route.kind === 'action-plan-execution-edit')
   ) {
     return 'mobile-only'
   }

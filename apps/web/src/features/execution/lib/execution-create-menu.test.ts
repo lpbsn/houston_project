@@ -29,8 +29,8 @@ describe('execution create menu options', () => {
         }),
       ),
     ).toEqual([
-      { id: 'action_plan', label: "Créer un plan d'action", disabled: false },
-      { id: 'catalog', label: 'Choisir un modèle existant', disabled: false },
+      { id: 'action_plan', label: 'Créer un plan', disabled: false },
+      { id: 'catalog', label: 'Utiliser la bibliothèque', disabled: false },
     ])
   })
 
@@ -41,7 +41,7 @@ describe('execution create menu options', () => {
           can_view_action_plan_catalog: true,
         }),
       ),
-    ).toEqual([{ id: 'catalog', label: 'Choisir un modèle existant', disabled: false }])
+    ).toEqual([{ id: 'catalog', label: 'Utiliser la bibliothèque', disabled: false }])
   })
 
   it('returns no options when no hints are true', () => {

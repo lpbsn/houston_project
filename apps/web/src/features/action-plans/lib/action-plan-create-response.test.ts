@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isActionPlanExecutionDetail,
   isActionPlanPlanningSubmitResponse,
+  resolveDirectCreateSuccessPath,
   resolvePlanningSuccessPath,
 } from '@/features/action-plans/lib/action-plan-create-response'
 import type { ActionPlanPlanningSubmitResponse } from '@/features/action-plans/types'
@@ -96,6 +97,44 @@ describe('resolvePlanningSuccessPath', () => {
       ),
     ).toBe('/execution')
     expect(resolvePlanningSuccessPath(planningResponse({}))).toBe('/execution')
+  })
+})
+
+describe('resolveDirectCreateSuccessPath', () => {
+  it('opens one execution and keeps a schedule or a template on the feed', () => {
+    expect(
+      resolveDirectCreateSuccessPath({
+        id: 'exec-1',
+        action_plan_id: 'plan-1',
+        status: 'in_progress',
+      } as ActionPlanExecutionDetail),
+    ).toBe('/action-plans/executions/exec-1')
+    expect(
+      resolveDirectCreateSuccessPath(
+        planningResponse({
+          summary: { executions_created: 1, schedules_created: 0 },
+          executions: [
+            { item_id: 'i1', id: 'exec-9', primary_membership_id: null, status: 'scheduled' },
+          ],
+        }),
+      ),
+    ).toBe('/action-plans/executions/exec-9')
+    expect(
+      resolveDirectCreateSuccessPath(
+        planningResponse({
+          summary: { executions_created: 0, schedules_created: 1 },
+          schedules: [{ item_id: 'i1', id: 'sched-1', primary_membership_id: null, status: 'active' }],
+        }),
+      ),
+    ).toBe('/execution')
+    expect(
+      resolveDirectCreateSuccessPath({
+        id: 'plan-1',
+        title: 'Plan',
+        is_reusable: true,
+        tasks: [],
+      } as ActionPlanDetail),
+    ).toBe('/execution')
   })
 })
 

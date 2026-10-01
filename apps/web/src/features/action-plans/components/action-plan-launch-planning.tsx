@@ -60,7 +60,8 @@ export function ActionPlanLaunchPlanning({
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
   const chronologyOn = draft.usePerAssigneeChronology
-  const showScheduleFields = timing === 'schedule' && !chronologyOn
+  const startLocked = config.lockStart === true
+  const showScheduleFields = (startLocked || timing === 'schedule') && !chronologyOn
   const showAdvanced =
     config.showAdvancedChronology && config.lockChronologyMode !== true
   const advancedVisible = advancedOpen || chronologyOn
@@ -126,17 +127,19 @@ export function ActionPlanLaunchPlanning({
               ) : null}
             </div>
           )}
-          <div className="px-3 py-3">
-            <TerrainSegmentedControl
-              ariaLabel="Quand"
-              value={timing}
-              options={[
-                { value: 'now', label: 'Maintenant' },
-                { value: 'schedule', label: 'Planifier' },
-              ]}
-              onChange={onTimingChange}
-            />
-          </div>
+          {startLocked ? null : (
+            <div className="px-3 py-3">
+              <TerrainSegmentedControl
+                ariaLabel="Quand"
+                value={timing}
+                options={[
+                  { value: 'now', label: 'Maintenant' },
+                  { value: 'schedule', label: 'Planifier' },
+                ]}
+                onChange={onTimingChange}
+              />
+            </div>
+          )}
           {showScheduleFields ? (
             <>
               <TerrainSwitch

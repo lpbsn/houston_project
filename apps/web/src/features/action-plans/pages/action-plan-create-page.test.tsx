@@ -187,7 +187,7 @@ vi.mock('../components/action-plan-event-planning-form', () => ({
   }) => {
     useEffect(() => {
       if (perAssigneeTestMode.enabled) {
-        if (draft.usePerAssigneeChronology) {
+        if (draft.assignees.some((assignee) => assignee.id === 'a-recurring')) {
           return
         }
         onDraftChange((previous) => ({
@@ -286,17 +286,43 @@ function mockPlanFormViewport(width: number) {
   })
 }
 
+function selectPilot(label: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Pôle pilote' }))
+  fireEvent.click(screen.getByRole('button', { name: label }))
+}
+
 function addTask() {
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter une tâche' }))
 }
 
-function selectTaskBusinessUnit(taskIndex: number, label: string) {
+function openTaskAdvanced(taskIndex: number) {
+  const details = screen.queryAllByRole('button', { name: 'Détails de la tâche' })
+  if (details.length > 0) {
+    const button = details[taskIndex]
+    if (button && button.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(button)
+    }
+    return
+  }
   const advancedButtons = screen.getAllByRole('button', { name: 'Options avancées' })
   fireEvent.click(advancedButtons[taskIndex]!)
+}
+
+function selectTaskBusinessUnit(taskIndex: number, label: string) {
+  openTaskAdvanced(taskIndex)
   const poleButtons = screen.getAllByRole('button', { name: "Pôle d'activité" })
   fireEvent.click(poleButtons[taskIndex]!)
   const optionButtons = screen.getAllByRole('button', { name: label })
   fireEvent.click(optionButtons[optionButtons.length - 1]!)
+}
+
+async function enablePerAssigneePlanning() {
+  fireEvent.click(screen.getByRole('button', { name: /Quand/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Options avancées' }))
+  fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
+  await waitFor(() => {
+    expect(screen.getByTestId('event-planning-form')).toBeTruthy()
+  })
 }
 
 function renderPage(
@@ -408,53 +434,63 @@ describe('ActionPlanCreatePage', () => {
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
-  it('renders Options section before tasks', () => {
+  it('orders mobile catalog create as content, tasks, then organisation', () => {
     renderPage({ mode: 'catalog' })
 
-    const optionsLabel = screen.getByText('Options')
-    const addTaskButton = screen.getByRole('button', { name: 'Ajouter une tâche' })
+    const title = screen.getByText('Titre')
+    const tasks = screen.getByText('Tâches')
+    const organisation = screen.getByText('Organisation')
 
-    expect(
-      optionsLabel.compareDocumentPosition(addTaskButton) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    expect(title.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tasks.compareDocumentPosition(organisation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByTestId('action-plan-mobile-planning')).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer comme modèle' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Enregistrer le modèle' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Validation requise' })).toBeTruthy()
   })
 
-  it('keeps planning form visible when save to library is enabled', () => {
-    renderPage({ mode: 'catalog' })
-    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
-    expect(screen.getByTestId('event-planning-form')).toBeTruthy()
+  it('hides occurrence planning when execution create is saved as a model', () => {
+    renderPage({ mode: 'execution', backPath: '/execution' })
+
+    expect(screen.getByTestId('action-plan-mobile-planning')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Créer le plan' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer comme modèle' }))
+
+    expect(screen.queryByTestId('action-plan-mobile-planning')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Créer le plan' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Enregistrer le modèle' })).toBeTruthy()
   })
 
-  it('always uses library submit label when save to library is enabled', () => {
-    renderPage({ mode: 'catalog' })
+  it('keeps signal focus under the observation and omits recurrence and the model switch', () => {
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
 
-    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan catalogue' } })
-    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
-
-    expect(screen.queryByRole('button', { name: 'Enregistrer et planifier' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' })).toBeTruthy()
+    const card = screen.getByTestId('linked-signal-card')
+    const title = screen.getByText('Titre')
+    expect(card.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer comme modèle' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Répéter' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Quand/ }))
+    expect(screen.queryByRole('switch', { name: 'Répéter' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Maintenant' })).toBeTruthy()
   })
 
-  it('aligns library switch label with validation switch label', () => {
-    mockAuthState.bootstrap.active_membership = {
-      id: 'member-owner',
-      establishment_id: 'est-1',
-      role: 'owner',
-      scopes: [],
-    }
-    mockAuthState.activeMembership = {
-      id: 'member-owner',
-      establishment_id: 'est-1',
-      role: 'owner',
-      scopes: [],
-    }
+  it('places validation in organisation and the model switch in options', () => {
+    renderPage({ mode: 'execution', backPath: '/execution' })
 
-    renderPage({ mode: 'catalog' })
+    const organisation = screen.getByTestId('action-plan-mobile-organization')
+    const validation = screen.getByText('Validation requise')
+    const modelSwitch = screen.getByText('Enregistrer comme modèle')
+    const options = screen.getByText('Options')
 
-    const validationLabel = screen.getByText('Validation requise')
-    const libraryLabel = screen.getByText('Enregistrer dans la bibliothèque')
-
-    expect(validationLabel.getBoundingClientRect().left).toBe(libraryLabel.getBoundingClientRect().left)
+    expect(organisation.contains(validation)).toBe(true)
+    expect(organisation.contains(modelSwitch)).toBe(false)
+    expect(organisation.compareDocumentPosition(options) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('selects pilot pole via pill wheel and submits with pilot_business_unit_id', async () => {
@@ -479,15 +515,14 @@ describe('ActionPlanCreatePage', () => {
 
     renderPage({ mode: 'catalog' })
 
-    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    fireEvent.click(screen.getByRole('button', { name: "Pôle pilote" }))
     fireEvent.click(screen.getByRole('button', { name: 'Maintenance' }))
 
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan maintenance pilote' } })
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
     selectTaskBusinessUnit(0, 'Maintenance')
-    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le modèle' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -521,24 +556,24 @@ describe('ActionPlanCreatePage', () => {
 
     renderPage({ mode: 'catalog' })
 
-    const pilotPill = screen.getByRole('button', { name: "Pôle d'activité pilote" })
+    const pilotPill = screen.getByRole('button', { name: "Pôle pilote" })
     fireEvent.click(pilotPill)
     fireEvent.click(screen.getByRole('button', { name: 'Coworking' }))
-    expect(screen.getByRole('button', { name: "Pôle d'activité pilote" })).toHaveProperty(
+    expect(screen.getByRole('button', { name: "Pôle pilote" })).toHaveProperty(
       'textContent',
       'Coworking',
     )
 
-    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote", pressed: true }))
-    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    fireEvent.click(screen.getByRole('button', { name: "Pôle pilote", pressed: true }))
+    fireEvent.click(screen.getByRole('button', { name: "Pôle pilote" }))
 
-    expect(screen.getByRole('button', { name: "Pôle d'activité pilote" })).toHaveProperty(
+    expect(screen.getByRole('button', { name: "Pôle pilote" })).toHaveProperty(
       'textContent',
       'Coworking',
     )
   })
 
-  it('submits owner catalog create with multi-pole tasks when pilot pole is not explicitly selected', async () => {
+  it('does not submit the first pole when the pilot pole was not chosen', async () => {
     mockAuthState.bootstrap.active_membership = {
       id: 'member-owner',
       establishment_id: 'est-1',
@@ -581,38 +616,13 @@ describe('ActionPlanCreatePage', () => {
     const taskInputs = screen.getAllByLabelText('Titre de la tâche')
     fireEvent.change(taskInputs[1], { target: { value: 'Tâche maintenance' } })
 
-    const advancedButtons = screen.getAllByRole('button', { name: 'Options avancées' })
-    fireEvent.click(advancedButtons[1]!)
-    const poleButtons = screen.getAllByRole('button', { name: "Pôle d'activité" })
-    fireEvent.click(poleButtons[1]!)
-    const maintenanceOptions = screen.getAllByRole('button', { name: 'Maintenance' })
-    fireEvent.click(maintenanceOptions[maintenanceOptions.length - 1]!)
+    selectTaskBusinessUnit(1, 'Maintenance')
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le modèle' }))
 
-    await waitFor(() => {
-      expect(createMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Plan multi-pôles',
-          pilot_business_unit_id: 'bu-restaurant',
-          is_reusable: true,
-          assignees: [],
-          tasks: [
-            expect.objectContaining({
-              task: 'Tâche restaurant',
-              business_unit_id: 'bu-restaurant',
-              position: 1,
-            }),
-            expect.objectContaining({
-              task: 'Tâche maintenance',
-              business_unit_id: 'bu-maintenance',
-              position: 2,
-            }),
-          ],
-        }),
-      )
-    })
+    expect(createMutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByText('Sélectionnez un pôle d’activité pilote.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pôle pilote' })).toHaveProperty('textContent', '—')
   })
 
   it('submits catalog create with is_reusable true when save to library is enabled', async () => {
@@ -620,11 +630,11 @@ describe('ActionPlanCreatePage', () => {
 
     const textInputs = screen.getAllByRole('textbox')
     fireEvent.change(textInputs[0], { target: { value: 'Plan catalogue' } })
+    selectPilot('Rooftop')
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Task 1' } })
     selectTaskBusinessUnit(0, 'Rooftop')
-    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le modèle' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -641,8 +651,8 @@ describe('ActionPlanCreatePage', () => {
     renderPage({ mode: 'catalog' })
 
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan catalogue vide' } })
-    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
+    selectPilot('Rooftop')
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le modèle' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -676,16 +686,21 @@ describe('ActionPlanCreatePage', () => {
 
     renderPage({ mode: 'execution', backPath: '/execution' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    expect(screen.queryByTestId('action-plan-mobile-planning')).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Validation requise' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer comme modèle' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
     expect(createMutateAsync).not.toHaveBeenCalled()
 
     const titleInput = screen.getAllByRole('textbox')[0]
     fireEvent.change(titleInput, { target: { value: 'Plan staff' } })
+    selectPilot('Rooftop')
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
     selectTaskBusinessUnit(0, 'Rooftop')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -711,7 +726,7 @@ describe('ActionPlanCreatePage', () => {
       backPath: '/signals/sig-1',
     })
 
-    expect(screen.queryByRole('button', { name: "Pôle d'activité pilote" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "Pôle pilote" })).toBeNull()
     expect(screen.getAllByText('Rooftop').length).toBeGreaterThanOrEqual(1)
 
     const titleInput = screen.getAllByRole('textbox')[0]
@@ -719,7 +734,7 @@ describe('ActionPlanCreatePage', () => {
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche signal' } })
     selectTaskBusinessUnit(0, 'Rooftop')
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -730,7 +745,7 @@ describe('ActionPlanCreatePage', () => {
         }),
       )
     })
-    expect(navigate).toHaveBeenCalledWith('/execution')
+    expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-1')
   })
 
   it('unlocks pilot and omits focus when signal has no responsible and routing stays unassigned', async () => {
@@ -773,7 +788,7 @@ describe('ActionPlanCreatePage', () => {
     })
 
     expect(screen.queryByText('Focus opérationnel')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    fireEvent.click(screen.getByRole('button', { name: "Pôle pilote" }))
     fireEvent.click(screen.getByRole('button', { name: 'Maintenance' }))
 
     const titleInput = screen.getAllByRole('textbox')[0]
@@ -781,7 +796,7 @@ describe('ActionPlanCreatePage', () => {
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
     selectTaskBusinessUnit(0, 'Maintenance')
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -826,13 +841,18 @@ describe('ActionPlanCreatePage', () => {
       backPath: '/signals/sig-1',
     })
 
-    expect(screen.getByText('Focus opérationnel')).toBeTruthy()
-    const titleInput = screen.getAllByRole('textbox')[0]
+    selectPilot('Rooftop')
+    const focusLabel = screen.getByText('Focus opérationnel')
+    const titleLabel = screen.getByText('Titre')
+    expect(focusLabel.compareDocumentPosition(titleLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const titleField = document.querySelector('[data-action-plan-field="title"] input')
+    expect(titleField).toBeTruthy()
+    const titleInput = titleField as HTMLInputElement
     fireEvent.change(titleInput, { target: { value: 'Plan resolved' } })
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
     selectTaskBusinessUnit(0, 'Rooftop')
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(
@@ -844,7 +864,7 @@ describe('ActionPlanCreatePage', () => {
     const focusInput = screen.getByText('Focus opérationnel').parentElement?.querySelector('input')
     expect(focusInput).toBeTruthy()
     fireEvent.change(focusInput!, { target: { value: 'lampe hs' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -905,16 +925,17 @@ describe('ActionPlanCreatePage', () => {
       backPath: '/signals/sig-1',
     })
 
-    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    fireEvent.click(screen.getByRole('button', { name: "Pôle pilote" }))
     expect(screen.getByRole('button', { name: 'Maintenance' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Rooftop' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Maintenance' }))
 
     const titleInput = screen.getAllByRole('textbox')[0]
     fireEvent.change(titleInput, { target: { value: 'Plan sujet' } })
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
     selectTaskBusinessUnit(0, 'Maintenance')
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -978,7 +999,7 @@ describe('ActionPlanCreatePage', () => {
       target: { value: 'Tâche Food Court' },
     })
     selectTaskBusinessUnit(0, 'Food Court')
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith(
@@ -1046,7 +1067,7 @@ describe('ActionPlanCreatePage', () => {
         '/signals/sig-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
     })
 
-    const createButtons = screen.getAllByRole('button', { name: 'Créer le plan d’action' })
+    const createButtons = screen.getAllByRole('button', { name: 'Créer le plan' })
     expect(createButtons).toHaveLength(1)
     const footer = createButtons[0]?.closest('footer')
     const form = footer?.closest('form')
@@ -1100,17 +1121,19 @@ describe('ActionPlanCreatePage', () => {
       schedules: [],
     })
 
-    renderPage({ mode: 'catalog' })
+    renderPage({ mode: 'execution', backPath: '/execution' })
 
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan per-assigné' } })
+    selectPilot('Rooftop')
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
     selectTaskBusinessUnit(0, 'Rooftop')
+    await enablePerAssigneePlanning()
 
     expect(screen.queryByRole('button', { name: 'Planifier la récurrence' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Lancer pour cet assigné' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledTimes(1)
@@ -1133,14 +1156,15 @@ describe('ActionPlanCreatePage', () => {
     perAssigneeTestMode.enabled = true
     perAssigneeTestMode.incomplete = true
 
-    renderPage({ mode: 'catalog' })
+    renderPage({ mode: 'execution', backPath: '/execution' })
 
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan incomplet' } })
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
     selectTaskBusinessUnit(0, 'Rooftop')
+    await enablePerAssigneePlanning()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
       expect(createMutateAsync).not.toHaveBeenCalled()
@@ -1158,7 +1182,9 @@ describe('ActionPlanCreatePage', () => {
 
     renderPage({ mode: 'template-edit', actionPlanId: 'plan-1' })
 
-    expect(await screen.findByRole('button', { name: 'Enregistrer les modifications' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Enregistrer' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(screen.queryByTestId('action-plan-mobile-planning')).toBeNull()
   })
 
   it('saves a library template from the catalog route on desktop web', async () => {
@@ -1171,6 +1197,7 @@ describe('ActionPlanCreatePage', () => {
     expect(screen.queryByTestId('event-planning-form')).toBeNull()
 
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Modèle desktop' } })
+    selectPilot('Rooftop')
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
     await waitFor(() => {
@@ -1194,6 +1221,7 @@ describe('ActionPlanCreatePage', () => {
     expect(screen.getByTestId('event-planning-form')).toBeTruthy()
 
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Exécution desktop' } })
+    selectPilot('Rooftop')
     fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }))
 
     await waitFor(() => {
@@ -1206,14 +1234,25 @@ describe('ActionPlanCreatePage', () => {
     })
   })
 
-  it('keeps the library toggle on a large native viewport', () => {
+  it('keeps catalog create on the mobile composition at a large native viewport', () => {
     mockPlanFormViewport(1280)
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     renderPage({ mode: 'catalog' })
 
-    expect(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Créer le plan d’action' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Créer un modèle' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer comme modèle' })).toBeNull()
+    expect(screen.queryByTestId('action-plan-mobile-planning')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Enregistrer le modèle' })).toBeTruthy()
+  })
+
+  it('keeps the model switch on execution create at a large native viewport', () => {
+    mockPlanFormViewport(1280)
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    renderPage({ mode: 'execution', backPath: '/execution' })
+
+    expect(screen.queryByRole('heading', { name: 'Créer une exécution' })).toBeNull()
+    expect(screen.getByRole('switch', { name: 'Enregistrer comme modèle' })).toBeTruthy()
+    expect(screen.getByTestId('action-plan-mobile-planning')).toBeTruthy()
   })
 
   it('stacks organization before tasks and the action at 1024px', () => {

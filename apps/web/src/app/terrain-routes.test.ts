@@ -427,6 +427,18 @@ describe('resolveTerrainTopbarPlacement', () => {
       'mobile-only',
     )
     expect(resolveTerrainTopbarPlacement(signal, getTerrainRouteConfig(signal))).toBe('mobile-only')
+
+    const templateEdit = { kind: 'action-plan-template-edit' as const, actionPlanId: 'plan-1' }
+    const executionEdit = {
+      kind: 'action-plan-execution-edit' as const,
+      executionId: 'exec-1',
+    }
+    expect(resolveTerrainTopbarPlacement(templateEdit, getTerrainRouteConfig(templateEdit))).toBe(
+      'mobile-only',
+    )
+    expect(
+      resolveTerrainTopbarPlacement(executionEdit, getTerrainRouteConfig(executionEdit)),
+    ).toBe('mobile-only')
   })
 
   it('keeps a mobile-only shell topbar on /analytics', () => {
@@ -436,20 +448,9 @@ describe('resolveTerrainTopbarPlacement', () => {
 
   it('hides the shared topbar on pages that own an in-page back control', () => {
     const teamMember = { kind: 'team-member-detail' as const, membershipId: 'member-1' }
-    const templateEdit = { kind: 'action-plan-template-edit' as const, actionPlanId: 'plan-1' }
-    const executionEdit = {
-      kind: 'action-plan-execution-edit' as const,
-      executionId: 'exec-1',
-    }
     expect(resolveTerrainTopbarPlacement(teamMember, getTerrainRouteConfig(teamMember))).toBe(
       'hidden',
     )
-    expect(resolveTerrainTopbarPlacement(templateEdit, getTerrainRouteConfig(templateEdit))).toBe(
-      'hidden',
-    )
-    expect(
-      resolveTerrainTopbarPlacement(executionEdit, getTerrainRouteConfig(executionEdit)),
-    ).toBe('hidden')
   })
 })
 

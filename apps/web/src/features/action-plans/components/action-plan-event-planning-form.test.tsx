@@ -115,6 +115,14 @@ describe('ActionPlanEventPlanningForm', () => {
     ).toBeTruthy()
   })
 
+  it('hides Maintenant when the start is locked', () => {
+    renderForm(createActionPlanEventPlanningDraft(), {
+      ...baseConfig,
+      lockStart: true,
+    })
+    expect(screen.queryByRole('button', { name: 'Maintenant' })).toBeNull()
+  })
+
   it('hides Maintenant when planning is not persisted', () => {
     renderForm(createActionPlanEventPlanningDraft(), {
       ...baseConfig,
