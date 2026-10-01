@@ -27,6 +27,31 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
           onClick={() =>
             onDraftChange((previous) => ({
               ...previous,
+              assignees: [
+                {
+                  id: 'a-shared',
+                  membershipId: 'm1',
+                  businessUnitId: 'bu1',
+                  displayName: 'Alice',
+                  startAt: '',
+                  endAt: '',
+                  visibleFrom: '',
+                  repeatEnabled: false,
+                  recurrenceDays: [],
+                  recurrenceEndDate: '',
+                  allDay: false,
+                },
+              ],
+            }))
+          }
+        >
+          Sélectionner un assigné
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onDraftChange((previous) => ({
+              ...previous,
               repeatEnabled: true,
               recurrenceDays: ['monday'],
             }))
@@ -165,6 +190,27 @@ describe('ActionPlanUseSheet', () => {
     expect(screen.queryByRole('button', { name: 'Planifier la récurrence' })).toBeNull()
   })
 
+  it('keeps launch disabled for non-staff without an assignee', () => {
+    const onPlanningSubmit = vi.fn()
+
+    render(
+      createElement(ActionPlanUseSheet, {
+        open: true,
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        isPending: false,
+        canSchedule: true,
+        onClose: vi.fn(),
+        onPlanningSubmit,
+      }),
+    )
+
+    const launchButton = screen.getByRole('button', { name: "Lancer l'exécution" })
+    expect((launchButton as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(launchButton)
+    expect(onPlanningSubmit).not.toHaveBeenCalled()
+  })
+
   it('calls onPlanningSubmit for one-shot launch', () => {
     const onPlanningSubmit = vi.fn()
 
@@ -180,6 +226,7 @@ describe('ActionPlanUseSheet', () => {
       }),
     )
 
+    fireEvent.click(screen.getByRole('button', { name: 'Sélectionner un assigné' }))
     fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
     expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -209,6 +256,7 @@ describe('ActionPlanUseSheet', () => {
       }),
     )
 
+    fireEvent.click(screen.getByRole('button', { name: 'Sélectionner un assigné' }))
     fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
     fireEvent.click(screen.getByRole('button', { name: 'Compléter repeat' }))
     fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
