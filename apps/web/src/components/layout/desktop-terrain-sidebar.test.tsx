@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
+import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
@@ -135,6 +136,12 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
+    const brand = sidebar.querySelector('img')
+    expect(brand?.getAttribute('src')).toBe(sporeIconSrc)
+    expect(brand?.className).toContain('h-9')
+    expect(brand?.className).not.toContain('rounded-full')
+    expect(brand?.style.filter).toBe('')
+    expect(within(sidebar).queryByText('S')).toBeNull()
   })
 
   it('navigates to the establishment observations feed for a single-establishment manager', () => {
@@ -428,6 +435,14 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(sidebar).getByLabelText('Marie Renaud')).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Déconnexion' })).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Développer la navigation' })).toBeTruthy()
+    expect(within(sidebar).queryByText('Spore')).toBeNull()
+    const brand = sidebar.querySelector('img')
+    expect(brand?.getAttribute('src')).toBe(sporeIconSrc)
+    expect(brand?.className).toContain('h-6')
+    expect(brand?.className).not.toContain('rounded-full')
+    expect(brand?.style.filter).toBe('')
+    expect(brand?.parentElement?.className).toContain('justify-center')
+    expect(brand?.parentElement?.className).toContain('px-2')
   })
 
   it('signs out from the footer on desktop web', () => {

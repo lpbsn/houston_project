@@ -19,6 +19,7 @@ import {
 
 import type { NavigateOptions } from '@/app/app-history'
 import type { AppRoute } from '@/app/app-routes'
+import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse } from '@/features/auth/types'
@@ -407,21 +408,23 @@ export function DesktopTerrainSidebar({
       <div
         className={cn(
           'flex h-16 shrink-0 items-center border-b border-white/10',
-          collapsed ? 'justify-center gap-0.5 px-1' : 'gap-2 px-3',
+          collapsed ? 'flex-col justify-center gap-0.5 px-2' : 'gap-2.5 px-3',
         )}
       >
-        <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1F7A4D] text-xs font-bold text-white"
+        <img
+          src={sporeIconSrc}
+          alt=""
           aria-hidden
-        >
-          S
-        </span>
+          className={cn('shrink-0 object-contain', collapsed ? 'h-6 w-auto' : 'h-9 w-auto')}
+        />
         {collapsed ? null : (
           <p className="min-w-0 flex-1 truncate text-sm font-semibold">Spore</p>
         )}
         <button
           type="button"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white"
+          className={cn(
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white',
+          )}
           aria-label={collapsed ? 'Développer la navigation' : 'Réduire la navigation'}
           title={collapsed ? 'Développer la navigation' : 'Réduire la navigation'}
           aria-pressed={collapsed}
