@@ -81,7 +81,7 @@ services:
       [
         "sh",
         "-c",
-        "exec uv run celery -A config worker -l info -n houston-ai-interactive@%h --without-mingle -Q ai_interactive --prefetch-multiplier=1 --concurrency \"$${CELERY_WORKER_CONCURRENCY:-2}\"",
+        "exec uv run celery -A config worker -l info -n houston-ai-interactive@%h -Q ai_interactive --prefetch-multiplier=1 --concurrency \"$${CELERY_WORKER_CONCURRENCY:-2}\"",
       ]
     depends_on:
       postgres:
@@ -106,7 +106,7 @@ services:
       [
         "sh",
         "-c",
-        "exec uv run celery -A config worker -l info -n houston-operational@%h --without-mingle -Q operational --concurrency \"$${CELERY_WORKER_CONCURRENCY:-1}\"",
+        "exec uv run celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency \"$${CELERY_WORKER_CONCURRENCY:-1}\"",
       ]
     depends_on:
       postgres:
@@ -131,7 +131,7 @@ services:
       [
         "sh",
         "-c",
-        "exec uv run celery -A config worker -l info -n houston-background@%h --without-mingle -Q ai_background,maintenance --concurrency \"$${CELERY_WORKER_CONCURRENCY:-1}\"",
+        "exec uv run celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency \"$${CELERY_WORKER_CONCURRENCY:-1}\"",
       ]
     depends_on:
       postgres:

@@ -332,11 +332,11 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"confirm_publish": True}
 CELERY_TASK_DEFAULT_QUEUE = "operational"
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
-# RabbitMQ 4 rejects transient non-exclusive classic queues. Workers do not
-# consume a pidbox. Mingle is disabled on the worker command so it does not
-# declare a pidbox reply queue either. Gossip still declares its own celeryev
-# queue, which has to be exclusive for that declaration to be accepted.
+# RabbitMQ 4 rejects transient non-exclusive classic queues. Kombu 5.6 declares
+# pidbox and gossip queues exclusive so those temporary queues stay legal.
+# The app never uses worker remote control, so workers do not consume a pidbox.
 CELERY_WORKER_ENABLE_REMOTE_CONTROL = False
+CELERY_CONTROL_QUEUE_EXCLUSIVE = True
 CELERY_EVENT_QUEUE_EXCLUSIVE = True
 HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS = env_int("HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS", 5)
 
