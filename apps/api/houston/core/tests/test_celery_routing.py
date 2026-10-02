@@ -22,6 +22,18 @@ def test_recovery_thresholds_stay_at_or_above_hard_time_limits():
     )
 
 
+def test_rabbitmq4_skips_pidbox_and_keeps_gossip_queues_exclusive():
+    assert settings.CELERY_WORKER_ENABLE_REMOTE_CONTROL is False
+    assert settings.CELERY_EVENT_QUEUE_EXCLUSIVE is True
+    assert not hasattr(settings, "CELERY_CONTROL_QUEUE_EXCLUSIVE")
+    assert app.conf.worker_enable_remote_control is False
+    assert app.conf.control_queue_exclusive is False
+    assert app.conf.control_queue_durable is False
+    assert app.conf.event_queue_exclusive is True
+    assert app.conf.event_queue_durable is False
+    assert app.control.mailbox.queue_exclusive is False
+
+
 def test_every_houston_task_is_explicitly_routed():
     app.loader.import_default_modules()
     missing = sorted(
@@ -46,6 +58,7 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
     assert "CELERY_RESULT_BACKEND" not in compose
     assert "-Q ai_interactive" in compose
     assert "--prefetch-multiplier=1" in compose
+    assert compose.count("--without-mingle") == 3
     assert "-Q operational" in compose
     assert "-Q ai_background,maintenance" in compose
     assert "CELERY_AI_INTERACTIVE_CONCURRENCY:-2" in compose
@@ -79,4 +92,5 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
             for line in (REPO_ROOT / relative).read_text().splitlines()
             if line.startswith("startCommand")
         )
+        assert "--without-mingle" in start_command
         assert start_command in contract

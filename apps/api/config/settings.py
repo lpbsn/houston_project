@@ -332,6 +332,12 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"confirm_publish": True}
 CELERY_TASK_DEFAULT_QUEUE = "operational"
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
+# RabbitMQ 4 rejects transient non-exclusive classic queues. Workers do not
+# consume a pidbox. Mingle is disabled on the worker command so it does not
+# declare a pidbox reply queue either. Gossip still declares its own celeryev
+# queue, which has to be exclusive for that declaration to be accepted.
+CELERY_WORKER_ENABLE_REMOTE_CONTROL = False
+CELERY_EVENT_QUEUE_EXCLUSIVE = True
 HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS = env_int("HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS", 5)
 
 # Celery Beat (first scheduled job in Houston). Requires a `celery-beat` process;
