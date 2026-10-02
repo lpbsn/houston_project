@@ -631,6 +631,27 @@ def _published_comment_attachment(api_client, settings, tmp_path, *, requires_va
     return owner, staff, execution, token, attachment
 
 
+def test_comment_preview_denies_anonymous_without_signed_comment_token(api_client):
+    from houston.chat.constants import CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT
+    from houston.uploads.preview_tokens import sign_upload_preview_token
+
+    url = _preview_url(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
+    denied = api_client.get(url)
+    assert denied.status_code == 401
+    assert denied.json()["code"] == "not_authenticated"
+
+    forged = api_client.get(url, {"token": "not-signed"})
+    assert forged.status_code == 401
+
+    other_domain = sign_upload_preview_token(
+        salt=CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        establishment_id=uuid.uuid4(),
+        attachment_id=uuid.uuid4(),
+        membership_id=uuid.uuid4(),
+    )
+    assert api_client.get(url, {"token": other_domain}).status_code == 401
+
+
 def test_comment_preview_token_authorizes_viewer_without_bearer(api_client, settings, tmp_path):
     _owner, staff, execution, token, attachment = _published_comment_attachment(
         api_client, settings, tmp_path

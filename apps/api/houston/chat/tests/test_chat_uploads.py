@@ -1058,6 +1058,27 @@ def _receiver_preview_url(api_client, published):
     return receiver_token, attachment["preview_url"]
 
 
+def test_chat_preview_denies_anonymous_without_signed_chat_token(api_client):
+    from houston.comments.constants import ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT
+    from houston.uploads.preview_tokens import sign_upload_preview_token
+
+    url = chat_url(uuid.uuid4(), f"attachments/{uuid.uuid4()}/preview/")
+    denied = api_client.get(url)
+    assert denied.status_code == 401
+    assert denied.json()["code"] == "not_authenticated"
+
+    forged = api_client.get(url, {"token": "not-signed"})
+    assert forged.status_code == 401
+
+    other_domain = sign_upload_preview_token(
+        salt=ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT,
+        establishment_id=uuid.uuid4(),
+        attachment_id=uuid.uuid4(),
+        membership_id=uuid.uuid4(),
+    )
+    assert api_client.get(url, {"token": other_domain}).status_code == 401
+
+
 def test_chat_preview_token_authorizes_viewer_without_bearer(api_client, settings, tmp_path):
     published = _publish_chat_image(api_client, settings, tmp_path)
     _receiver_token, preview_url = _receiver_preview_url(api_client, published)

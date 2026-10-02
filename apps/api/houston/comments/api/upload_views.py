@@ -34,6 +34,7 @@ from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import HasActiveMembership, is_valid_membership
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
+from houston.uploads.permissions import IsAuthenticatedOrSignedUploadPreviewToken
 from houston.uploads.preview_tokens import unsign_upload_preview_token
 from houston.uploads.private_storage import (
     PRIVATE_MEDIA_BACKEND_S3,
@@ -290,10 +291,12 @@ def _render_comment_attachment_preview(request, attachment):
 
 class ActionPlanCommentAttachmentPreviewView(EstablishmentScopedObservationMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.AllowAny]
+    preview_token_salt = ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT
+    permission_classes = [IsAuthenticatedOrSignedUploadPreviewToken]
 
     @extend_schema(
         tags=["comments"],
+        auth=[{"BearerAccessToken": []}, {}],
         parameters=[
             OpenApiParameter(
                 name="variant",
