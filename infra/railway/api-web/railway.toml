@@ -8,6 +8,7 @@ watchPatterns = [
   "/apps/web/**",
   "/contracts/operational-realtime-invalidation.json",
   "/apps/api/**",
+  "/docs/catalogue/**",
   "/infra/docker/railway/**",
   "/infra/railway/api-web/**",
   "/pyproject.toml",

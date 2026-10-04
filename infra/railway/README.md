@@ -21,7 +21,7 @@ Watch Paths express **functional build dependencies** — what should trigger a 
 
 | Service | `watchPatterns` |
 |---|---|
-| `api-web` | `/apps/web/**`, `/contracts/operational-realtime-invalidation.json`, `/apps/api/**`, `/infra/docker/railway/**`, `/infra/railway/api-web/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `api-web` | `/apps/web/**`, `/contracts/operational-realtime-invalidation.json`, `/apps/api/**`, `/docs/catalogue/**`, `/infra/docker/railway/**`, `/infra/railway/api-web/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-ai-interactive` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-ai-interactive/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-operational` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-operational/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-background` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-background/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
