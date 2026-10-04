@@ -36,7 +36,7 @@ See [`infra/railway/README.md`](../../infra/railway/README.md) for step-by-step 
 
 Each service's `railway.toml` defines `watchPatterns` under `[build]`. Do not paste the arrays here: [`infra/railway/README.md`](../../infra/railway/README.md) and `infra/railway/*/railway.toml`.
 
-Railway evaluates patterns from the repository root (`/`). Changes under `/docs/**` or `/.cursor/**` skip deployment.
+Railway evaluates patterns from the repository root (`/`). Changes under `/docs/**` outside `/docs/catalogue/**`, or under `/.cursor/**`, skip deployment. `/docs/catalogue/**` is copied into the `api-web` image (`/app/docs/catalogue`) and rebuilds that service only.
 
 ### Trigger matrix
 
@@ -45,6 +45,7 @@ Railway evaluates patterns from the repository root (`/`). Changes under `/docs/
 | `/apps/web/**` | Yes | No | No |
 | `/contracts/operational-realtime-invalidation.json` | Yes | Yes | Yes |
 | `/apps/api/**` | Yes | Yes | Yes |
+| `/docs/catalogue/**` | Yes | No | No |
 | `/infra/docker/railway/**` | Yes | No | No |
 | `/infra/docker/api/**` | No | Yes | Yes |
 | `/infra/railway/api-web/**` | Yes | No | No |
@@ -52,7 +53,7 @@ Railway evaluates patterns from the repository root (`/`). Changes under `/docs/
 | `/infra/railway/celery-beat/**` | No | No | Yes |
 | `/pyproject.toml`, `/uv.lock` | Yes | Yes | Yes |
 | `/.dockerignore` | Yes | Yes | Yes |
-| `/docs/**`, `/.cursor/**`, `/README.md` | No | No | No |
+| `/docs/**` except `/docs/catalogue/**`, `/.cursor/**`, `/README.md` | No | No | No |
 
 `api-web` does **not** watch `/infra/docker/api/**`. Worker and beat do **not** watch frontend or Railway edge paths.
 
@@ -62,7 +63,8 @@ Do not use artificial test commits on the production branch. Prefer a Railway te
 
 | Scenario | Expected |
 |---|---|
-| Change under `/docs/**` only | 0 deploys |
+| Change under `/docs/**` outside `/docs/catalogue/**` | 0 deploys |
+| Change under `/docs/catalogue/**` only | `api-web` only |
 | Change under `/apps/web/**` only | `api-web` only |
 | Change under `/apps/api/**` only | all 3 services |
 | Change under `/infra/docker/api/**` only | worker + beat only |
@@ -86,7 +88,7 @@ Rollback: remove `watchPatterns` from the affected `railway.toml` files.
 
 Railway builds with `builder = "DOCKERFILE"` and `dockerfilePath = "infra/docker/railway/Dockerfile.api-web"` (relative to Root Directory `/`).
 
-The image includes: production Python venv (`/opt/venv`), production SPA build (`apps/web/dist`), nginx edge config.
+The image includes: production Python venv (`/opt/venv`), production SPA build (`apps/web/dist`), nginx edge config, and the catalogue seed at `/app/docs/catalogue`.
 
 Images are **multi-stage**: a `python-builder` stage runs `uv sync` with **uv `0.11.16`** (`ghcr.io/astral-sh/uv:0.11.16`) and `build-essential`; the production runtime copies only `/opt/venv` and application code — **no `uv`, `curl`, `gcc`, or `make`** in the deployed image. Local dev images built with `UV_SYNC_DEV=true` (see [`docker-compose.yml`](../../docker-compose.yml)) intentionally retain `uv` for `uv run` in Compose/Makefile.
 
