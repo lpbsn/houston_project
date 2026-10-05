@@ -3,14 +3,17 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand, CommandError
 
 from houston.core.dev_guards import LocalDevEnvironmentError
+from houston.establishments.mama_nice_dataset_constants import STAGING_ESTABLISHMENT_ID
 from houston.establishments.mama_nice_dataset_exceptions import MamaNiceDatasetError
 from houston.establishments.mama_nice_dataset_replay import seed_mama_nice_dataset
 
 
 class Command(BaseCommand):
     help = (
-        "Seed the Mama Shelter Nice demo corpus. Production requires "
-        "--establishment-id. Never creates org/OWNER/first DIRECTOR."
+        "Seed the Mama Shelter Nice demo corpus. "
+        "Use --local for the local bootstrap, --staging for the locked staging "
+        "establishment, or --establishment-id for the locked production UUID. "
+        "Never creates org/OWNER/first DIRECTOR."
     )
 
     def add_arguments(self, parser):
@@ -28,6 +31,15 @@ class Command(BaseCommand):
             action="store_true",
             help="Target the local bootstrap establishment instead of production UUIDs.",
         )
+        parser.add_argument(
+            "--staging",
+            action="store_true",
+            help=(
+                "Target the locked staging establishment "
+                f"{STAGING_ESTABLISHMENT_ID} in [DEMO] SPORE. "
+                "--establishment-id must match that UUID."
+            ),
+        )
 
     def handle(self, *args, **options):
         dry_run = bool(options["dry_run"])
@@ -41,6 +53,7 @@ class Command(BaseCommand):
                 confirm=confirm,
                 resume=bool(options["resume"]),
                 local=bool(options["local"]),
+                staging=bool(options["staging"]),
                 as_of=options.get("as_of"),
             )
         except LocalDevEnvironmentError as exc:
