@@ -92,6 +92,7 @@ from houston.establishments.mama_nice_dataset_preflight import (
     PreflightResult,
     preflight_mama_nice_local,
     preflight_mama_nice_production,
+    preflight_mama_nice_staging,
 )
 from houston.establishments.mama_nice_dataset_roster import ROSTER
 from houston.establishments.mama_nice_dataset_scenarios import (
@@ -187,8 +188,13 @@ def seed_mama_nice_dataset(
     confirm: bool,
     resume: bool,
     local: bool = False,
+    staging: bool = False,
     as_of: str | datetime | None = None,
 ) -> SeedResult:
+    if local and staging:
+        raise MamaNiceDatasetError(["--local and --staging are mutually exclusive"])
+    if staging and not establishment_id:
+        raise MamaNiceDatasetError(["--establishment-id is required for staging"])
     if not dry_run and not confirm:
         raise MamaNiceDatasetError(["refusing to write without --confirm; use --dry-run"])
     corpus = compile_mama_nice_dataset()
@@ -200,6 +206,20 @@ def seed_mama_nice_dataset(
         assert_local_dev_environment()
         try:
             preflight = preflight_mama_nice_local()
+        except MamaNiceDatasetError as exc:
+            if dry_run:
+                return SeedResult(
+                    dry_run=True,
+                    resume=resume,
+                    preflight_messages=list(exc.messages),
+                    errors=list(exc.messages),
+                )
+            raise
+    elif staging:
+        if establishment_id is None:
+            raise MamaNiceDatasetError(["--establishment-id is required for staging"])
+        try:
+            preflight = preflight_mama_nice_staging(establishment_id=establishment_id)
         except MamaNiceDatasetError as exc:
             if dry_run:
                 return SeedResult(
