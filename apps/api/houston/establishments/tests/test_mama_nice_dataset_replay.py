@@ -200,7 +200,9 @@ def test_replay_seasons_preserve_runtime_keeps_october_and_closes_history():
     assert transaction.season_id == runtime.id
     assert runtime.status == GamificationSeason.Status.ACTIVE
     assert not BadgeAward.objects.filter(season=runtime).exists()
-    assert not PointTransaction.objects.filter(establishment=establishment).exclude(season=runtime).exists()
+    assert not PointTransaction.objects.filter(establishment=establishment).exclude(
+        season=runtime
+    ).exists()
 
 
 @pytest.mark.django_db
