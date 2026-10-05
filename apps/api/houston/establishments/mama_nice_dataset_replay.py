@@ -216,8 +216,7 @@ def seed_mama_nice_dataset(
                 )
             raise
     elif staging:
-        if establishment_id is None:
-            raise MamaNiceDatasetError(["--establishment-id is required for staging"])
+        assert establishment_id is not None
         try:
             preflight = preflight_mama_nice_staging(establishment_id=establishment_id)
         except MamaNiceDatasetError as exc:
