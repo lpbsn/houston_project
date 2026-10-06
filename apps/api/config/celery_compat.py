@@ -3,8 +3,10 @@ from __future__ import annotations
 from importlib.metadata import version as package_version
 
 from kombu.transport import pyamqp
-from kombu.transport.pyamqp import version_string_as_tuple
+from kombu.utils.text import version_string_as_tuple
 
+# Delete this module, its call in config/celery.py, and
+# houston/core/tests/test_celery_compat.py when Kombu 5.7+ is locked.
 _KOMBU_NATIVE_RABBITMQ4_QOS_VERSION = (5, 7)
 _HOUSTON_COMPAT_MARKER = "__houston_rabbitmq4_qos_compat__"
 
@@ -15,6 +17,7 @@ def _kombu_major_minor() -> tuple[int, int]:
 
 
 def _qos_semantics_matches_spec(self, connection):
+    # celery/kombu#2481: RabbitMQ 4 classic queues no longer accept global QoS.
     props = connection.server_properties
     if props.get("product") == "RabbitMQ":
         version_str = props.get("version")
@@ -26,11 +29,13 @@ def _qos_semantics_matches_spec(self, connection):
 
 
 def apply_rabbitmq4_qos_compat() -> bool:
-    """Backport Kombu's RabbitMQ 4 QoS semantics until Kombu 5.7+ is installed.
+    """Patch pyamqp.Transport until the installed Kombu includes kombu#2481.
 
-    Kombu 5.6.x treats RabbitMQ >=3.3 as using global QoS semantics. RabbitMQ 4
-    removed global QoS for classic queues, so Celery must use per-consumer QoS.
-    This mirrors celery/kombu#2481 and becomes a no-op once Kombu 5.7+ is used.
+    Celery decides `basic.qos(global=...)` with
+    `not connection.qos_semantics_matches_spec`, and kombu Connection
+    delegates that to `Transport.qos_semantics_matches_spec`. Kombu 5.6.x
+    returns False for every RabbitMQ >= 3.3, so workers send global QoS and
+    RabbitMQ 4 rejects it. This replaces only that method.
     """
 
     if _kombu_major_minor() >= _KOMBU_NATIVE_RABBITMQ4_QOS_VERSION:
