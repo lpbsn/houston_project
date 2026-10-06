@@ -9,6 +9,7 @@ from config.celery_routing import (
     WORKER_QUEUES,
 )
 from django.conf import settings
+from kombu.transport import pyamqp
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 
@@ -34,6 +35,28 @@ def test_rabbitmq4_temporary_queues_are_exclusive_and_remote_control_is_off():
     mailbox = app.control.mailbox
     assert mailbox.queue_exclusive is True
     assert mailbox.queue_durable is False
+
+
+def test_rabbitmq4_uses_per_consumer_qos_until_kombu_has_native_fix():
+    transport = object.__new__(pyamqp.Transport)
+
+    class Connection:
+        server_properties = {"product": "RabbitMQ", "version": "4.3.0"}
+
+    connection = Connection()
+    assert transport.qos_semantics_matches_spec(connection) is True
+
+    connection.server_properties = {"product": "RabbitMQ", "version": "3.13.7"}
+    assert transport.qos_semantics_matches_spec(connection) is False
+
+    connection.server_properties = {"product": "RabbitMQ", "version": "3.2.4"}
+    assert transport.qos_semantics_matches_spec(connection) is True
+
+    connection.server_properties = {"product": "RabbitMQ"}
+    assert transport.qos_semantics_matches_spec(connection) is True
+
+    connection.server_properties = {"product": "ActiveMQ", "version": "5.0.0"}
+    assert transport.qos_semantics_matches_spec(connection) is True
 
 
 def test_every_houston_task_is_explicitly_routed():
