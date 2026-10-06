@@ -13,6 +13,7 @@ from houston.establishments.mama_nice_dataset_constants import (
     PROD_ESTABLISHMENT_ID,
     PROD_ORGANIZATION_ID,
     PROD_OWNER_REF,
+    STAGING_ESTABLISHMENT_ID,
 )
 from houston.establishments.mama_nice_dataset_exceptions import MamaNiceDatasetError
 from houston.establishments.mama_nice_dataset_manifest import load_mama_nice_manifest
@@ -90,6 +91,71 @@ def preflight_mama_nice_production(*, establishment_id: str) -> PreflightResult:
             f"DIRECTOR {PROD_DIRECTOR_REF} resolved as {director_kind}",
         ],
     )
+
+
+def preflight_mama_nice_staging(*, establishment_id: str) -> PreflightResult:
+    if establishment_id != STAGING_ESTABLISHMENT_ID:
+        raise MamaNiceDatasetError(
+            [f"staging seed must target {STAGING_ESTABLISHMENT_ID}"]
+        )
+    establishment = (
+        Establishment.objects.select_related("organization")
+        .filter(id=establishment_id)
+        .first()
+    )
+    if establishment is None:
+        raise MamaNiceDatasetError(["staging establishment was not found"])
+    if establishment.organization.name != LOCAL_ORG_NAME:
+        raise MamaNiceDatasetError(
+            [
+                "staging organization name "
+                f"{establishment.organization.name!r} diverges from {LOCAL_ORG_NAME}"
+            ]
+        )
+    owner = _require_single_active_membership(
+        establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        label="OWNER",
+    )
+    director = _require_single_active_membership(
+        establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        label="DIRECTOR",
+    )
+    _assert_catalog(establishment, rewrite_descriptions=False)
+    return PreflightResult(
+        establishment=establishment,
+        organization=establishment.organization,
+        owner_membership=owner,
+        governance_director=director,
+        owner_ref_kind="membership",
+        director_ref_kind="membership",
+        messages=[
+            f"OWNER {owner.id} active",
+            f"DIRECTOR {director.id} active",
+            f"organization {establishment.organization.name}",
+        ],
+    )
+
+
+def _require_single_active_membership(
+    establishment: Establishment,
+    *,
+    role: str,
+    label: str,
+) -> EstablishmentMembership:
+    memberships = list(
+        EstablishmentMembership.objects.filter(
+            establishment=establishment,
+            role=role,
+            status=EstablishmentMembership.Status.ACTIVE,
+        ).select_related("user")
+    )
+    if len(memberships) != 1:
+        raise MamaNiceDatasetError(
+            [f"staging requires exactly one active {label}; found {len(memberships)}"]
+        )
+    return memberships[0]
 
 
 def preflight_mama_nice_local() -> PreflightResult:

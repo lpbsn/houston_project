@@ -66,6 +66,7 @@ RUN if [ -x /opt/venv/bin/uv ]; then \
 
 COPY apps/api /app/apps/api
 COPY contracts/operational-realtime-invalidation.json /app/contracts/operational-realtime-invalidation.json
+COPY docs/catalogue /app/docs/catalogue
 
 WORKDIR /app/apps/api
 

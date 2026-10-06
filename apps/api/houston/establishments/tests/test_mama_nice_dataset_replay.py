@@ -26,14 +26,19 @@ from houston.establishments.mama_nice_dataset_ledger import canonical_fingerprin
 from houston.establishments.mama_nice_dataset_manifest import load_mama_nice_manifest
 from houston.establishments.mama_nice_dataset_replay import (
     SeedResult,
+    _award_service_clock,
+    _preserve_runtime_season_scope,
     _replay_plans,
     _replay_schedules,
     _replay_seasons,
+    _service_award_instant,
     seed_mama_nice_dataset,
 )
 from houston.establishments.models import EstablishmentMembership, MamaNiceSeedRecord
-from houston.gamification.models import GamificationSeason
-from houston.gamification.services import open_season
+from houston.gamification.constants import build_idempotency_key
+from houston.gamification.exceptions import GamificationValidationError
+from houston.gamification.models import BadgeAward, GamificationSeason, PointTransaction
+from houston.gamification.services import award_points, open_season
 from houston.testing.factories import TEST_PASSWORD, create_establishment, create_membership
 from houston.testing.taxonomy import (
     create_business_unit,
@@ -123,6 +128,109 @@ def test_replay_seasons_resumes_after_open_without_close():
     assert september.status == GamificationSeason.Status.ACTIVE
     assert result.skipped == 1
     assert result.written == 12
+
+
+def _open_october_runtime_season(establishment):
+    return open_season(establishment, month_start_local=date(2026, 10, 1))
+
+
+@pytest.mark.django_db
+def test_replay_seasons_preserve_runtime_keeps_october_and_closes_history():
+    establishment = create_establishment(name="Mama seasons runtime", timezone="Europe/Paris")
+    runtime = _open_october_runtime_season(establishment)
+    before = (runtime.status, runtime.starts_at, runtime.ends_at, runtime.closed_at)
+
+    with _preserve_runtime_season_scope(True):
+        first = SeedResult(dry_run=False, resume=False)
+        _replay_seasons(establishment, resume=False, result=first)
+        resumed = SeedResult(dry_run=False, resume=True)
+        _replay_seasons(establishment, resume=True, result=resumed)
+        award_at = _award_service_clock(
+            HISTORY_START,
+            4,
+            establishment=establishment,
+        )
+        september_at = _service_award_instant(
+            establishment,
+            datetime(2026, 9, 23, 9, 20, tzinfo=SNAPSHOT.tzinfo),
+            2,
+        )
+
+    runtime.refresh_from_db()
+    assert (runtime.status, runtime.starts_at, runtime.ends_at, runtime.closed_at) == before
+    assert runtime.starts_at == datetime(2026, 10, 1, tzinfo=SNAPSHOT.tzinfo)
+    assert runtime.ends_at == datetime(2026, 11, 1, tzinfo=SNAPSHOT.tzinfo)
+    seasons = list(
+        GamificationSeason.objects.filter(establishment=establishment).order_by("starts_at")
+    )
+    assert len(seasons) == 8
+    closed = [season for season in seasons if season.status == GamificationSeason.Status.CLOSED]
+    assert [season.starts_at.astimezone(SNAPSHOT.tzinfo).date() for season in closed] == [
+        *SEASON_MONTHS_CLOSED,
+        SEASON_MONTH_ACTIVE,
+    ]
+    assert all(season.closed_at is not None for season in closed)
+    assert [season for season in seasons if season.status == GamificationSeason.Status.ACTIVE] == [
+        runtime
+    ]
+    assert first.written == 13
+    assert first.skipped == 0
+    assert resumed.written == 0
+    assert resumed.skipped == 13
+    assert runtime.starts_at <= award_at < runtime.ends_at
+    assert award_at == runtime.starts_at + timedelta(days=11, seconds=4)
+    assert runtime.starts_at <= september_at < runtime.ends_at
+
+    membership = create_membership(establishment=establishment)
+    transaction = award_points(
+        membership=membership,
+        establishment=establishment,
+        delta=1,
+        reason_code="test.award",
+        source_type="test",
+        source_id=membership.id,
+        occurred_at=award_at,
+        idempotency_key=build_idempotency_key(
+            reason_code="test.award",
+            subject_id=membership.id,
+            membership_id=membership.id,
+        ),
+    )
+    runtime.refresh_from_db()
+    assert transaction.season_id == runtime.id
+    assert runtime.status == GamificationSeason.Status.ACTIVE
+    assert not BadgeAward.objects.filter(season=runtime).exists()
+    assert not PointTransaction.objects.filter(establishment=establishment).exclude(
+        season=runtime
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_replay_seasons_preserve_scope_without_runtime_keeps_dataset_month_active():
+    establishment = create_establishment(name="Mama seasons staging empty", timezone="Europe/Paris")
+    result = SeedResult(dry_run=False, resume=False)
+    with _preserve_runtime_season_scope(True):
+        _replay_seasons(establishment, resume=False, result=result)
+
+    active = GamificationSeason.objects.get(
+        establishment=establishment,
+        status=GamificationSeason.Status.ACTIVE,
+    )
+    assert active.starts_at.astimezone(SNAPSHOT.tzinfo).date() == SEASON_MONTH_ACTIVE
+    assert result.written == 13
+    assert result.skipped == 0
+
+
+@pytest.mark.django_db
+def test_replay_seasons_without_preserve_still_refuses_active_runtime_season():
+    establishment = create_establishment(name="Mama seasons prod runtime", timezone="Europe/Paris")
+    runtime = _open_october_runtime_season(establishment)
+    result = SeedResult(dry_run=False, resume=False)
+    with pytest.raises(GamificationValidationError, match="active season"):
+        _replay_seasons(establishment, resume=False, result=result)
+    runtime.refresh_from_db()
+    assert runtime.status == GamificationSeason.Status.ACTIVE
+    assert GamificationSeason.objects.filter(establishment=establishment).count() == 1
 
 
 @pytest.mark.django_db

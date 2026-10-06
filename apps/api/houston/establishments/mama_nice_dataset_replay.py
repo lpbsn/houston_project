@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Iterator
@@ -92,6 +93,7 @@ from houston.establishments.mama_nice_dataset_preflight import (
     PreflightResult,
     preflight_mama_nice_local,
     preflight_mama_nice_production,
+    preflight_mama_nice_staging,
 )
 from houston.establishments.mama_nice_dataset_roster import ROSTER
 from houston.establishments.mama_nice_dataset_scenarios import (
@@ -112,8 +114,13 @@ from houston.establishments.services import (
     deactivate_membership_for_management,
     invite_membership_for_establishment,
 )
+from houston.gamification.constants import CURRENT_RULE_VERSION
 from houston.gamification.models import GamificationSeason
-from houston.gamification.selectors import get_season_by_starts_at
+from houston.gamification.selectors import (
+    get_active_season,
+    get_season_by_starts_at,
+    month_bounds_for_occurred_at,
+)
 from houston.gamification.services import close_season, open_season
 from houston.observations.services import submit_observation
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
@@ -187,8 +194,13 @@ def seed_mama_nice_dataset(
     confirm: bool,
     resume: bool,
     local: bool = False,
+    staging: bool = False,
     as_of: str | datetime | None = None,
 ) -> SeedResult:
+    if local and staging:
+        raise MamaNiceDatasetError(["--local and --staging are mutually exclusive"])
+    if staging and not establishment_id:
+        raise MamaNiceDatasetError(["--establishment-id is required for staging"])
     if not dry_run and not confirm:
         raise MamaNiceDatasetError(["refusing to write without --confirm; use --dry-run"])
     corpus = compile_mama_nice_dataset()
@@ -200,6 +212,19 @@ def seed_mama_nice_dataset(
         assert_local_dev_environment()
         try:
             preflight = preflight_mama_nice_local()
+        except MamaNiceDatasetError as exc:
+            if dry_run:
+                return SeedResult(
+                    dry_run=True,
+                    resume=resume,
+                    preflight_messages=list(exc.messages),
+                    errors=list(exc.messages),
+                )
+            raise
+    elif staging:
+        assert establishment_id is not None
+        try:
+            preflight = preflight_mama_nice_staging(establishment_id=establishment_id)
         except MamaNiceDatasetError as exc:
             if dry_run:
                 return SeedResult(
@@ -237,7 +262,11 @@ def seed_mama_nice_dataset(
         as_of=as_of,
         persist=True,
     )
-    with suppress_mama_nice_side_effects(), use_reference_at(reference_at):
+    with (
+        suppress_mama_nice_side_effects(),
+        use_reference_at(reference_at),
+        _preserve_runtime_season_scope(staging),
+    ):
         _replay(preflight=preflight, corpus=corpus, resume=resume, result=result)
     return result
 
@@ -358,7 +387,9 @@ def _replay(
 
 def _close_historical_authored_signals(*, corpus, signals, memberships) -> None:
     director = _fictive_director(memberships)
-    with freeze_django_now(operational_now()):
+    with freeze_django_now(
+        _service_award_instant(director.establishment, operational_now(), 0)
+    ):
         for spec in corpus.signal_specs:
             signal = signals.get(spec["seed_key"])
             if signal is None:
@@ -450,20 +481,114 @@ def _month_start_dt(month_start: date) -> datetime:
     return datetime(month_start.year, month_start.month, 1, tzinfo=SNAPSHOT.tzinfo)
 
 
-def _award_service_clock(natural: datetime, sequence: int) -> datetime:
-    """Place a point-awarding call inside August 2026 while that season is active.
+def _dataset_window_end() -> datetime:
+    month = SEASON_MONTH_ACTIVE
+    if month.month == 12:
+        return datetime(month.year + 1, 1, 1, tzinfo=SNAPSHOT.tzinfo)
+    return datetime(month.year, month.month + 1, 1, tzinfo=SNAPSHOT.tzinfo)
+
+
+_preserve_runtime_season: ContextVar[bool] = ContextVar(
+    "mama_nice_preserve_runtime_season",
+    default=False,
+)
+
+
+@contextmanager
+def _preserve_runtime_season_scope(enabled: bool) -> Iterator[None]:
+    """Staging-only: keep a later active season instead of opening dataset months."""
+    token = _preserve_runtime_season.set(enabled)
+    try:
+        yield
+    finally:
+        _preserve_runtime_season.reset(token)
+
+
+def _runtime_season_after_dataset(establishment: Establishment) -> GamificationSeason | None:
+    if not _preserve_runtime_season.get():
+        return None
+    active = get_active_season(establishment)
+    if active is None or active.starts_at < _dataset_window_end():
+        return None
+    return active
+
+
+def _service_award_instant(
+    establishment: Establishment,
+    at: datetime,
+    sequence: int = 0,
+) -> datetime:
+    """Keep point-awarding instants inside the preserved runtime season.
+
+    Local and production replay leave the instant unchanged. Staging replay
+    moves it only when a later active season must stay open, because points
+    cannot be written on a closed historical month.
+    """
+    runtime = _runtime_season_after_dataset(establishment)
+    if runtime is None or runtime.starts_at <= at < runtime.ends_at:
+        return at
+    placed = runtime.starts_at + timedelta(days=11, seconds=sequence)
+    if not (runtime.starts_at <= placed < runtime.ends_at):
+        raise MamaNiceDatasetError(
+            ["runtime season is too short to place historical point awards"]
+        )
+    return placed
+
+
+def _award_service_clock(
+    natural: datetime,
+    sequence: int,
+    *,
+    establishment: Establishment | None = None,
+) -> datetime:
+    """Place a point-awarding call inside the season that can accept points.
 
     Historical activity predates March 2026. A season per past month would exceed
     the six closed seasons, and points cannot be written into a season that is
     already closed. August stays open until these calls finish, then it is closed
     so badges are persisted. Timestamps already inside August are kept. September
     executions do not use this helper; they run after September is opened.
+
+    When staging preserves a later runtime season, the same calls land inside
+    that season instead of August.
     """
     award_start = _month_start_dt(SEASON_MONTHS_CLOSED[-1])
     active_start = _month_start_dt(SEASON_MONTH_ACTIVE)
     if award_start <= natural < active_start:
-        return natural
-    return award_start + timedelta(days=11, seconds=sequence)
+        placed = natural
+    else:
+        placed = award_start + timedelta(days=11, seconds=sequence)
+    if establishment is None:
+        return placed
+    return _service_award_instant(establishment, placed, sequence)
+
+
+def _ensure_closed_historical_season(
+    establishment: Establishment,
+    month_start: date,
+) -> GamificationSeason:
+    starts_at, ends_at = month_bounds_for_occurred_at(
+        establishment=establishment,
+        occurred_at=_month_start_dt(month_start),
+    )
+    existing = get_season_by_starts_at(establishment, starts_at)
+    if existing is not None:
+        if existing.status != GamificationSeason.Status.CLOSED:
+            raise MamaNiceDatasetError(
+                [
+                    f"season:{month_start.isoformat()}: refusing to replace an active season"
+                ]
+            )
+        return existing
+    return GamificationSeason.objects.create(
+        establishment=establishment,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        timezone=establishment.timezone,
+        rule_version=CURRENT_RULE_VERSION,
+        status=GamificationSeason.Status.CLOSED,
+        closed_at=ends_at,
+    )
 
 
 def _replay_seasons(
@@ -491,9 +616,12 @@ def _replay_seasons(
         elif phase != "all":
             raise MamaNiceDatasetError([f"unknown season replay phase {phase}"])
         at = _month_start_dt(month_start)
+        preserve_runtime = _runtime_season_after_dataset(establishment) is not None
         if open_this:
 
-            def writer(month_start=month_start, at=at):
+            def writer(month_start=month_start, at=at, preserve_runtime=preserve_runtime):
+                if preserve_runtime:
+                    return _ensure_closed_historical_season(establishment, month_start).id
                 with freeze_django_now(at):
                     season = open_season(establishment, month_start_local=month_start)
                 return season.id
@@ -514,12 +642,20 @@ def _replay_seasons(
             continue
         close_at = (datetime(month_start.year, month_start.month, 1, tzinfo=SNAPSHOT.tzinfo) + timedelta(days=32)).replace(day=1)
 
-        def close_writer(month_start=month_start, close_at=close_at, at=at):
+        def close_writer(month_start=month_start, close_at=close_at, at=at, preserve_runtime=preserve_runtime):
             season = get_season_by_starts_at(establishment, at)
             if season is None:
                 raise MamaNiceDatasetError(
                     [f"season:{month_start.isoformat()}:close: no season for starts_at={at.isoformat()}"]
                 )
+            if preserve_runtime:
+                if season.status != GamificationSeason.Status.CLOSED:
+                    raise MamaNiceDatasetError(
+                        [
+                            f"season:{month_start.isoformat()}:close: refusing to close an active season"
+                        ]
+                    )
+                return season.id
             with freeze_django_now(close_at):
                 close_season(season, closed_at=close_at)
             return season.id
@@ -1026,7 +1162,11 @@ def _replay_signal_overlays(*, corpus, signals, memberships, forbidden, resume, 
             pole = _responsible_pole_key(signal)
             requester = _active_member_for_pole(memberships, role="staff", pole=pole)
             reviewer = _active_member_for_pole(memberships, role="manager", pole=pole)
-            resolve_at = _award_service_clock(at + timedelta(hours=3), sequence)
+            resolve_at = _award_service_clock(
+                at + timedelta(hours=3),
+                sequence,
+                establishment=signal.establishment,
+            )
             sequence += 1
             reject_first = rr_done < 3
             retry_after_reject = reject_first and not rejected_retry
@@ -1086,7 +1226,11 @@ def _replay_signal_overlays(*, corpus, signals, memberships, forbidden, resume, 
                 rejected_retry = True
             rr_done += 1
         elif spec["status"] == "resolved":
-            resolve_at = _award_service_clock(at + timedelta(hours=4), sequence)
+            resolve_at = _award_service_clock(
+                at + timedelta(hours=4),
+                sequence,
+                establishment=signal.establishment,
+            )
             sequence += 1
 
             def resolve_writer(signal=signal, actor=actor, resolve_at=resolve_at):
@@ -1251,9 +1395,13 @@ def _replay_executions(
 
         def writer(signal=signal, actor=actor, director=director, start=start, end=end, spec=spec, index=index):
             if start >= _month_start_dt(SEASON_MONTH_ACTIVE):
-                clock = start + timedelta(minutes=20)
+                clock = _service_award_instant(
+                    establishment,
+                    start + timedelta(minutes=20),
+                    index,
+                )
             else:
-                clock = _award_service_clock(start, index)
+                clock = _award_service_clock(start, index, establishment=establishment)
             with freeze_django_now(clock):
                 _plan, execution = create_action_plan_with_execution(
                     establishment_id=establishment.id,
@@ -1327,7 +1475,13 @@ def _replay_executions(
     )
     if period == "before_active":
         return executions
-    with freeze_django_now(SNAPSHOT):
+    # Preserved runtime seasons are already closed for September, so this
+    # block must not award at SNAPSHOT. Rows are created scheduled; promotion
+    # below awards inside the runtime season. Horizon selection stays on SNAPSHOT.
+    materialize_at = SNAPSHOT
+    if _runtime_season_after_dataset(establishment) is not None:
+        materialize_at = HISTORY_START - timedelta(seconds=1)
+    with freeze_django_now(materialize_at):
         for schedule in schedules.values():
             materialize_schedule_occurrences_in_horizon(
                 schedule=schedule,
@@ -1452,8 +1606,10 @@ def _replay_recent_in_progress_executions(
         if period == "active_month" and not starts_in_active_month:
             continue
 
-        def writer(signal=signal, actor=actor, director=director, start=start, end=end, spec=spec):
-            with freeze_django_now(start + timedelta(minutes=15)):
+        def writer(signal=signal, actor=actor, director=director, start=start, end=end, spec=spec, index=index):
+            with freeze_django_now(
+                _service_award_instant(establishment, start + timedelta(minutes=15), index)
+            ):
                 _plan, execution = create_action_plan_with_execution(
                     establishment_id=establishment.id,
                     created_by=director,
@@ -1526,8 +1682,10 @@ def _replay_recent_pending_executions(
         if period == "active_month" and start < _month_start_dt(SEASON_MONTH_ACTIVE):
             continue
 
-        def writer(signal=signal, actor=actor, start=start, end=end, spec=spec):
-            with freeze_django_now(start + timedelta(minutes=20)):
+        def writer(signal=signal, actor=actor, start=start, end=end, spec=spec, index=index):
+            with freeze_django_now(
+                _service_award_instant(establishment, start + timedelta(minutes=20), index)
+            ):
                 _plan, execution = create_action_plan_with_execution(
                     establishment_id=establishment.id,
                     created_by=director,
@@ -1608,7 +1766,7 @@ def _promote_started_scheduled_executions(*, establishment) -> None:
             start_at__lte=now,
         ).values_list("id", flat=True)
     )
-    with freeze_django_now(now):
+    with freeze_django_now(_service_award_instant(establishment, now, 0)):
         for execution_id in due_ids:
             promote_due_scheduled_executions(
                 establishment_id=establishment.id,
@@ -1637,9 +1795,9 @@ def _close_past_schedule_executions(*, establishment, actor) -> None:
             EXECUTION_STATUS_PENDING_VALIDATION,
         },
     )
-    for execution in past:
+    for sequence, execution in enumerate(past):
         clock = min(execution.end_at or operational_now(), operational_now())
-        with freeze_django_now(clock):
+        with freeze_django_now(_service_award_instant(establishment, clock, sequence)):
             execution.refresh_from_db()
             if execution.status == EXECUTION_STATUS_SCHEDULED:
                 promote_due_scheduled_executions(
@@ -1681,12 +1839,12 @@ def _replay_overdue_executions(
 ) -> None:
     from houston.action_plans.models import ActionPlanExecution
 
-    for spec in overdue_execution_specs():
+    for sequence, spec in enumerate(overdue_execution_specs()):
         start = spec.end_at - timedelta(days=2)
         at = start
 
-        def writer(spec=spec, start=start):
-            with freeze_django_now(start):
+        def writer(spec=spec, start=start, sequence=sequence):
+            with freeze_django_now(_service_award_instant(establishment, start, sequence)):
                 _plan, execution = create_action_plan_with_execution(
                     establishment_id=establishment.id,
                     created_by=director,

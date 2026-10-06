@@ -150,7 +150,7 @@ make seed-mama-nice-dataset ARGS='--local --confirm --resume'
 make validate-mama-nice-dataset ARGS='--local'
 ```
 
-`bootstrap_mama_nice_dataset` is local-only (`assert_local_dev_environment`). Production uses `seed_mama_nice_dataset --establishment-id fe29f398-4a6b-4f9b-a92f-00805435ddc2 --dry-run` then `--confirm` after a fail-closed preflight. Do not run bootstrap or migrate-from-host against production.
+`bootstrap_mama_nice_dataset` is local-only (`assert_local_dev_environment`). Production uses `seed_mama_nice_dataset --establishment-id fe29f398-4a6b-4f9b-a92f-00805435ddc2 --dry-run` then `--confirm` after a fail-closed preflight. Staging uses `seed_mama_nice_dataset --staging --establishment-id 3a76600c-b60b-413d-b1aa-c4d9709c07c5 --dry-run` then `--confirm`; that preflight requires `[DEMO] SPORE`, one active OWNER, one active DIRECTOR, and the existing catalog lock. Do not run bootstrap or migrate-from-host against production or staging.
 
 ## Automatic checks
 

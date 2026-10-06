@@ -53,8 +53,12 @@ apps/api/celerybeat-schedule*
 # Logs
 *.log
 
-# Non-runtime repo content (PR3 selective COPY)
-docs/
+# Non-runtime repo content (PR3 selective COPY).
+# docs/catalogue is the versioned seed read by import_business_unit_catalog
+# at /app/docs/catalogue. Exclude the rest of docs/, then re-include the seed.
+docs/*
+!docs/catalogue/
+!docs/catalogue/**
 .cursor/
 .github/
 scripts/
