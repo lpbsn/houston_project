@@ -65,6 +65,9 @@ CELERY_TASK_ROUTES = {
         "queue": QUEUE_MAINTENANCE
     },
     "houston.uploads.tasks.cleanup_expired_uploads_task": {"queue": QUEUE_MAINTENANCE},
+    "houston.brain.tasks.cleanup_abandoned_reporting_drafts_task": {
+        "queue": QUEUE_MAINTENANCE
+    },
     "houston.gamification.tasks.rollover_gamification_seasons_task": {
         "queue": QUEUE_MAINTENANCE
     },

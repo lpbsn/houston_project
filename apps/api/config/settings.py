@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "houston.ai",
     "houston.uploads",
     "houston.gamification",
+    "houston.brain",
 ]
 
 MIDDLEWARE = [
@@ -378,6 +379,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(
             hour=env_int("HOUSTON_UPLOAD_PURGE_BEAT_HOUR_UTC", 5),
             minute=env_int("HOUSTON_UPLOAD_PURGE_BEAT_MINUTE_UTC", 0),
+        ),
+    },
+    "cleanup-abandoned-brain-reporting-drafts": {
+        "task": "houston.brain.tasks.cleanup_abandoned_reporting_drafts_task",
+        "schedule": crontab(
+            minute=env_int("HOUSTON_BRAIN_DRAFT_CLEANUP_BEAT_MINUTE_UTC", 25),
         ),
     },
     "recover-stuck-observation-processing": {
@@ -692,6 +699,29 @@ HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS = env_int(
     "HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS",
     3600,
 )
+
+# Brain document preparation. Initial technical ceilings, not commercial targets.
+HOUSTON_BRAIN_MAX_UPLOAD_BYTES = env_int(
+    "HOUSTON_BRAIN_MAX_UPLOAD_BYTES",
+    8 * 1024 * 1024,
+)
+HOUSTON_BRAIN_MAX_XLSX_UNCOMPRESSED_BYTES = env_int(
+    "HOUSTON_BRAIN_MAX_XLSX_UNCOMPRESSED_BYTES",
+    32 * 1024 * 1024,
+)
+HOUSTON_BRAIN_EXTRACTION_TIMEOUT_SECONDS = env_int(
+    "HOUSTON_BRAIN_EXTRACTION_TIMEOUT_SECONDS",
+    30,
+)
+HOUSTON_BRAIN_MAX_ROWS = env_int("HOUSTON_BRAIN_MAX_ROWS", 20_000)
+HOUSTON_BRAIN_MAX_COLUMNS = env_int("HOUSTON_BRAIN_MAX_COLUMNS", 256)
+HOUSTON_BRAIN_MAX_CELLS = env_int("HOUSTON_BRAIN_MAX_CELLS", 250_000)
+HOUSTON_BRAIN_MAX_SHEETS = env_int("HOUSTON_BRAIN_MAX_SHEETS", 50)
+HOUSTON_BRAIN_MAX_PDF_PAGES = env_int("HOUSTON_BRAIN_MAX_PDF_PAGES", 200)
+HOUSTON_BRAIN_MAX_DOCX_BLOCKS = env_int("HOUSTON_BRAIN_MAX_DOCX_BLOCKS", 20_000)
+HOUSTON_BRAIN_MAX_ZIP_ENTRIES = env_int("HOUSTON_BRAIN_MAX_ZIP_ENTRIES", 500)
+HOUSTON_BRAIN_DRAFT_TTL_SECONDS = env_int("HOUSTON_BRAIN_DRAFT_TTL_SECONDS", 24 * 60 * 60)
+HOUSTON_BRAIN_DRAFT_CLEANUP_BATCH = env_int("HOUSTON_BRAIN_DRAFT_CLEANUP_BATCH", 100)
 
 LOGGING = {
     "version": 1,
