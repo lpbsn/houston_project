@@ -42,6 +42,8 @@ class BrainReporting(BaseModel):
     )
     rejection_code = models.CharField(max_length=80, blank=True, default="")
     rejection_message = models.TextField(blank=True, default="")
+    # Civil window [period_start, period_end): start inclusive, end exclusive.
+    # Lot 2 collection reads these dates in the establishment timezone.
     period_start = models.DateField(null=True, blank=True)
     period_end = models.DateField(null=True, blank=True)
     period_confirmed_at = models.DateTimeField(null=True, blank=True)
@@ -60,7 +62,7 @@ class BrainReporting(BaseModel):
                         period_start__isnull=False,
                         period_end__isnull=False,
                     )
-                    & Q(period_end__gte=F("period_start"))
+                    & Q(period_end__gt=F("period_start"))
                 ),
                 name="brain_rep_period_chk",
             ),

@@ -8,11 +8,11 @@ from typing import BinaryIO
 
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
+from houston.brain.bounded import extract_bounded
 from houston.brain.errors import ExtractionRejected, ReportingRejected
-from houston.brain.extract import extract_document
 from houston.brain.models import BrainExtraction, BrainReporting
 from houston.brain.records import EXTRACTOR_ID, EXTRACTOR_VERSION
 from houston.brain.sniff import sniff_format
@@ -32,7 +32,7 @@ _CONTENT_TYPES = {
 _TOO_LARGE = "Le fichier dépasse la taille maximale acceptée."
 _EMPTY = "Le fichier ne contient pas de contenu analysable."
 _PERIOD = "La période confirmée doit avoir un début et une fin."
-_PERIOD_ORDER = "La fin de période précède le début."
+_PERIOD_ORDER = "La fin de période est exclue et doit être postérieure au début."
 
 
 def prepare_reporting(
@@ -68,56 +68,66 @@ def prepare_reporting(
         period_end=period_end,
         period_confirmed_at=timezone.now() if period_start and period_end else None,
     )
+    _acquire_extraction_lock(reporting.id)
     try:
-        stored_name = get_private_media_storage().save(storage_key, ContentFile(raw))
-    except Exception:
-        reporting.delete()
-        raise
-    if stored_name != reporting.storage_key:
-        reporting.storage_key = stored_name
-        reporting.save(update_fields=["storage_key", "updated_at"])
-    try:
-        result = extract_document(raw, source_format)
-    except ExtractionRejected as exc:
-        _mark_rejected(reporting, code=exc.code, message=exc.message)
-        return reporting
-    except Exception as exc:
-        logger.error(
-            "brain_reporting_extraction_failed",
-            extra={
-                "event": "brain_reporting_extraction_failed",
-                "reporting_id": str(reporting.id),
-                "exception_class": type(exc).__name__,
-            },
-            exc_info=False,
-        )
-        _mark_rejected(
-            reporting,
-            code="extraction_failed",
-            message="La préparation du fichier a échoué.",
-        )
-        return reporting
-    with transaction.atomic():
-        locked = (
-            BrainReporting.objects.select_for_update()
-            .filter(pk=reporting.pk, status=BrainReporting.Status.DRAFT)
-            .first()
-        )
-        if locked is None:
-            return BrainReporting.objects.get(pk=reporting.pk)
-        BrainExtraction.objects.create(
-            reporting=locked,
-            extractor_id=EXTRACTOR_ID,
-            extractor_version=EXTRACTOR_VERSION,
-            source_sha256=locked.content_sha256,
-            payload=result.as_payload(),
-        )
-        locked.status = BrainReporting.Status.READY
-        locked.rejection_code = ""
-        locked.rejection_message = ""
-        locked.save(
-            update_fields=["status", "rejection_code", "rejection_message", "updated_at"]
-        )
+        try:
+            stored_name = get_private_media_storage().save(storage_key, ContentFile(raw))
+        except Exception:
+            reporting.delete()
+            raise
+        if stored_name != reporting.storage_key:
+            reporting.storage_key = stored_name
+            reporting.save(update_fields=["storage_key", "updated_at"])
+        try:
+            result = extract_bounded(raw, source_format)
+        except ExtractionRejected as exc:
+            _mark_rejected(reporting, code=exc.code, message=exc.message)
+            return reporting
+        except Exception as exc:
+            logger.error(
+                "brain_reporting_extraction_failed",
+                extra={
+                    "event": "brain_reporting_extraction_failed",
+                    "reporting_id": str(reporting.id),
+                    "exception_class": type(exc).__name__,
+                },
+                exc_info=False,
+            )
+            _mark_rejected(
+                reporting,
+                code="extraction_failed",
+                message="La préparation du fichier a échoué.",
+            )
+            return reporting
+        with transaction.atomic():
+            locked = (
+                BrainReporting.objects.select_for_update()
+                .filter(pk=reporting.pk, status=BrainReporting.Status.DRAFT)
+                .first()
+            )
+            if locked is None:
+                current = BrainReporting.objects.filter(pk=reporting.pk).first()
+                if current is not None:
+                    return current
+                raise ExtractionRejected(
+                    code="reporting_removed",
+                    message="Le reporting n'est plus disponible.",
+                )
+            BrainExtraction.objects.create(
+                reporting=locked,
+                extractor_id=EXTRACTOR_ID,
+                extractor_version=EXTRACTOR_VERSION,
+                source_sha256=locked.content_sha256,
+                payload=result.as_payload(),
+            )
+            locked.status = BrainReporting.Status.READY
+            locked.rejection_code = ""
+            locked.rejection_message = ""
+            locked.save(
+                update_fields=["status", "rejection_code", "rejection_message", "updated_at"]
+            )
+    finally:
+        _release_extraction_lock(reporting.id)
     logger.info(
         "brain_reporting_ready",
         extra={
@@ -170,14 +180,19 @@ def _delete_abandoned_draft(reporting_id) -> bool:
             return False
         if BrainExtraction.objects.filter(reporting_id=reporting.pk).exists():
             return False
-        storage_key = reporting.storage_key
-        if storage_key and not _storage_key_removed(storage_key):
+        if not _try_acquire_extraction_lock(reporting.id):
             return False
-        deleted_count, _ = BrainReporting.objects.filter(
-            pk=reporting.pk,
-            status=BrainReporting.Status.DRAFT,
-        ).delete()
-        return deleted_count > 0
+        try:
+            storage_key = reporting.storage_key
+            if storage_key and not _storage_key_removed(storage_key):
+                return False
+            deleted_count, _ = BrainReporting.objects.filter(
+                pk=reporting.pk,
+                status=BrainReporting.Status.DRAFT,
+            ).delete()
+            return deleted_count > 0
+        finally:
+            _release_extraction_lock(reporting.id)
 
 
 def _storage_key_removed(storage_key: str) -> bool:
@@ -208,7 +223,7 @@ def _mark_rejected(reporting: BrainReporting, *, code: str, message: str) -> Non
 def _validate_period(period_start: date | None, period_end: date | None) -> None:
     if (period_start is None) ^ (period_end is None):
         raise ReportingRejected(code="period_incomplete", message=_PERIOD)
-    if period_start is not None and period_end is not None and period_end < period_start:
+    if period_start is not None and period_end is not None and period_end <= period_start:
         raise ReportingRejected(code="period_invalid", message=_PERIOD_ORDER)
 
 
@@ -229,6 +244,28 @@ def _read_bounded(content: bytes | BinaryIO) -> bytes:
             raise ReportingRejected(code="file_too_large", message=_TOO_LARGE)
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+def _advisory_key(reporting_id) -> int:
+    return int.from_bytes(reporting_id.bytes[:8], "big", signed=True)
+
+
+def _acquire_extraction_lock(reporting_id) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_lock(%s)", [_advisory_key(reporting_id)])
+        cursor.fetchone()
+
+
+def _try_acquire_extraction_lock(reporting_id) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [_advisory_key(reporting_id)])
+        return bool(cursor.fetchone()[0])
+
+
+def _release_extraction_lock(reporting_id) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_unlock(%s)", [_advisory_key(reporting_id)])
+        cursor.fetchone()
 
 
 def _basename(filename: str) -> str:

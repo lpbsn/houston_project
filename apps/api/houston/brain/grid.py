@@ -43,8 +43,16 @@ def extract_grid(
             continue
         scope = _row_scope(row)
         for column_index, cell in enumerate(row):
+            if cell.omit:
+                continue
             header = labels[column_index] if column_index < len(labels) else None
-            locator = locate(row_index, column_index, header.label if header else None)
+            locator = _located(
+                locate,
+                row_index,
+                column_index,
+                header.label if header else None,
+                cell,
+            )
             if cell.source == SOURCE_ABSENT:
                 measures.append(
                     _measure(
@@ -237,6 +245,12 @@ def _is_numeric_like(cell: GridCell) -> bool:
 def _header_labels(row: list[GridCell]):
     labels = []
     for cell in row:
+        if cell.horizontal_continuation and labels:
+            labels.append(labels[-1])
+            continue
+        if cell.omit:
+            labels.append(None)
+            continue
         text = (cell.raw or "").strip()
         labels.append(interpret_label(text) if text else None)
     return labels
@@ -255,6 +269,8 @@ def _numeric_columns(rows: list[list[GridCell]], header_at: int | None) -> set[i
 def _preamble(row, row_index: int, locate, kind: str) -> list[QualitativeBlock]:
     blocks = []
     for column_index, cell in enumerate(row):
+        if cell.omit:
+            continue
         text = (cell.raw or "").strip()
         if not text:
             continue
@@ -262,7 +278,7 @@ def _preamble(row, row_index: int, locate, kind: str) -> list[QualitativeBlock]:
             QualitativeBlock(
                 kind=kind,
                 text=text,
-                locator=locate(row_index, column_index, None),
+                locator=_located(locate, row_index, column_index, None, cell),
             )
         )
     return blocks
@@ -271,6 +287,8 @@ def _preamble(row, row_index: int, locate, kind: str) -> list[QualitativeBlock]:
 def _header_blocks(row, row_index: int, locate) -> list[QualitativeBlock]:
     blocks = []
     for column_index, cell in enumerate(row):
+        if cell.omit:
+            continue
         text = (cell.raw or "").strip()
         if not text:
             continue
@@ -278,10 +296,19 @@ def _header_blocks(row, row_index: int, locate) -> list[QualitativeBlock]:
             QualitativeBlock(
                 kind="label",
                 text=text,
-                locator=locate(row_index, column_index, text),
+                locator=_located(locate, row_index, column_index, text, cell),
             )
         )
     return blocks
+
+
+def _located(locate, row_index: int, column_index: int, header: str | None, cell: GridCell) -> dict:
+    locator = locate(row_index, column_index, header)
+    if cell.column_span > 1:
+        locator["column_span"] = cell.column_span
+    if cell.row_span > 1:
+        locator["row_span"] = cell.row_span
+    return locator
 
 
 def _row_scope(row: list[GridCell]) -> str | None:

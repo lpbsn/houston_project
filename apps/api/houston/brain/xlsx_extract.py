@@ -29,7 +29,12 @@ _CHARTS_ONLY = (
 
 def extract_xlsx(raw: bytes, budget: ExtractionBudget) -> ExtractionResult:
     budget.check_time()
-    names = zip_entry_names(raw, invalid_code="invalid_xlsx", invalid_message=_INVALID)
+    names = zip_entry_names(
+        raw,
+        budget,
+        invalid_code="invalid_xlsx",
+        invalid_message=_INVALID,
+    )
     warnings = _package_warnings(names)
     formulas, external = _formula_index(raw, budget)
     if external:

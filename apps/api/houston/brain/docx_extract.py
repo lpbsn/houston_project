@@ -5,14 +5,25 @@ import io
 from houston.brain.bounds import ExtractionBudget, zip_entry_names
 from houston.brain.errors import ExtractionRejected
 from houston.brain.grid import extract_grid
-from houston.brain.records import ExtractionResult, GridCell, QualitativeBlock
+from houston.brain.records import (
+    SOURCE_EMPTY,
+    SOURCE_TEXT,
+    ExtractionResult,
+    GridCell,
+    QualitativeBlock,
+)
 
 _INVALID = "Le fichier DOCX n'est pas exploitable."
 
 
 def extract_docx(raw: bytes, budget: ExtractionBudget) -> ExtractionResult:
     budget.check_time()
-    names = zip_entry_names(raw, invalid_code="invalid_docx", invalid_message=_INVALID)
+    names = zip_entry_names(
+        raw,
+        budget,
+        invalid_code="invalid_docx",
+        invalid_message=_INVALID,
+    )
     warnings = _package_warnings(names)
     document = _open(raw)
     if _has_text_boxes(document):
@@ -60,15 +71,7 @@ def extract_docx(raw: bytes, budget: ExtractionBudget) -> ExtractionResult:
                 )
             )
             continue
-        grid: list[list[GridCell]] = []
-        for row in block.rows:
-            budget.add_row()
-            budget.check_columns(len(row.cells))
-            grid_row = []
-            for cell in row.cells:
-                budget.add_cell()
-                grid_row.append(GridCell(raw=cell.text))
-            grid.append(grid_row)
+        grid = _table_grid(block, budget)
         current = block_index
 
         def locate(row_index: int, column_index: int, header: str | None, *, table_block=current):
@@ -111,6 +114,102 @@ def _package_warnings(names: list[str]) -> list[dict]:
             }
         )
     return warnings
+
+
+def _table_grid(table, budget: ExtractionBudget) -> list[list[GridCell]]:
+    specs = [_row_specs(row) for row in table._tbl.tr_lst]
+    grid: list[list[GridCell]] = []
+    for row_index, row in enumerate(specs):
+        budget.add_row()
+        budget.check_columns(_row_width(row))
+        expanded: list[GridCell] = []
+        column = 0
+        for span, vmerge, text in row:
+            if vmerge == "continue":
+                for _offset in range(span):
+                    budget.add_cell()
+                    expanded.append(GridCell(source=SOURCE_EMPTY, omit=True))
+                column += span
+                continue
+            row_span = _row_span(specs, row_index, column, span) if vmerge == "restart" else 1
+            budget.add_cell()
+            expanded.append(
+                GridCell(raw=text, source=SOURCE_TEXT, column_span=span, row_span=row_span)
+            )
+            for _offset in range(span - 1):
+                budget.add_cell()
+                expanded.append(
+                    GridCell(source=SOURCE_EMPTY, omit=True, horizontal_continuation=True)
+                )
+            column += span
+        grid.append(expanded)
+    return grid
+
+
+def _row_specs(row) -> list[tuple[int, str | None, str]]:
+    return [_tc_spec(cell) for cell in row.tc_lst]
+
+
+def _tc_spec(cell) -> tuple[int, str | None, str]:
+    properties = cell.tcPr
+    span = 1
+    vmerge = None
+    if properties is not None:
+        if properties.gridSpan is not None and properties.gridSpan.val:
+            span = int(properties.gridSpan.val)
+        if properties.vMerge is not None:
+            vmerge = properties.vMerge.val or "continue"
+    return span, vmerge, _tc_text(cell)
+
+
+def _tc_text(cell) -> str:
+    from docx.oxml.ns import qn
+
+    parts: list[str] = []
+    for paragraph in cell.findall(qn("w:p")):
+        chunks: list[str] = []
+        _collect_text(paragraph, chunks)
+        text = "".join(chunks).strip()
+        if text:
+            parts.append(text)
+    return "\n".join(parts)
+
+
+def _collect_text(element, chunks: list[str]) -> None:
+    from docx.oxml.ns import qn
+
+    if element.tag == qn("w:txbxContent"):
+        return
+    if element.tag == qn("w:t") and element.text:
+        chunks.append(element.text)
+    for child in element:
+        _collect_text(child, chunks)
+
+
+def _row_width(row: list[tuple[int, str | None, str]]) -> int:
+    return sum(span for span, _vmerge, _text in row)
+
+
+def _row_span(specs, row_index: int, column: int, span: int) -> int:
+    count = 1
+    for look_ahead in range(row_index + 1, len(specs)):
+        if all(
+            _vmerge_at(specs[look_ahead], column + offset) == "continue"
+            for offset in range(span)
+        ):
+            count += 1
+            continue
+        break
+    return count
+
+
+def _vmerge_at(row: list[tuple[int, str | None, str]], column: int) -> str | None:
+    cursor = 0
+    for span, vmerge, _text in row:
+        if cursor <= column < cursor + span:
+            return vmerge
+        cursor += span
+    return None
 
 
 def _open(raw: bytes):

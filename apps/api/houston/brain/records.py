@@ -6,6 +6,20 @@ from decimal import Decimal
 EXTRACTOR_ID = "houston.brain.extract"
 EXTRACTOR_VERSION = "1"
 
+# Regions the extractor did not read. A future analysis must treat coverage as partial.
+OMITTED_CONTENT = frozenset(
+    {
+        "text_boxes_not_extracted",
+        "header_footer_not_extracted",
+        "charts_not_interpreted",
+        "comments_not_extracted",
+        "images_not_interpreted",
+        "pdf_page_without_text",
+        "embedded_objects_ignored",
+        "external_link_ignored",
+    }
+)
+
 VALUE_NUMBER = "number"
 VALUE_ZERO = "zero"
 VALUE_EMPTY = "empty"
@@ -28,6 +42,10 @@ class GridCell:
     row: int | None = None
     column: int | None = None
     coordinate: str | None = None
+    column_span: int = 1
+    row_span: int = 1
+    omit: bool = False
+    horizontal_continuation: bool = False
 
     def is_empty(self) -> bool:
         if self.source == SOURCE_EMPTY:
@@ -88,9 +106,23 @@ class ExtractionResult:
         return any(measure.value_kind != VALUE_EMPTY for measure in self.measures)
 
     def as_payload(self) -> dict:
+        warnings = []
+        limits = []
+        for warning in self.warnings:
+            item = dict(warning)
+            omits = item.get("code") in OMITTED_CONTENT
+            item["omits_content"] = omits
+            warnings.append(item)
+            if omits:
+                limit = {"code": item["code"], "message": item["message"]}
+                if "locator" in item:
+                    limit["locator"] = item["locator"]
+                limits.append(limit)
         return {
             "format": self.source_format,
             "measures": [measure.as_dict() for measure in self.measures],
             "qualitative": [block.as_dict() for block in self.qualitative],
-            "warnings": self.warnings,
+            "warnings": warnings,
+            "limits": limits,
+            "coverage": "partial" if limits else "complete",
         }

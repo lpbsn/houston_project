@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import re
+import threading
 import zipfile
 from datetime import timedelta
 
@@ -18,7 +19,11 @@ from pypdf.generic import (
 from houston.brain.errors import ReportingRejected
 from houston.brain.models import BrainExtraction, BrainReporting
 from houston.brain.records import EXTRACTOR_ID, EXTRACTOR_VERSION
-from houston.brain.services import cleanup_abandoned_reporting_drafts, prepare_reporting
+from houston.brain.services import (
+    _advisory_key,
+    cleanup_abandoned_reporting_drafts,
+    prepare_reporting,
+)
 from houston.testing.factories import build_membership
 from houston.uploads.private_storage import get_private_media_storage
 
@@ -332,15 +337,27 @@ def test_csv_period_header_does_not_become_the_confirmed_period():
     assert reporting.period_start is None
 
 
-def test_confirmed_period_is_stored_when_the_caller_provides_it():
+def test_confirmed_period_uses_an_exclusive_civil_end():
+    start = timezone.now().date().replace(month=3, day=1)
+    end = start.replace(month=4, day=1)
     reporting = _prepare(
         "periode.csv",
         "Libellé;CA\nBar;1\n".encode(),
-        period_start=timezone.now().date().replace(day=1),
-        period_end=timezone.now().date(),
+        period_start=start,
+        period_end=end,
     )
-    assert reporting.period_start is not None
+    assert reporting.period_start == start
+    assert reporting.period_end == end
     assert reporting.period_confirmed_at is not None
+    assert _payload(reporting)["coverage"] == "complete"
+    with pytest.raises(ReportingRejected) as refused:
+        _prepare(
+            "periode.csv",
+            "Libellé;CA\nBar;1\n".encode(),
+            period_start=start,
+            period_end=start,
+        )
+    assert refused.value.code == "period_invalid"
 
 
 def test_ambiguous_csv_separator_is_rejected_without_extraction():
@@ -387,6 +404,8 @@ def test_xlsx_external_link_is_not_opened():
     assert any(
         warning["code"] == "external_link_ignored" for warning in _payload(reporting)["warnings"]
     )
+    assert _payload(reporting)["coverage"] == "partial"
+    assert any(limit["code"] == "external_link_ignored" for limit in _payload(reporting)["limits"])
 
 
 def test_xlsx_macros_are_not_executed_and_cell_values_remain():
@@ -432,8 +451,11 @@ def test_decorative_pdf_image_does_not_reject_text():
     assert reporting.status == BrainReporting.Status.READY
     assert _blocks(reporting, kind="paragraph")[0]["text"] == "Activite stable."
     assert any(
-        warning["code"] == "images_not_interpreted" for warning in _payload(reporting)["warnings"]
+        warning["code"] == "images_not_interpreted" and warning["omits_content"]
+        for warning in _payload(reporting)["warnings"]
     )
+    assert _payload(reporting)["coverage"] == "partial"
+    assert any(limit["code"] == "images_not_interpreted" for limit in _payload(reporting)["limits"])
 
 
 def test_docx_heading_paragraph_and_table_stay_in_order():
@@ -448,6 +470,41 @@ def test_docx_heading_paragraph_and_table_stay_in_order():
     assert measure["value"] == "1200"
     assert measure["locator"]["format"] == "docx"
     assert measure["locator"]["block"] > paragraph["locator"]["block"]
+
+
+def test_docx_merged_cells_keep_one_measure_and_its_span():
+    from docx import Document
+
+    document = Document()
+    table = document.add_table(rows=3, cols=3)
+    table.cell(0, 0).text = "Libellé"
+    table.cell(0, 1).text = "CA HT"
+    table.cell(0, 1).merge(table.cell(0, 2))
+    table.cell(1, 0).text = "Restaurant"
+    table.cell(1, 1).text = "1200"
+    table.cell(1, 1).merge(table.cell(2, 1))
+    table.cell(1, 2).text = "3"
+    table.cell(2, 0).text = "Bar"
+    table.cell(2, 2).text = "4"
+    payload = io.BytesIO()
+    document.save(payload)
+    reporting = _prepare("fusion.docx", payload.getvalue())
+    labels = [block for block in _payload(reporting)["qualitative"] if block["text"] == "CA HT"]
+    assert len(labels) == 1
+    assert labels[0]["locator"]["column_span"] == 2
+    amounts = [
+        measure
+        for measure in _measures(reporting, label="CA HT")
+        if measure["value"] == "1200"
+    ]
+    assert len(amounts) == 1
+    assert amounts[0]["locator"]["row_span"] == 2
+    assert amounts[0]["locator"]["row"] == 2
+    assert sorted(measure["value"] for measure in _measures(reporting, label="CA HT")) == [
+        "1200",
+        "3",
+        "4",
+    ]
 
 
 def test_doc_is_refused_before_storage_or_extraction():
@@ -585,6 +642,58 @@ def test_cleanup_deletes_only_abandoned_drafts_and_their_files(settings):
     assert cleanup_abandoned_reporting_drafts() == 1
     assert not BrainReporting.objects.filter(pk=old_drafts[2].pk).exists()
     assert not storage.exists(old_keys[2])
+
+
+def test_cleanup_does_not_delete_a_draft_locked_by_extraction():
+    draft = _draft(age=timedelta(hours=30))
+    key = _advisory_key(draft.id)
+    ready = threading.Event()
+    release = threading.Event()
+    errors: list[BaseException] = []
+
+    def hold() -> None:
+        from django.db import connection as thread_connection
+
+        try:
+            with thread_connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_lock(%s)", [key])
+                cursor.fetchone()
+            ready.set()
+            release.wait(10)
+            with thread_connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_unlock(%s)", [key])
+                cursor.fetchone()
+        except BaseException as exc:
+            errors.append(exc)
+            ready.set()
+        finally:
+            thread_connection.close()
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    assert ready.wait(10)
+    try:
+        assert not errors
+        assert cleanup_abandoned_reporting_drafts() == 0
+        still_draft = BrainReporting.objects.filter(
+            pk=draft.pk,
+            status=BrainReporting.Status.DRAFT,
+        )
+        assert still_draft.exists()
+        assert get_private_media_storage().exists(draft.storage_key)
+        BrainReporting.objects.filter(pk=draft.pk).update(status=BrainReporting.Status.READY)
+        assert cleanup_abandoned_reporting_drafts() == 0
+        assert get_private_media_storage().exists(draft.storage_key)
+    finally:
+        release.set()
+        thread.join(10)
+    assert not errors
+    assert cleanup_abandoned_reporting_drafts() == 0
+    assert get_private_media_storage().exists(draft.storage_key)
+    BrainReporting.objects.filter(pk=draft.pk).update(status=BrainReporting.Status.DRAFT)
+    assert cleanup_abandoned_reporting_drafts() == 1
+    assert not BrainReporting.objects.filter(pk=draft.pk).exists()
+    assert not get_private_media_storage().exists(draft.storage_key)
 
 
 def test_cleanup_keeps_the_draft_when_storage_delete_fails(monkeypatch):

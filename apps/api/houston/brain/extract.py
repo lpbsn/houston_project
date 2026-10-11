@@ -11,8 +11,12 @@ from houston.brain.xlsx_extract import extract_xlsx
 _EMPTY = "Le fichier ne contient pas de contenu analysable."
 
 
-def extract_document(raw: bytes, source_format: str) -> ExtractionResult:
-    budget = ExtractionBudget()
+def extract_document(
+    raw: bytes,
+    source_format: str,
+    budget: ExtractionBudget | None = None,
+) -> ExtractionResult:
+    budget = budget or ExtractionBudget()
     if source_format == "csv":
         result = extract_csv(raw, budget)
     elif source_format == "xlsx":
