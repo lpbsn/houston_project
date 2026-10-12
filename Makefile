@@ -20,7 +20,7 @@
 # -----------------------------------------------------------------------------
 
 COMPOSE := docker compose
-CELERY_SERVICES := celery-ai-interactive celery-operational celery-background
+CELERY_SERVICES := celery-ai-interactive celery-operational celery-background celery-brain
 COMPOSE_PROD_TEST := $(COMPOSE) -f docker-compose.prod-test.yml -p houston-prod-test
 API_EXEC := $(COMPOSE) exec -T api
 API_EXEC_INTERACTIVE := $(COMPOSE) exec api
@@ -184,6 +184,7 @@ docker-verify-security:
 	$(COMPOSE) exec -T celery-ai-interactive id
 	$(COMPOSE) exec -T celery-operational id
 	$(COMPOSE) exec -T celery-background id
+	$(COMPOSE) exec -T celery-brain id
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py check'
 
 # -----------------------------------------------------------------------------

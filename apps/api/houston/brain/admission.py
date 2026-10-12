@@ -8,6 +8,7 @@ import uuid
 from django.conf import settings
 from django.db import IntegrityError, transaction
 
+from houston.brain.configuration import admission_configuration
 from houston.brain.errors import (
     BrainAccessDenied,
     BrainCapacityUnavailable,
@@ -154,7 +155,7 @@ def _insert_analysis(
         idempotency_key=idempotency_key,
         status=BrainAnalysis.Status.QUEUED,
         attempt_token=token,
-        configuration=_configuration(extraction),
+        configuration=admission_configuration(extraction),
     )
     BrainSlot.objects.create(
         establishment_id=establishment_id,
@@ -163,6 +164,9 @@ def _insert_analysis(
         status=BrainSlot.Status.QUEUED,
         token=token,
     )
+    from houston.brain.runtime import schedule_analysis_publish
+
+    schedule_analysis_publish(analysis.id, token)
     logger.info(
         "brain_analysis_admitted",
         extra={
@@ -173,20 +177,3 @@ def _insert_analysis(
         },
     )
     return analysis
-
-
-def _configuration(extraction: BrainExtraction) -> dict:
-    return {
-        "extractor_id": extraction.extractor_id,
-        "extractor_version": extraction.extractor_version,
-        "source_sha256": extraction.source_sha256,
-        "schema_version": None,
-        "prompt_version": None,
-        "knowledge_version": None,
-        "model": None,
-        "ceilings": {
-            "capture_timeout_seconds": int(settings.HOUSTON_BRAIN_CAPTURE_TIMEOUT_SECONDS),
-            "max_candidates_per_category": int(settings.HOUSTON_BRAIN_MAX_CANDIDATES_PER_CATEGORY),
-            "max_queued_and_running": int(settings.HOUSTON_BRAIN_MAX_QUEUED_AND_RUNNING),
-        },
-    }

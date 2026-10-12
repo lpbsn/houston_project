@@ -49,13 +49,25 @@ def test_every_houston_task_is_explicitly_routed():
 def test_interactive_and_background_workers_do_not_share_queues():
     assert QUEUE_AI_INTERACTIVE not in WORKER_QUEUES["background"]
     assert QUEUE_AI_BACKGROUND not in WORKER_QUEUES["ai_interactive"]
+    assert "brain_analysis" not in WORKER_QUEUES["ai_interactive"]
+    assert "brain_analysis" not in WORKER_QUEUES["operational"]
+    assert "brain_analysis" not in WORKER_QUEUES["background"]
+    assert QUEUE_AI_INTERACTIVE not in WORKER_QUEUES["brain"]
+    assert "operational" not in WORKER_QUEUES["brain"]
+    assert "ai_background" not in WORKER_QUEUES["brain"]
+    assert "maintenance" not in WORKER_QUEUES["brain"]
+    routes = settings.CELERY_TASK_ROUTES
+    assert routes["houston.signals.tasks.process_observation_task"]["queue"] == "ai_interactive"
+    assert routes["houston.brain.tasks.run_brain_analysis_task"]["queue"] == "brain_analysis"
+    assert routes["houston.brain.tasks.recover_brain_analysis_task"]["queue"] == "operational"
 
 
-def test_local_and_railway_run_three_worker_pools_without_redis_broker():
+def test_local_and_railway_run_worker_pools_without_redis_broker():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
     assert "celery-ai-interactive:" in compose
     assert "celery-operational:" in compose
     assert "celery-background:" in compose
+    assert "celery-brain:" in compose
     assert "amqp://houston:houston@rabbitmq:5672//" in compose
     assert "CELERY_RESULT_BACKEND" not in compose
     assert "-Q ai_interactive" in compose
@@ -63,9 +75,18 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
     assert "--without-mingle" not in compose
     assert "-Q operational" in compose
     assert "-Q ai_background,maintenance" in compose
+    assert "-Q brain_analysis" in compose
+    brain = compose.split("celery-brain:", 1)[1].split("celery-beat:", 1)[0]
+    assert "-Q brain_analysis" in brain
+    assert "--prefetch-multiplier=1" in brain
+    assert "ai_interactive" not in brain
+    for pool in ("celery-ai-interactive:", "celery-operational:", "celery-background:"):
+        block = compose.split(pool, 1)[1].split("\n  celery-", 1)[0]
+        assert "brain_analysis" not in block
     assert "CELERY_AI_INTERACTIVE_CONCURRENCY:-2" in compose
     assert "CELERY_OPERATIONAL_CONCURRENCY:-1" in compose
     assert "CELERY_BACKGROUND_CONCURRENCY:-1" in compose
+    assert "CELERY_BRAIN_CONCURRENCY:-2" in compose
     assert "CELERY_WORKER_CONCURRENCY:-4" not in compose
 
     interactive = (
@@ -73,11 +94,18 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
     ).read_text()
     operational = (REPO_ROOT / "infra/railway/celery-operational/railway.toml").read_text()
     background = (REPO_ROOT / "infra/railway/celery-background/railway.toml").read_text()
+    brain_railway = (REPO_ROOT / "infra/railway/celery-brain/railway.toml").read_text()
     assert "-Q ai_interactive" in interactive
     assert "--prefetch-multiplier=1" in interactive
+    assert "brain_analysis" not in interactive
     assert "-Q operational" in operational
     assert "ai_background" not in operational
+    assert "brain_analysis" not in operational
     assert "-Q ai_background,maintenance" in background
+    assert "brain_analysis" not in background
+    assert "-Q brain_analysis" in brain_railway
+    assert "--prefetch-multiplier=1" in brain_railway
+    assert "ai_interactive" not in brain_railway
     assert "CELERY_RESULT_BACKEND" not in (
         REPO_ROOT / "apps/api/config/settings.py"
     ).read_text()
@@ -88,6 +116,7 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
         "infra/railway/celery-ai-interactive/railway.toml",
         "infra/railway/celery-operational/railway.toml",
         "infra/railway/celery-background/railway.toml",
+        "infra/railway/celery-brain/railway.toml",
     ):
         start_command = next(
             line

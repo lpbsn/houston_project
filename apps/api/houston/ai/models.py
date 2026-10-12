@@ -10,6 +10,7 @@ class AIUsageLog(BaseModel):
         TRANSCRIPTION = "transcription", "Transcription"
         OBSERVATION_PIPELINE = "observation_pipeline", "Observation pipeline"
         ANALYTICS_PATTERN = "analytics_pattern", "Analytics pattern"
+        BRAIN_ANALYSIS = "brain_analysis", "Brain analysis"
 
     class Status(models.TextChoices):
         STARTED = "started", "Started"

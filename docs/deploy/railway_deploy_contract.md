@@ -49,7 +49,7 @@ Railway evaluates patterns from the repository root (`/`). Changes under `/docs/
 | `/infra/docker/railway/**` | Yes | No | No |
 | `/infra/docker/api/**` | No | Yes | Yes |
 | `/infra/railway/api-web/**` | Yes | No | No |
-| `/infra/railway/celery-ai-interactive/**`, `/infra/railway/celery-operational/**`, `/infra/railway/celery-background/**` | No | Yes, the matching service | No |
+| `/infra/railway/celery-ai-interactive/**`, `/infra/railway/celery-operational/**`, `/infra/railway/celery-background/**`, `/infra/railway/celery-brain/**` | No | Yes, the matching service | No |
 | `/infra/railway/celery-beat/**` | No | No | Yes |
 | `/pyproject.toml`, `/uv.lock` | Yes | Yes | Yes |
 | `/.dockerignore` | Yes | Yes | Yes |
@@ -183,6 +183,9 @@ Create these three private services before the next deploy and remove the retire
 | `celery-ai-interactive` | `/infra/railway/celery-ai-interactive/railway.toml` | `ai_interactive`, prefetch 1 |
 | `celery-operational` | `/infra/railway/celery-operational/railway.toml` | `operational` |
 | `celery-background` | `/infra/railway/celery-background/railway.toml` | `ai_background`, `maintenance` |
+| `celery-brain` | `/infra/railway/celery-brain/railway.toml` | `brain_analysis`, prefetch 1 |
+
+`celery-brain` is an additional pool. It does not replace the three field workers and it does not consume `ai_interactive`. Initial concurrency is 2, on top of the measured 2 / 1 / 1 envelope: about two extra Postgres connections while its children run. Create the private service before sending Brain work to staging. Do not deploy it as part of this change's local implementation.
 
 Same multi-stage build as `api-web` Python layer: **uv `0.11.16`** and `build-essential` in the builder only; production runtime without `uv`/`curl`/`gcc`/`make`.
 
@@ -208,7 +211,13 @@ startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then e
 startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
 ```
 
-* `CELERY_WORKER_CONCURRENCY` is **required** on each worker service (see [`railway_variables.md`](railway_variables.md)). Initial values, from the measured 4-process envelope: `2` on `celery-ai-interactive`, `1` on `celery-operational`, `1` on `celery-background`.
+`celery-brain`:
+
+```toml
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-brain@%h -Q brain_analysis --prefetch-multiplier=1 --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+```
+
+* `CELERY_WORKER_CONCURRENCY` is **required** on each worker service (see [`railway_variables.md`](railway_variables.md)). Initial values, from the measured 4-process envelope: `2` on `celery-ai-interactive`, `1` on `celery-operational`, `1` on `celery-background`. `celery-brain` starts at `2` in addition to that envelope. The sweep that recovers Brain transport stays on `celery-operational`.
 * Shell validates presence, decimal digits only, value > 0, no leading zero — **before** `exec` (so Celery never receives `--concurrency=0`, which would fall back to CPU-count default).
 * `exec` replaces the shell so SIGTERM reaches the Celery process for graceful shutdown.
 

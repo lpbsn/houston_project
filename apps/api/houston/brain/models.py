@@ -144,6 +144,10 @@ class BrainAnalysis(BaseModel):
     claimed_at = models.DateTimeField(null=True, blank=True)
     lease_expires_at = models.DateTimeField(null=True, blank=True)
     cancel_requested_at = models.DateTimeField(null=True, blank=True)
+    failure_code = models.CharField(max_length=80, blank=True, default="")
+    reserved_input_tokens = models.PositiveIntegerField(default=0)
+    consumed_input_tokens = models.PositiveIntegerField(default=0)
+    provider_calls_used = models.PositiveIntegerField(default=0)
     configuration = models.JSONField()
 
     class Meta:
@@ -167,6 +171,7 @@ class BrainAnalysis(BaseModel):
         ]
         indexes = [
             models.Index(fields=["author"], name="brain_an_author_idx"),
+            models.Index(fields=["status", "created_at"], name="brain_an_stat_cr_idx"),
         ]
 
     def __str__(self) -> str:
@@ -394,3 +399,61 @@ class BrainObjectiveRevision(BaseModel):
 
     def __str__(self) -> str:
         return f"BrainObjectiveRevision {self.id}"
+
+
+class BrainLot(BaseModel):
+    """One validated section batch. Reuse compares input and frozen configuration hashes."""
+
+    class Status(models.TextChoices):
+        VALIDATED = "validated", "Validated"
+
+    analysis = models.ForeignKey(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="lots",
+    )
+    stable_key = models.CharField(max_length=64)
+    input_hash = models.CharField(max_length=64)
+    configuration_hash = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=Status.choices)
+    output = models.JSONField()
+    attempt_token = models.UUIDField()
+    reserved_input_tokens = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["analysis", "stable_key"],
+                name="brain_lot_an_key_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(status="validated"),
+                name="brain_lot_status_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["analysis", "status"],
+                name="brain_lot_an_stat_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainLot {self.stable_key} [{self.status}]"
+
+
+class BrainWorkerBeat(models.Model):
+    """One Brain worker process. A fresh beat shows that this process is alive."""
+
+    process_name = models.CharField(max_length=200, primary_key=True)
+    beat_at = models.DateTimeField()
+    concurrency = models.PositiveIntegerField()
+    in_flight = models.PositiveIntegerField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["beat_at"], name="brain_beat_at_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainWorkerBeat {self.process_name} {self.in_flight}/{self.concurrency}"
