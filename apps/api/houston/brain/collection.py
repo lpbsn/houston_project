@@ -54,6 +54,7 @@ CATEGORY_EXECUTION = "execution"
 CATEGORY_TASK = "execution_task"
 CATEGORY_PLAN = "plan"
 CATEGORY_REPORTING = "reporting"
+CATEGORY_DOCUMENT = "document"
 CATEGORY_OBJECTIVE = "objective"
 
 ROLE_OVERLAP = "chevauchement"
@@ -65,6 +66,8 @@ ROLE_PRIOR = "reporting_anterieur"
 ROLE_PERIOD = "periode"
 ROLE_SUIVI = "suivi"
 ROLE_BEFORE = "anterieur"
+ROLE_CURRENT_MEASURE = "mesure"
+ROLE_CURRENT_QUALITATIVE = "qualitatif"
 
 NOT_RECONSTRUCTABLE = "not_reconstructable"
 REASON_NOT_COMPARABLE = "periode_non_comparable"
@@ -360,6 +363,7 @@ def collect_capture(
         exclusions=objective_excluded,
     )
     rows = [
+        *_document_rows(extraction_payload),
         *overlap_items,
         *late_kept,
         *execution_items,
@@ -1078,6 +1082,44 @@ def _status_at(at, reliable_from, events, reconstruct) -> dict:
     if status is None:
         return {"value": NOT_RECONSTRUCTABLE}
     return {"value": status}
+
+
+def _document_rows(payload: dict) -> list[DossierRow]:
+    """Current reporting, copied from the extraction already loaded for this capture."""
+    if not isinstance(payload, dict):
+        return []
+    rows = []
+    for index, block in enumerate(payload.get("qualitative") or []):
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("text") or "")
+        if not text.strip():
+            continue
+        locator = block.get("locator") if isinstance(block.get("locator"), dict) else {}
+        rows.append(
+            DossierRow(
+                CATEGORY_DOCUMENT,
+                f"document:qualitative:{index:04d}",
+                ROLE_CURRENT_QUALITATIVE,
+                {
+                    "kind": str(block.get("kind") or "paragraph"),
+                    "text": text,
+                    "locator": locator,
+                },
+                "reporting_courant",
+            )
+        )
+    for index, measure in enumerate(_measures(payload)):
+        rows.append(
+            DossierRow(
+                CATEGORY_DOCUMENT,
+                f"document:measure:{index:04d}",
+                ROLE_CURRENT_MEASURE,
+                measure,
+                "reporting_courant",
+            )
+        )
+    return rows
 
 
 def _measures(payload) -> list[dict]:

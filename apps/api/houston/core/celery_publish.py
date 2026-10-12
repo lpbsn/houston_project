@@ -18,7 +18,13 @@ _PUBLISH_RETRY_POLICY = {
 }
 
 
-def publish_celery_task(task, *, args: Sequence[object], countdown: int | None = None) -> bool:
+def publish_celery_task(
+    task,
+    *,
+    args: Sequence[object],
+    countdown: int | None = None,
+    queue: str | None = None,
+) -> bool:
     """Publish one task and wait for the broker confirm, bounded by a short timeout.
 
     A timeout or broker error is logged and swallowed. Callers keep the durable
@@ -46,15 +52,18 @@ def publish_celery_task(task, *, args: Sequence[object], countdown: int | None =
                 if confirm_timeout <= 0:
                     outcome["exc"] = TimeoutError("PublishTimeout")
                     return
-                task.apply_async(
-                    args=tuple(args),
-                    countdown=countdown,
-                    retry=False,
-                    retry_policy=_PUBLISH_RETRY_POLICY,
-                    connection=connection,
-                    timeout=confirm_timeout,
-                    confirm_timeout=confirm_timeout,
-                )
+                send = {
+                    "args": tuple(args),
+                    "countdown": countdown,
+                    "retry": False,
+                    "retry_policy": _PUBLISH_RETRY_POLICY,
+                    "connection": connection,
+                    "timeout": confirm_timeout,
+                    "confirm_timeout": confirm_timeout,
+                }
+                if queue:
+                    send["queue"] = queue
+                task.apply_async(**send)
         except Exception as exc:
             outcome["exc"] = exc
             return

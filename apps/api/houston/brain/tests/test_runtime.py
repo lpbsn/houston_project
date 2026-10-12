@@ -12,6 +12,7 @@ from django.db import connections
 from houston.ai.models import AIUsageLog
 from houston.brain.admission import admit_brain_work
 from houston.brain.configuration import digest, estimate_tokens
+from houston.brain.contract import SYNTHESIS_KEY, minimal_analysis
 from houston.brain.lots import plan_lots, sections_from_payload
 from houston.brain.models import BrainAnalysis, BrainDossier, BrainExtraction, BrainLot, BrainSlot
 from houston.brain.provider import ProviderCallResult
@@ -49,8 +50,9 @@ class ScriptedProvider:
 
 
 def _ok(lot_key: str = "lot") -> ProviderCallResult:
+    del lot_key
     return ProviderCallResult(
-        output={"lot_key": lot_key, "section_markers": ["ok"]},
+        output=minimal_analysis(["s0000"]),
         truncated=False,
         input_tokens=None,
         output_tokens=1,
@@ -111,7 +113,7 @@ def test_absent_provider_usage_counts_as_the_reserved_call(monkeypatch):
     provider = ScriptedProvider(
         [
             ProviderCallResult(
-                output={"lot_key": "lot-0001"},
+                output=minimal_analysis(["s0000"]),
                 truncated=False,
                 input_tokens=None,
                 output_tokens=1,
@@ -121,8 +123,8 @@ def test_absent_provider_usage_counts_as_the_reserved_call(monkeypatch):
     run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
     analysis.refresh_from_db()
     lot = BrainLot.objects.get(analysis=analysis)
-    assert analysis.consumed_input_tokens == lot.reserved_input_tokens
-    assert analysis.consumed_input_tokens > 0
+    assert analysis.consumed_input_tokens == estimate_tokens(provider.calls[0]["payload"])
+    assert analysis.consumed_input_tokens >= lot.reserved_input_tokens
 
 
 def test_truncated_output_is_not_a_validated_lot(monkeypatch):
@@ -165,7 +167,7 @@ def test_validated_lot_is_reused_after_a_knowledge_setting_change(monkeypatch, s
     settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = first
     settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = first * 4
     settings.HOUSTON_BRAIN_MAX_CALLS = 4
-    analysis = _prepare(settings, ["alpha " * 40, "bravo " * 40], per_call=first, total=first * 4)
+    analysis = _prepare(settings, ["alpha " * 120, "bravo " * 120], per_call=first, total=first * 4)
     from houston.brain.provider import BrainProviderUnavailable
 
     provider = ScriptedProvider([_ok("one"), BrainProviderUnavailable()])
@@ -178,12 +180,22 @@ def test_validated_lot_is_reused_after_a_knowledge_setting_change(monkeypatch, s
     settings.HOUSTON_BRAIN_KNOWLEDGE_VERSION = "knowledge-activated"
     analysis.refresh_from_db()
     assert analysis.configuration["knowledge_version"] is None
-    follow = ScriptedProvider([_ok("two")])
+    follow = ScriptedProvider(
+        [
+            _ok("two"),
+            ProviderCallResult(
+                output=minimal_analysis(["s0000", "s0001"]),
+                truncated=False,
+                input_tokens=None,
+                output_tokens=1,
+            ),
+        ]
+    )
     run_brain_analysis(analysis.id, analysis.attempt_token, provider=follow)
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.COMPLETED
-    assert len(follow.calls) == 1
-    assert follow.calls[0]["lot_key"] != first_lot.stable_key
+    assert [call["lot_key"] for call in follow.calls] == ["lot-0002", SYNTHESIS_KEY]
+    assert first_lot.stable_key not in {call["lot_key"] for call in follow.calls}
     first_lot.refresh_from_db()
     assert first_lot.attempt_token == writer
     assert BrainLot.objects.filter(analysis=analysis).count() == 2
@@ -335,8 +347,18 @@ def pytest_settings():
 
 
 def _two_section_ceilings() -> tuple[int, int]:
-    one = {"kind": "paragraph", "text": "alpha " * 40, "locator": {"block": 0}}
-    two = {"kind": "paragraph", "text": "bravo " * 40, "locator": {"block": 1}}
+    one = {
+        "kind": "paragraph",
+        "text": "alpha " * 120,
+        "locator": {"block": 0},
+        "piece_id": "s0000",
+    }
+    two = {
+        "kind": "paragraph",
+        "text": "bravo " * 120,
+        "locator": {"block": 1},
+        "piece_id": "s0001",
+    }
     single = estimate_tokens({"sections": [one]})
     both = estimate_tokens({"sections": [one, two]})
     per_call = max(single, both - 1)

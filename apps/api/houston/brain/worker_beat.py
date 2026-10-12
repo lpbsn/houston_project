@@ -145,13 +145,19 @@ def _write() -> None:
 
 def _consumes_brain_queue() -> bool:
     from config.celery_routing import QUEUE_BRAIN_ANALYSIS
+    from django.conf import settings
 
+    expected = str(getattr(settings, "HOUSTON_BRAIN_ANALYSIS_QUEUE", "") or "")
     args = sys.argv
     for index, arg in enumerate(args):
+        names = []
         if arg == "-Q" and index + 1 < len(args):
-            return QUEUE_BRAIN_ANALYSIS in args[index + 1].split(",")
-        if arg.startswith("--queues="):
-            return QUEUE_BRAIN_ANALYSIS in arg.split("=", 1)[1].split(",")
+            names = args[index + 1].split(",")
+        elif arg.startswith("--queues="):
+            names = arg.split("=", 1)[1].split(",")
+        if not names:
+            continue
+        return QUEUE_BRAIN_ANALYSIS in names or expected in names
     return False
 
 

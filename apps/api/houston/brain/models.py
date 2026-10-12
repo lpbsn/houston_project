@@ -149,6 +149,7 @@ class BrainAnalysis(BaseModel):
     consumed_input_tokens = models.PositiveIntegerField(default=0)
     provider_calls_used = models.PositiveIntegerField(default=0)
     configuration = models.JSONField()
+    result = models.JSONField(null=True, blank=True)
 
     class Meta:
         constraints = [

@@ -33,6 +33,12 @@ def plan_lots(
             code="empty_document",
             message="Le fichier ne contient pas de contenu analysable.",
         )
+    numbered = []
+    for index, section in enumerate(sections):
+        item = dict(section)
+        item.setdefault("piece_id", f"s{index:04d}")
+        numbered.append(item)
+    sections = numbered
     groups: list[list[dict]] = []
     current: list[dict] = []
     for section in sections:
@@ -130,6 +136,8 @@ def sections_from_payload(payload: dict) -> list[dict]:
                     "locator": group["rows"][0]["locator"],
                 }
             )
+    for index, section in enumerate(sections):
+        section["piece_id"] = f"s{index:04d}"
     return sections
 
 
@@ -158,9 +166,12 @@ def _subdivide(section: dict, per_call_input_tokens: int) -> list[dict]:
     paragraphs = [part for part in str(section.get("text") or "").split("\n\n") if part.strip()]
     if len(paragraphs) <= 1:
         raise _unsplittable()
+    parent = str(section.get("piece_id") or "piece")
     pieces = []
-    for paragraph in paragraphs:
-        piece = _paragraph_payload(paragraph, section.get("locator") or {}, section)
+    for index, paragraph in enumerate(paragraphs):
+        child = dict(section)
+        child["piece_id"] = f"{parent}-p{index:04d}"
+        piece = _paragraph_payload(paragraph, section.get("locator") or {}, child)
         if estimate_tokens({"sections": [piece]}) > per_call_input_tokens:
             raise _unsplittable()
         pieces.append(piece)
@@ -171,9 +182,12 @@ def _table_rows(section: dict, per_call_input_tokens: int) -> list[dict]:
     rows = section.get("rows") or []
     if not rows:
         raise _unsplittable()
+    parent = str(section.get("piece_id") or "piece")
     pieces = []
-    for row in rows:
-        piece = _table_payload(section, [row])
+    for index, row in enumerate(rows):
+        child = dict(section)
+        child["piece_id"] = f"{parent}-p{index:04d}"
+        piece = _table_payload(child, [row])
         if estimate_tokens({"sections": [piece]}) > per_call_input_tokens:
             raise _unsplittable()
         pieces.append(piece)
@@ -188,6 +202,8 @@ def _section_payload(section: dict) -> dict:
 
 def _paragraph_payload(text: str, locator: dict, section: dict) -> dict:
     payload = {"kind": "paragraph", "text": text, "locator": locator}
+    if section.get("piece_id"):
+        payload["piece_id"] = section["piece_id"]
     if section.get("header"):
         payload["header"] = section["header"]
     if section.get("unit"):
@@ -196,13 +212,16 @@ def _paragraph_payload(text: str, locator: dict, section: dict) -> dict:
 
 
 def _table_payload(section: dict, rows: list[dict]) -> dict:
-    return {
+    payload = {
         "kind": "table",
         "header": section.get("header"),
         "unit": section.get("unit"),
         "locator": section.get("locator") or {},
         "rows": rows,
     }
+    if section.get("piece_id"):
+        payload["piece_id"] = section["piece_id"]
+    return payload
 
 
 def _measure_text(measure: dict) -> str:

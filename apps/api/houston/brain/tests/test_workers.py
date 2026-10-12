@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.brain.configuration import digest
+from houston.brain.contract import minimal_analysis
 from houston.brain.lots import plan_lots, sections_from_payload
 from houston.brain.models import BrainAnalysis, BrainLot, BrainWorkerBeat
 from houston.brain.recovery import recover_brain_works
@@ -31,10 +32,14 @@ class BrainWorker:
         self.proc: subprocess.Popen | None = None
         self.concurrency = concurrency
         self.hold_seconds = hold_seconds
+        self.queue = f"brain_analysis_{uuid.uuid4().hex}"
+        self._previous_queue = settings.HOUSTON_BRAIN_ANALYSIS_QUEUE
 
     def start(self) -> None:
+        settings.HOUSTON_BRAIN_ANALYSIS_QUEUE = self.queue
         env = os.environ.copy()
         env["POSTGRES_DB"] = settings.DATABASES["default"]["NAME"]
+        env["HOUSTON_BRAIN_ANALYSIS_QUEUE"] = self.queue
         env["HOUSTON_BRAIN_WORKER_BEAT_INTERVAL_SECONDS"] = "1"
         env["HOUSTON_BRAIN_FAKE_HOLD_SECONDS"] = str(self.hold_seconds)
         env["HOUSTON_BRAIN_FAKE_MODE"] = "ok"
@@ -52,7 +57,7 @@ class BrainWorker:
                 "-n",
                 f"houston-brain-test-{os.getpid()}-{uuid.uuid4().hex[:6]}@%h",
                 "-Q",
-                "brain_analysis",
+                self.queue,
                 "--prefetch-multiplier=1",
                 "--concurrency",
                 str(self.concurrency),
@@ -67,6 +72,7 @@ class BrainWorker:
         )
 
     def stop(self) -> None:
+        settings.HOUSTON_BRAIN_ANALYSIS_QUEUE = self._previous_queue
         proc = self.proc
         if proc is not None and proc.poll() is None:
             os.killpg(proc.pid, signal.SIGKILL)
@@ -74,6 +80,7 @@ class BrainWorker:
         self.proc = None
         if self.log and not self.log.closed:
             self.log.close()
+        _delete_queue(self.queue)
 
     def tail(self) -> str:
         if self.log.closed:
@@ -82,14 +89,24 @@ class BrainWorker:
         return self.log.read().decode(errors="replace")[-2500:]
 
 
-def _purge() -> None:
+def _purge(queue: str) -> None:
+    _queue_op(queue, "queue_purge")
+
+
+def _delete_queue(queue: str) -> None:
+    if queue == "brain_analysis":
+        return
+    _queue_op(queue, "queue_delete")
+
+
+def _queue_op(queue: str, operation: str) -> None:
     from kombu import Connection
 
     with Connection(settings.CELERY_BROKER_URL) as connection:
         connection.connect()
         channel = connection.channel()
         try:
-            channel.queue_purge("brain_analysis")
+            getattr(channel, operation)(queue)
         except Exception:
             return
 
@@ -112,7 +129,7 @@ def test_saturated_workers_leave_the_next_analysis_queued():
             25,
             worker.tail(),
         )
-        _purge()
+        _purge(worker.queue)
         analyses = [_prepare(settings, [f"occupe {index} " * 5]) for index in range(3)]
         _wait_until(
             lambda: BrainAnalysis.objects.filter(
@@ -142,7 +159,7 @@ def test_restart_without_a_fresh_beat_does_not_republish(settings):
     worker.start()
     try:
         _wait_until(lambda: _free_beat() is not None, 25, worker.tail())
-        _purge()
+        _purge(worker.queue)
         analysis = _prepare_without_publish(settings)
         assert recover_brain_works()["transport_republished"] == 0
         analysis.refresh_from_db()
@@ -166,7 +183,7 @@ def test_a_lost_publish_is_delivered_by_a_live_idle_worker(settings):
     worker.start()
     try:
         _wait_until(lambda: _free_beat() is not None, 25, worker.tail())
-        _purge()
+        _purge(worker.queue)
         analysis = _prepare_without_publish(settings)
         assert analysis.published_at is None
         assert recover_brain_works()["transport_republished"] == 0
@@ -192,7 +209,7 @@ def test_killing_the_worker_retries_once_and_the_old_token_cannot_write(settings
     worker.start()
     try:
         _wait_until(lambda: BrainWorkerBeat.objects.exists(), 25, worker.tail())
-        _purge()
+        _purge(worker.queue)
         assert publish_brain_analysis(analysis.id, analysis.attempt_token) is True
         _wait_until(lambda: _status(analysis) == BrainAnalysis.Status.RUNNING, 20, worker.tail())
         worker.stop()
@@ -244,13 +261,14 @@ def test_a_live_worker_reuses_a_validated_lot_without_calling_the_provider(setti
     )
     lot = planned[0]
     writer = uuid.uuid4()
+    output = minimal_analysis([lot.payload["sections"][0]["piece_id"]])
     BrainLot.objects.create(
         analysis=analysis,
         stable_key=lot.stable_key,
         input_hash=lot.input_hash,
         configuration_hash=digest(analysis.configuration),
         status=BrainLot.Status.VALIDATED,
-        output={"kept": True},
+        output=output,
         attempt_token=writer,
         reserved_input_tokens=lot.reserved_input_tokens,
     )
@@ -258,7 +276,7 @@ def test_a_live_worker_reuses_a_validated_lot_without_calling_the_provider(setti
     worker.start()
     try:
         _wait_until(lambda: BrainWorkerBeat.objects.exists(), 25, worker.tail())
-        _purge()
+        _purge(worker.queue)
         assert publish_brain_analysis(analysis.id, analysis.attempt_token) is True
         _wait_until(
             lambda: _status(analysis) == BrainAnalysis.Status.COMPLETED,
@@ -266,7 +284,7 @@ def test_a_live_worker_reuses_a_validated_lot_without_calling_the_provider(setti
             worker.tail(),
         )
         stored = BrainLot.objects.get(analysis=analysis)
-        assert stored.output == {"kept": True}
+        assert stored.output == output
         assert stored.attempt_token == writer
         assert AIUsageLog.objects.filter(correlation_id=analysis.id).count() == 0
     finally:
@@ -278,7 +296,7 @@ def test_double_delivery_claims_once(settings):
     worker.start()
     try:
         _wait_until(lambda: BrainWorkerBeat.objects.count() >= 1, 25, worker.tail())
-        _purge()
+        _purge(worker.queue)
         analysis = _prepare_without_publish(settings)
         assert publish_brain_analysis(analysis.id, analysis.attempt_token) is True
         assert publish_brain_analysis(analysis.id, analysis.attempt_token) is True

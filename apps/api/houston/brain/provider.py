@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
+from houston.brain.contract import minimal_analysis
 from houston.brain.errors import BrainWorkError
 
 
@@ -77,17 +78,28 @@ class FakeBrainProvider:
             )
         if mode == "omit_input_usage":
             return ProviderCallResult(
-                output=output,
+                output=minimal_analysis(_piece_ids(payload)),
                 truncated=False,
                 input_tokens=None,
                 output_tokens=1,
             )
         return ProviderCallResult(
-            output=output,
+            output=minimal_analysis(_piece_ids(payload)),
             truncated=False,
             input_tokens=None,
             output_tokens=1,
         )
+
+
+def _piece_ids(payload: dict) -> list[str]:
+    required = payload.get("required_piece_ids") if isinstance(payload, dict) else None
+    if isinstance(required, list) and required:
+        return [str(item) for item in required if item]
+    found = []
+    for section in payload.get("sections") or []:
+        if isinstance(section, dict) and section.get("piece_id"):
+            found.append(str(section["piece_id"]))
+    return found or ["s0000"]
 
 
 def _env_int(name: str) -> int:

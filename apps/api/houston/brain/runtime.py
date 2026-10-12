@@ -17,10 +17,23 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.brain.capture import capture_dossier
+from houston.brain.collection import REQUIRED_SEARCHES
 from houston.brain.configuration import (
     digest,
+    estimate_tokens,
     frozen_extraction,
     runtime_ceilings,
+)
+from houston.brain.contract import (
+    CORRECTION_KEY,
+    SCHEMA_VERSION,
+    SYNTHESIS_KEY,
+    accepted_result,
+    analysis_envelope,
+    assess,
+    correction_envelope,
+    piece_ids_of,
+    synthesis_envelope,
 )
 from houston.brain.errors import BrainWorkError, CaptureTimeout, CaptureVolumeExceeded
 from houston.brain.lots import plan_lots, sections_from_payload
@@ -50,12 +63,15 @@ _TERMINAL = (
 
 
 def publish_brain_analysis(analysis_id, attempt_token) -> bool:
+    from django.conf import settings
+
     from houston.brain.tasks import run_brain_analysis_task
     from houston.core.celery_publish import publish_celery_task
 
     published = publish_celery_task(
         run_brain_analysis_task,
         args=(str(analysis_id), str(attempt_token)),
+        queue=settings.HOUSTON_BRAIN_ANALYSIS_QUEUE,
     )
     if not published:
         logger.error(
@@ -240,11 +256,29 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
     except BrainWorkError as exc:
         _fail(analysis_id, token, exc.code)
         return
-    if not _touch(
-        analysis_id,
-        token,
-        reserved_input_tokens=sum(lot.reserved_input_tokens for lot in planned),
+    context = _dossier_context(analysis_id)
+    if context is None:
+        _fail(analysis_id, token, "insufficient_coverage")
+        return
+    _dossier, items, runs = context
+    pieces = piece_ids_of(planned)
+    if not _searches_executed(runs):
+        _fail(analysis_id, token, "insufficient_coverage")
+        return
+    synthesis_tokens = (
+        estimate_tokens(synthesis_envelope(pieces, items, runs)) if len(planned) > 1 else 0
+    )
+    reserved = sum(lot.reserved_input_tokens for lot in planned) + synthesis_tokens
+    calls = len(planned) + (1 if len(planned) > 1 else 0)
+    synthesis_exceeds_call = synthesis_tokens > ceilings["per_call_input_tokens"]
+    if (
+        synthesis_exceeds_call
+        or reserved > ceilings["total_input_tokens"]
+        or calls > ceilings["max_calls"]
     ):
+        _fail(analysis_id, token, "budget_exceeded")
+        return
+    if not _touch(analysis_id, token, reserved_input_tokens=reserved):
         return
     config_hash = digest(analysis.configuration)
     for lot in planned:
@@ -272,10 +306,18 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         if analysis.provider_calls_used >= ceilings["max_calls"]:
             _fail(analysis_id, token, "budget_exceeded")
             return
+        sent = lot.payload
+        sent_tokens = 0
+        if len(planned) == 1:
+            sent = analysis_envelope(lot.payload["sections"], pieces, items, runs)
+            sent_tokens = estimate_tokens(sent)
+            if sent_tokens > ceilings["per_call_input_tokens"]:
+                _fail(analysis_id, token, "budget_exceeded")
+                return
         result = provider.complete(
             analysis_id=str(analysis_id),
             lot_key=lot.stable_key,
-            payload=lot.payload,
+            payload=sent,
             timeout_seconds=ceilings["provider_timeout_seconds"],
         )
         outcome = _accept_call(
@@ -286,6 +328,7 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             result=result,
             ceilings=ceilings,
             configuration=analysis.configuration,
+            sent_tokens=sent_tokens,
         )
         if outcome not in {"written", "reused"}:
             return
@@ -300,7 +343,16 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         return
     if not _guard(_running(analysis_id, token), token):
         return
-    _complete(analysis_id, token)
+    _settle(
+        analysis_id,
+        token,
+        provider=provider,
+        planned=planned,
+        pieces=pieces,
+        ceilings=ceilings,
+        configuration=analysis.configuration,
+        started=started,
+    )
 
 
 def _capture_if_open(analysis_id, token) -> bool:
@@ -329,11 +381,11 @@ def _accept_call(
     result: ProviderCallResult,
     ceilings: dict[str, int],
     configuration: dict,
+    sent_tokens: int = 0,
 ) -> str:
     acceptable = _output_acceptable(result, ceilings["per_call_output_tokens"])
-    charged = (
-        result.input_tokens if result.input_tokens is not None else lot.reserved_input_tokens
-    )
+    reserved = max(lot.reserved_input_tokens, sent_tokens)
+    charged = result.input_tokens if result.input_tokens is not None else reserved
     now = timezone.now()
     with transaction.atomic():
         row = (
@@ -422,6 +474,288 @@ def _accept_call(
         return "written"
 
 
+def _charge_free_call(
+    *,
+    analysis_id,
+    token,
+    result: ProviderCallResult,
+    ceilings: dict[str, int],
+    configuration: dict,
+    reserved_tokens: int,
+) -> str:
+    """Count a synthesis or correction. It does not create a lot."""
+    acceptable = _output_acceptable(result, ceilings["per_call_output_tokens"])
+    charged = result.input_tokens if result.input_tokens is not None else reserved_tokens
+    now = timezone.now()
+    with transaction.atomic():
+        row = (
+            BrainAnalysis.objects.select_for_update()
+            .filter(id=analysis_id, attempt_token=token, status=_RUNNING)
+            .first()
+        )
+        if row is None or row.cancel_requested_at is not None:
+            return "stopped"
+        calls = row.provider_calls_used + 1
+        consumed = row.consumed_input_tokens + max(0, charged)
+        over_budget = (
+            calls > ceilings["max_calls"]
+            or consumed > ceilings["total_input_tokens"]
+            or (
+                result.input_tokens is not None
+                and result.input_tokens > ceilings["per_call_input_tokens"]
+            )
+        )
+        row.provider_calls_used = calls
+        row.consumed_input_tokens = consumed
+        row.lease_expires_at = now + timedelta(seconds=ceilings["lease_seconds"])
+        if not acceptable or over_budget:
+            code = "provider_output_rejected" if not acceptable else "budget_exceeded"
+            row.status = BrainAnalysis.Status.FAILED
+            row.failure_code = code
+            row.lease_expires_at = None
+            row.save(
+                update_fields=[
+                    "provider_calls_used",
+                    "consumed_input_tokens",
+                    "lease_expires_at",
+                    "status",
+                    "failure_code",
+                    "updated_at",
+                ]
+            )
+            BrainSlot.objects.filter(analysis_id=analysis_id).delete()
+            _usage(
+                row,
+                configuration=configuration,
+                result=result,
+                error_code=code,
+                status=AIUsageLog.Status.FAILED,
+            )
+            return "failed"
+        row.save(
+            update_fields=[
+                "provider_calls_used",
+                "consumed_input_tokens",
+                "lease_expires_at",
+                "updated_at",
+            ]
+        )
+        _usage(
+            row,
+            configuration=configuration,
+            result=result,
+            error_code="",
+            status=AIUsageLog.Status.SUCCEEDED,
+        )
+        return "accepted"
+
+
+def _settle(
+    analysis_id,
+    token,
+    *,
+    provider: BrainProvider,
+    planned,
+    pieces,
+    ceilings: dict[str, int],
+    configuration: dict,
+    started: float,
+) -> None:
+    analysis = _running(analysis_id, token)
+    if analysis is None or not _guard(analysis, token):
+        return
+    if _attempt_expired(analysis, ceilings, started):
+        _fail(analysis_id, token, "attempt_exceeded")
+        return
+    if str(configuration.get("schema_version") or "") != SCHEMA_VERSION:
+        _fail(analysis_id, token, "configuration_unusable")
+        return
+    context = _dossier_context(analysis_id)
+    if context is None:
+        _fail(analysis_id, token, "insufficient_coverage")
+        return
+    _dossier, items, runs = context
+    if not _searches_executed(runs):
+        _fail(analysis_id, token, "insufficient_coverage")
+        return
+    if len(planned) == 1:
+        stored = BrainLot.objects.filter(
+            analysis_id=analysis_id,
+            stable_key=planned[0].stable_key,
+            status=BrainLot.Status.VALIDATED,
+        ).first()
+        if stored is None:
+            _fail(analysis_id, token, "lots_incomplete")
+            return
+        candidate = stored.output
+    else:
+        if not _renew(analysis_id, token, ceilings["lease_seconds"]):
+            _cancel_if_requested(analysis_id, token)
+            return
+        candidate = _contract_call(
+            analysis_id=analysis_id,
+            token=token,
+            provider=provider,
+            lot_key=SYNTHESIS_KEY,
+            payload=synthesis_envelope(pieces, items, runs),
+            ceilings=ceilings,
+            configuration=configuration,
+        )
+        if candidate is None:
+            return
+    assessment = assess(candidate, pieces=pieces, items=items)
+    if assessment.ok and assessment.parsed is not None:
+        _finish(analysis_id, token, assessment.parsed, items)
+        return
+    _correct(
+        analysis_id,
+        token,
+        provider=provider,
+        assessment=assessment,
+        pieces=pieces,
+        items=items,
+        ceilings=ceilings,
+        configuration=configuration,
+        started=started,
+    )
+
+
+def _correct(
+    analysis_id,
+    token,
+    *,
+    provider: BrainProvider,
+    assessment,
+    pieces,
+    items,
+    ceilings: dict[str, int],
+    configuration: dict,
+    started: float,
+) -> None:
+    analysis = _running(analysis_id, token)
+    if analysis is None or not _guard(analysis, token):
+        return
+    if _attempt_expired(analysis, ceilings, started):
+        _fail(analysis_id, token, "attempt_exceeded")
+        return
+    if not _renew(analysis_id, token, ceilings["lease_seconds"]):
+        _cancel_if_requested(analysis_id, token)
+        return
+    corrected = _contract_call(
+        analysis_id=analysis_id,
+        token=token,
+        provider=provider,
+        lot_key=CORRECTION_KEY,
+        payload=correction_envelope(
+            assessment.issues,
+            pieces,
+            items,
+            assessment.subject_keys,
+        ),
+        ceilings=ceilings,
+        configuration=configuration,
+    )
+    if corrected is None:
+        return
+    second = assess(
+        corrected,
+        pieces=pieces,
+        items=items,
+        required_subject_keys=assessment.subject_keys,
+    )
+    if not second.ok or second.parsed is None:
+        code = second.issues[0].code if second.issues else "response_invalid"
+        _fail(analysis_id, token, code)
+        return
+    _finish(analysis_id, token, second.parsed, items)
+
+
+def _contract_call(
+    *,
+    analysis_id,
+    token,
+    provider: BrainProvider,
+    lot_key: str,
+    payload: dict,
+    ceilings: dict[str, int],
+    configuration: dict,
+) -> dict | None:
+    analysis = _running(analysis_id, token)
+    if analysis is None:
+        return None
+    reserved = estimate_tokens(payload)
+    if not _within_call_budget(analysis, reserved, ceilings):
+        _fail(analysis_id, token, "budget_exceeded")
+        return None
+    result = provider.complete(
+        analysis_id=str(analysis_id),
+        lot_key=lot_key,
+        payload=payload,
+        timeout_seconds=ceilings["provider_timeout_seconds"],
+    )
+    outcome = _charge_free_call(
+        analysis_id=analysis_id,
+        token=token,
+        result=result,
+        ceilings=ceilings,
+        configuration=configuration,
+        reserved_tokens=reserved,
+    )
+    if outcome != "accepted":
+        return None
+    return result.output
+
+
+def _finish(analysis_id, token, parsed, items) -> None:
+    analysis = _running(analysis_id, token)
+    if analysis is None or not _guard(analysis, token):
+        return
+    try:
+        extraction = frozen_extraction(analysis)
+    except BrainWorkError as exc:
+        _fail(analysis_id, token, exc.code)
+        return
+    _complete(
+        analysis_id,
+        token,
+        result=accepted_result(parsed, items, extraction.payload),
+    )
+
+
+def _within_call_budget(analysis: BrainAnalysis, reserved: int, ceilings: dict[str, int]) -> bool:
+    if reserved > ceilings["per_call_input_tokens"]:
+        return False
+    if analysis.provider_calls_used + 1 > ceilings["max_calls"]:
+        return False
+    return analysis.consumed_input_tokens + reserved <= ceilings["total_input_tokens"]
+
+
+def _searches_executed(runs) -> bool:
+    """A code alone is not an execution. The run must keep the scope that was read."""
+    by_code = {}
+    for run in runs:
+        if run.code in by_code:
+            return False
+        by_code[run.code] = run
+    if set(by_code) != set(REQUIRED_SEARCHES):
+        return False
+    for run in by_code.values():
+        criteria = run.criteria if isinstance(run.criteria, dict) else None
+        establishment_id = str((criteria or {}).get("establishment_id") or "").strip()
+        if criteria is None or not establishment_id:
+            return False
+        if run.examined_count is None or run.retained_count is None:
+            return False
+    return True
+
+
+def _dossier_context(analysis_id):
+    dossier = BrainDossier.objects.filter(analysis_id=analysis_id, closed_at__isnull=False).first()
+    if dossier is None:
+        return None
+    return dossier, list(dossier.items.all()), list(dossier.search_runs.all())
+
+
 def _output_acceptable(result: ProviderCallResult, per_call_output_tokens: int) -> bool:
     if result.truncated or not isinstance(result.output, dict):
         return False
@@ -453,12 +787,13 @@ def _guard(analysis: BrainAnalysis | None, token) -> bool:
     return True
 
 
-def _complete(analysis_id, token) -> bool:
+def _complete(analysis_id, token, result: dict | None = None) -> bool:
     completed = _transition(
         analysis_id,
         token,
         status=BrainAnalysis.Status.COMPLETED,
         only_if_not_canceled=True,
+        result=result,
     )
     if completed:
         logger.info(
@@ -507,6 +842,7 @@ def _transition(
     status: str,
     failure_code: str = "",
     only_if_not_canceled: bool = False,
+    result: dict | None = None,
 ) -> bool:
     now = timezone.now()
     with transaction.atomic():
@@ -525,15 +861,17 @@ def _transition(
         row.lease_expires_at = None
         if status == BrainAnalysis.Status.CANCELED and row.cancel_requested_at is None:
             row.cancel_requested_at = now
-        row.save(
-            update_fields=[
-                "status",
-                "failure_code",
-                "lease_expires_at",
-                "cancel_requested_at",
-                "updated_at",
-            ]
-        )
+        update_fields = [
+            "status",
+            "failure_code",
+            "lease_expires_at",
+            "cancel_requested_at",
+            "updated_at",
+        ]
+        if result is not None:
+            row.result = result
+            update_fields.append("result")
+        row.save(update_fields=update_fields)
         BrainSlot.objects.filter(analysis_id=analysis_id).delete()
         return True
 
@@ -654,7 +992,7 @@ def _usage(
         total = (input_tokens or 0) + (output_tokens or 0)
     AIUsageLog.objects.create(
         ai_domain=AIUsageLog.Domain.BRAIN_ANALYSIS,
-        provider="fake",
+        provider=str(configuration.get("provider") or "fake"),
         model=str(configuration.get("model") or ""),
         prompt_version=str(configuration.get("prompt_version") or ""),
         schema_version=str(configuration.get("schema_version") or ""),
