@@ -196,6 +196,107 @@ class BrainCapacity(models.Model):
         return "BrainCapacity"
 
 
+class BrainMessage(BaseModel):
+    """One follow-up on a completed analysis. Its status and budgets are not the analysis."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
+
+    class Purpose(models.TextChoices):
+        EXPLAIN = "explain", "Explain"
+        HYPOTHESIS = "hypothesis", "Hypothesis"
+        CORRECTION = "correction", "Correction"
+        NEW_FACT = "new_fact", "New fact"
+        NEW_DOCUMENT = "new_document", "New document"
+
+    analysis = models.ForeignKey(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="authored_brain_messages",
+    )
+    request_id = models.CharField(max_length=128)
+    sequence = models.PositiveIntegerField()
+    purpose = models.CharField(max_length=32, choices=Purpose.choices)
+    body = models.TextField()
+    cited_item_ids = models.JSONField(default=list)
+    declaration = models.JSONField(null=True, blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+    )
+    attempt_token = models.UUIDField(default=uuid.uuid4)
+    attempt_count = models.PositiveIntegerField(default=0)
+    transient_retries_used = models.PositiveIntegerField(default=0)
+    transport_republish_count = models.PositiveIntegerField(default=0)
+    transport_stall_since = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    cancel_requested_at = models.DateTimeField(null=True, blank=True)
+    failure_code = models.CharField(max_length=80, blank=True, default="")
+    reserved_input_tokens = models.PositiveIntegerField(default=0)
+    consumed_input_tokens = models.PositiveIntegerField(default=0)
+    provider_calls_used = models.PositiveIntegerField(default=0)
+    result = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["analysis", "request_id"],
+                name="brain_msg_an_req_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["analysis", "sequence"],
+                name="brain_msg_an_seq_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(sequence__gte=1),
+                name="brain_msg_seq_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    purpose__in=[
+                        "explain",
+                        "hypothesis",
+                        "correction",
+                        "new_fact",
+                        "new_document",
+                    ]
+                ),
+                name="brain_msg_purpose_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    status__in=[
+                        "queued",
+                        "running",
+                        "completed",
+                        "failed",
+                        "canceled",
+                    ]
+                ),
+                name="brain_msg_status_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="brain_msg_stat_cr_idx"),
+            models.Index(fields=["author"], name="brain_msg_author_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainMessage {self.sequence} [{self.status}]"
+
+
 class BrainSlot(BaseModel):
     """One active Brain work for an establishment. Uniqueness is the slot, not an analysis index."""
 
@@ -217,6 +318,13 @@ class BrainSlot(BaseModel):
         on_delete=models.CASCADE,
         related_name="slots",
     )
+    message = models.ForeignKey(
+        BrainMessage,
+        on_delete=models.CASCADE,
+        related_name="slots",
+        null=True,
+        blank=True,
+    )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     status = models.CharField(max_length=16, choices=Status.choices)
     token = models.UUIDField()
@@ -236,9 +344,15 @@ class BrainSlot(BaseModel):
                 condition=Q(status__in=["queued", "running"]),
                 name="brain_slot_status_chk",
             ),
+            models.CheckConstraint(
+                condition=Q(kind="analysis", message__isnull=True)
+                | Q(kind="follow_up", message__isnull=False),
+                name="brain_slot_msg_kind_chk",
+            ),
         ]
         indexes = [
             models.Index(fields=["analysis"], name="brain_slot_analysis_idx"),
+            models.Index(fields=["message"], name="brain_slot_message_idx"),
         ]
 
     def __str__(self) -> str:

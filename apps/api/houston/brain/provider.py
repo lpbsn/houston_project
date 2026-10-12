@@ -56,6 +56,8 @@ class FakeBrainProvider:
         mode = os.environ.get("HOUSTON_BRAIN_FAKE_MODE", "ok").strip() or "ok"
         if mode == "unavailable":
             raise BrainProviderUnavailable()
+        if isinstance(payload, dict) and payload.get("contract") == "brain_follow_up_v1":
+            return _follow_up_result(payload, mode)
         section_keys = [
             section.get("text") or section.get("header")
             for section in payload.get("sections") or []
@@ -89,6 +91,43 @@ class FakeBrainProvider:
             input_tokens=None,
             output_tokens=1,
         )
+
+
+def _follow_up_result(payload: dict, mode: str) -> ProviderCallResult:
+    purpose = payload.get("purpose")
+    raw_ids = payload.get("required_item_ids")
+    item_ids = raw_ids if isinstance(raw_ids, list) else []
+    hypothesis = purpose == "hypothesis"
+    citations = [{"item_id": str(item_id)} for item_id in item_ids if item_id]
+    label = "Hypothèse" if hypothesis else None
+    if mode == "unknown_citation":
+        citations = [{"item_id": "dehors-dossier"}]
+    if mode == "unlabeled_hypothesis":
+        hypothesis = True
+        label = None
+    output = {
+        "schema_version": "brain_follow_up_v1",
+        "mode": "hypothesis" if hypothesis else "explanation",
+        "answer": "Lecture limitée au dossier figé.",
+        "hypothesis_label": label,
+        "citations": citations,
+    }
+    if mode == "decision_object":
+        output["suggestion"] = {"title": "Plan proposé depuis le follow-up"}
+    truncated = mode == "truncated"
+    if mode == "omit_output_tokens":
+        return ProviderCallResult(
+            output=output,
+            truncated=False,
+            input_tokens=1,
+            output_tokens=None,
+        )
+    return ProviderCallResult(
+        output=output,
+        truncated=truncated,
+        input_tokens=None,
+        output_tokens=1,
+    )
 
 
 def _piece_ids(payload: dict) -> list[str]:

@@ -21,6 +21,7 @@ from houston.brain.collection import REQUIRED_SEARCHES
 from houston.brain.configuration import (
     digest,
     estimate_tokens,
+    follow_up_ceilings,
     frozen_extraction,
     runtime_ceilings,
 )
@@ -41,6 +42,7 @@ from houston.brain.models import (
     BrainAnalysis,
     BrainDossier,
     BrainLot,
+    BrainMessage,
     BrainSlot,
 )
 from houston.brain.provider import (
@@ -97,6 +99,41 @@ def schedule_analysis_publish(analysis_id, attempt_token) -> None:
     transaction.on_commit(_enqueue)
 
 
+def publish_brain_follow_up(message_id, attempt_token) -> bool:
+    from django.conf import settings
+
+    from houston.brain.tasks import run_brain_follow_up_task
+    from houston.core.celery_publish import publish_celery_task
+
+    published = publish_celery_task(
+        run_brain_follow_up_task,
+        args=(str(message_id), str(attempt_token)),
+        queue=settings.HOUSTON_BRAIN_ANALYSIS_QUEUE,
+    )
+    if not published:
+        logger.error(
+            "brain_follow_up_publish_failed",
+            extra={
+                "event": "brain_follow_up_publish_failed",
+                "message_id": str(message_id),
+            },
+        )
+        return False
+    BrainMessage.objects.filter(
+        id=message_id,
+        attempt_token=attempt_token,
+        status=_QUEUED,
+    ).update(published_at=timezone.now(), updated_at=timezone.now())
+    return True
+
+
+def schedule_follow_up_publish(message_id, attempt_token) -> None:
+    def _enqueue() -> None:
+        publish_brain_follow_up(message_id, attempt_token)
+
+    transaction.on_commit(_enqueue)
+
+
 def claim_analysis(analysis_id, attempt_token) -> bool:
     token = _token(attempt_token)
     if token is None:
@@ -134,6 +171,193 @@ def claim_analysis(analysis_id, attempt_token) -> bool:
         token=token,
         updated_at=now,
     )
+    return True
+
+
+def claim_message(message_id, attempt_token) -> bool:
+    """Same queued-token update as an analysis. The row is the follow-up, not the analysis."""
+    token = _token(attempt_token)
+    if token is None:
+        return False
+    current = BrainMessage.objects.filter(id=message_id, attempt_token=token).first()
+    if current is None or current.status != _QUEUED:
+        return False
+    if current.cancel_requested_at is not None:
+        transition_message(
+            message_id,
+            token,
+            status=BrainMessage.Status.CANCELED,
+            failure_code="cancel_requested",
+            queued=True,
+        )
+        return False
+    analysis = BrainAnalysis.objects.filter(id=current.analysis_id).first()
+    try:
+        ceilings = follow_up_ceilings(None if analysis is None else analysis.configuration)
+    except BrainWorkError:
+        result = None
+        if analysis is not None:
+            from houston.brain.followups import configuration_proposal
+
+            result = configuration_proposal(analysis)
+        transition_message(
+            message_id,
+            token,
+            status=BrainMessage.Status.FAILED,
+            failure_code="configuration_unusable",
+            result=result,
+            queued=True,
+        )
+        return False
+    now = timezone.now()
+    updated = BrainMessage.objects.filter(
+        id=message_id,
+        status=_QUEUED,
+        attempt_token=token,
+        cancel_requested_at__isnull=True,
+    ).update(
+        status=_RUNNING,
+        claimed_at=now,
+        lease_expires_at=now + timedelta(seconds=ceilings["lease_seconds"]),
+        attempt_count=F("attempt_count") + 1,
+        transport_republish_count=0,
+        transport_stall_since=None,
+        updated_at=now,
+    )
+    if not updated:
+        return False
+    BrainSlot.objects.filter(message_id=message_id, status=_QUEUED).update(
+        status=BrainSlot.Status.RUNNING,
+        token=token,
+        updated_at=now,
+    )
+    return True
+
+
+def renew_message(message_id, token, lease_seconds: int) -> bool:
+    now = timezone.now()
+    updated = BrainMessage.objects.filter(
+        id=message_id,
+        attempt_token=token,
+        status=_RUNNING,
+        cancel_requested_at__isnull=True,
+    ).update(
+        lease_expires_at=now + timedelta(seconds=lease_seconds),
+        updated_at=now,
+    )
+    return updated == 1
+
+
+def touch_message(message_id, token, **fields) -> bool:
+    fields["updated_at"] = timezone.now()
+    updated = BrainMessage.objects.filter(
+        id=message_id,
+        attempt_token=token,
+        status=_RUNNING,
+    ).update(**fields)
+    return updated == 1
+
+
+def transition_message(
+    message_id,
+    token,
+    *,
+    status: str,
+    failure_code: str = "",
+    only_if_not_canceled: bool = False,
+    result: dict | None = None,
+    queued: bool = False,
+) -> bool:
+    """Terminal write for the current message token. The analysis row is not updated."""
+    expected = _QUEUED if queued else _RUNNING
+    now = timezone.now()
+    with transaction.atomic():
+        row = (
+            BrainMessage.objects.select_for_update()
+            .filter(id=message_id, attempt_token=token, status=expected)
+            .first()
+        )
+        if row is None:
+            return False
+        if only_if_not_canceled and row.cancel_requested_at is not None:
+            return False
+        row.status = status
+        if failure_code:
+            row.failure_code = failure_code
+        row.lease_expires_at = None
+        if status == BrainMessage.Status.CANCELED and row.cancel_requested_at is None:
+            row.cancel_requested_at = now
+        update_fields = [
+            "status",
+            "failure_code",
+            "lease_expires_at",
+            "cancel_requested_at",
+            "updated_at",
+        ]
+        if result is not None:
+            row.result = result
+            update_fields.append("result")
+        row.save(update_fields=update_fields)
+        BrainSlot.objects.filter(message_id=message_id).delete()
+        return True
+
+
+def requeue_message(message_id, token) -> bool:
+    """One execution retry. The previous token can no longer write the message or its lot."""
+    new_token = uuid.uuid4()
+    with transaction.atomic():
+        row = (
+            BrainMessage.objects.select_for_update()
+            .filter(
+                id=message_id,
+                attempt_token=token,
+                status=_RUNNING,
+                transient_retries_used=0,
+                cancel_requested_at__isnull=True,
+            )
+            .first()
+        )
+        if row is None:
+            return False
+        establishment_id = BrainAnalysis.objects.filter(id=row.analysis_id).values_list(
+            "establishment_id",
+            flat=True,
+        ).first()
+        row.attempt_token = new_token
+        row.status = _QUEUED
+        row.claimed_at = None
+        row.lease_expires_at = None
+        row.published_at = None
+        row.transport_stall_since = None
+        row.transient_retries_used = 1
+        row.save(
+            update_fields=[
+                "attempt_token",
+                "status",
+                "claimed_at",
+                "lease_expires_at",
+                "published_at",
+                "transport_stall_since",
+                "transient_retries_used",
+                "updated_at",
+            ]
+        )
+        slot = BrainSlot.objects.select_for_update().filter(message_id=row.id).first()
+        if slot is None:
+            BrainSlot.objects.create(
+                establishment_id=establishment_id,
+                analysis_id=row.analysis_id,
+                message=row,
+                kind=BrainSlot.Kind.FOLLOW_UP,
+                status=_QUEUED,
+                token=new_token,
+            )
+        else:
+            slot.token = new_token
+            slot.status = _QUEUED
+            slot.kind = BrainSlot.Kind.FOLLOW_UP
+            slot.save(update_fields=["token", "status", "kind", "updated_at"])
+    publish_brain_follow_up(message_id, new_token)
     return True
 
 

@@ -11,6 +11,7 @@ class AIUsageLog(BaseModel):
         OBSERVATION_PIPELINE = "observation_pipeline", "Observation pipeline"
         ANALYTICS_PATTERN = "analytics_pattern", "Analytics pattern"
         BRAIN_ANALYSIS = "brain_analysis", "Brain analysis"
+        BRAIN_FOLLOW_UP = "brain_follow_up", "Brain follow-up"
 
     class Status(models.TextChoices):
         STARTED = "started", "Started"

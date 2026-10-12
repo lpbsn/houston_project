@@ -5,6 +5,7 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
+from houston.brain.followups import run_brain_follow_up
 from houston.brain.recovery import recover_brain_works
 from houston.brain.runtime import run_brain_analysis
 from houston.brain.services import cleanup_abandoned_reporting_drafts
@@ -48,6 +49,15 @@ def cleanup_abandoned_reporting_drafts_task() -> int:
 )
 def run_brain_analysis_task(analysis_id: str, attempt_token: str) -> None:
     run_brain_analysis(analysis_id, attempt_token)
+
+
+@shared_task(
+    max_retries=0,
+    soft_time_limit=settings.HOUSTON_BRAIN_ATTEMPT_SOFT_SECONDS,
+    time_limit=settings.HOUSTON_BRAIN_ATTEMPT_HARD_SECONDS,
+)
+def run_brain_follow_up_task(message_id: str, attempt_token: str) -> None:
+    run_brain_follow_up(message_id, attempt_token)
 
 
 @shared_task(

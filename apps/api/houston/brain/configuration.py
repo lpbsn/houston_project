@@ -70,6 +70,37 @@ def configuration_unusable() -> BrainWorkError:
     return BrainWorkError(code="configuration_unusable", message=_UNUSABLE)
 
 
+FOLLOW_UP_CEILING_KEYS = (
+    "per_call_input_tokens",
+    "per_call_output_tokens",
+    "follow_up_total_input_tokens",
+    "follow_up_max_calls",
+    "lease_seconds",
+    "provider_timeout_seconds",
+    "attempt_soft_seconds",
+    "attempt_hard_seconds",
+)
+
+
+def follow_up_ceilings(configuration: object) -> dict[str, int]:
+    """Follow-up budgets from the analysis copy. Global settings are not read here."""
+    if not isinstance(configuration, dict):
+        raise configuration_unusable()
+    ceilings = configuration.get("ceilings")
+    if not isinstance(ceilings, dict):
+        raise configuration_unusable()
+    values: dict[str, int] = {}
+    for key in FOLLOW_UP_CEILING_KEYS:
+        try:
+            number = int(ceilings[key])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise configuration_unusable() from exc
+        if number <= 0:
+            raise configuration_unusable()
+        values[key] = number
+    return values
+
+
 def runtime_ceilings(configuration: object) -> dict[str, int]:
     if not isinstance(configuration, dict):
         raise configuration_unusable()

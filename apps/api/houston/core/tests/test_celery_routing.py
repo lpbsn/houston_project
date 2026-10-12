@@ -59,6 +59,7 @@ def test_interactive_and_background_workers_do_not_share_queues():
     routes = settings.CELERY_TASK_ROUTES
     assert routes["houston.signals.tasks.process_observation_task"]["queue"] == "ai_interactive"
     assert routes["houston.brain.tasks.run_brain_analysis_task"]["queue"] == "brain_analysis"
+    assert routes["houston.brain.tasks.run_brain_follow_up_task"]["queue"] == "brain_analysis"
     assert routes["houston.brain.tasks.recover_brain_analysis_task"]["queue"] == "operational"
 
 
