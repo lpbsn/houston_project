@@ -22,6 +22,7 @@ def plan_lots(
     per_call_input_tokens: int,
     total_input_tokens: int,
     max_calls: int,
+    knowledge: dict | None = None,
 ) -> list[PlannedLot]:
     if per_call_input_tokens <= 0 or total_input_tokens <= 0 or max_calls <= 0:
         raise BrainWorkError(
@@ -43,10 +44,10 @@ def plan_lots(
     current: list[dict] = []
     for section in sections:
         piece = _section_payload(section)
-        if _fits(current, piece, per_call_input_tokens):
+        if _fits(current, piece, per_call_input_tokens, knowledge):
             current.append(piece)
             continue
-        if _fits([], piece, per_call_input_tokens):
+        if _fits([], piece, per_call_input_tokens, knowledge):
             if current:
                 groups.append(current)
             current = [piece]
@@ -54,18 +55,20 @@ def plan_lots(
         if current:
             groups.append(current)
             current = []
-        for part in _subdivide(section, per_call_input_tokens):
-            if _fits(current, part, per_call_input_tokens):
+        for part in _subdivide(section, per_call_input_tokens, knowledge):
+            if _fits(current, part, per_call_input_tokens, knowledge):
                 current.append(part)
                 continue
             if current:
                 groups.append(current)
-            if not _fits([], part, per_call_input_tokens):
+            if not _fits([], part, per_call_input_tokens, knowledge):
                 raise _unsplittable()
             current = [part]
     if current:
         groups.append(current)
-    planned = [_lot(index, parts) for index, parts in enumerate(groups, start=1)]
+    planned = [
+        _lot(index, parts, knowledge) for index, parts in enumerate(groups, start=1)
+    ]
     reserved = sum(lot.reserved_input_tokens for lot in planned)
     if len(planned) > max_calls or reserved > total_input_tokens:
         raise BrainWorkError(
@@ -141,28 +144,41 @@ def sections_from_payload(payload: dict) -> list[dict]:
     return sections
 
 
-def _lot(index: int, parts: list[dict]) -> PlannedLot:
+def _lot(index: int, parts: list[dict], knowledge: dict | None) -> PlannedLot:
     payload = {"sections": parts}
+    hashed = _costed(parts, knowledge)
     return PlannedLot(
         stable_key=f"lot-{index:04d}",
         payload=payload,
-        input_hash=digest(payload),
-        reserved_input_tokens=estimate_tokens(payload),
+        input_hash=digest(hashed),
+        reserved_input_tokens=estimate_tokens(hashed),
     )
 
 
-def _fits(current: list[dict], piece: dict, per_call_input_tokens: int) -> bool:
-    if not current and estimate_tokens({"sections": [piece]}) <= per_call_input_tokens:
+def _costed(parts: list[dict], knowledge: dict | None) -> dict:
+    payload = {"sections": parts}
+    if knowledge is not None:
+        payload["knowledge"] = knowledge
+    return payload
+
+
+def _fits(
+    current: list[dict],
+    piece: dict,
+    per_call_input_tokens: int,
+    knowledge: dict | None,
+) -> bool:
+    if not current and estimate_tokens(_costed([piece], knowledge)) <= per_call_input_tokens:
         return True
     if not current:
         return False
-    return estimate_tokens({"sections": [*current, piece]}) <= per_call_input_tokens
+    return estimate_tokens(_costed([*current, piece], knowledge)) <= per_call_input_tokens
 
 
-def _subdivide(section: dict, per_call_input_tokens: int) -> list[dict]:
+def _subdivide(section: dict, per_call_input_tokens: int, knowledge: dict | None) -> list[dict]:
     kind = section.get("kind")
     if kind == "table":
-        return _table_rows(section, per_call_input_tokens)
+        return _table_rows(section, per_call_input_tokens, knowledge)
     paragraphs = [part for part in str(section.get("text") or "").split("\n\n") if part.strip()]
     if len(paragraphs) <= 1:
         raise _unsplittable()
@@ -172,13 +188,13 @@ def _subdivide(section: dict, per_call_input_tokens: int) -> list[dict]:
         child = dict(section)
         child["piece_id"] = f"{parent}-p{index:04d}"
         piece = _paragraph_payload(paragraph, section.get("locator") or {}, child)
-        if estimate_tokens({"sections": [piece]}) > per_call_input_tokens:
+        if estimate_tokens(_costed([piece], knowledge)) > per_call_input_tokens:
             raise _unsplittable()
         pieces.append(piece)
     return pieces
 
 
-def _table_rows(section: dict, per_call_input_tokens: int) -> list[dict]:
+def _table_rows(section: dict, per_call_input_tokens: int, knowledge: dict | None) -> list[dict]:
     rows = section.get("rows") or []
     if not rows:
         raise _unsplittable()
@@ -188,7 +204,7 @@ def _table_rows(section: dict, per_call_input_tokens: int) -> list[dict]:
         child = dict(section)
         child["piece_id"] = f"{parent}-p{index:04d}"
         piece = _table_payload(child, [row])
-        if estimate_tokens({"sections": [piece]}) > per_call_input_tokens:
+        if estimate_tokens(_costed([piece], knowledge)) > per_call_input_tokens:
             raise _unsplittable()
         pieces.append(piece)
     return pieces

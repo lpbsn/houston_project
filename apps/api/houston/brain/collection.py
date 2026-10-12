@@ -5,6 +5,7 @@ Independent of feed retention, pins, and pagination.
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
@@ -25,6 +26,7 @@ from houston.brain.errors import BrainWorkError, CaptureVolumeExceeded
 from houston.brain.mentions import first_period_mention
 from houston.brain.models import BrainExtraction, BrainObjective, BrainReporting
 from houston.brain.objectives import revision_overlaps_period
+from houston.establishments.models import EstablishmentActivityDescription
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     SIGNAL_LIFECYCLE_METADATA_SAFE_KEYS,
@@ -56,6 +58,7 @@ CATEGORY_PLAN = "plan"
 CATEGORY_REPORTING = "reporting"
 CATEGORY_DOCUMENT = "document"
 CATEGORY_OBJECTIVE = "objective"
+CATEGORY_CONTEXT = "establishment_context"
 
 ROLE_OVERLAP = "chevauchement"
 ROLE_LATE = "declaration_tardive"
@@ -374,6 +377,7 @@ def collect_capture(
         *n1_execution_items,
         *n1_task_items,
         *objective_items,
+        _establishment_context(run, establishment),
     ]
     for row in rows:
         _reject_forbidden(row.payload)
@@ -1022,6 +1026,8 @@ def _objectives(run, establishment_id, period: _Window, labels: set[str], captur
                     "scope": revision.scope,
                     "reference": revision.reference,
                     "target": revision.target,
+                    "success_condition": revision.success_condition,
+                    "decision": revision.decision,
                     "due_on": _iso(revision.due_on),
                     "measurement_period_start": _iso(revision.measurement_period_start),
                     "measurement_period_end": _iso(revision.measurement_period_end),
@@ -1082,6 +1088,38 @@ def _status_at(at, reliable_from, events, reconstruct) -> dict:
     if status is None:
         return {"value": NOT_RECONSTRUCTABLE}
     return {"value": status}
+
+
+def _establishment_context(run, establishment) -> DossierRow:
+    """Copy the living activity description. A later edit does not rewrite this row."""
+
+    def query():
+        return EstablishmentActivityDescription.objects.filter(
+            establishment_id=establishment.id
+        ).first()
+
+    description = run(query)
+    text = (description.description if description is not None else "").strip()
+    if description is None or not text:
+        return DossierRow(
+            CATEGORY_CONTEXT,
+            "establishment-context",
+            "absent",
+            {"present": False},
+            "contexte_etablissement",
+        )
+    return DossierRow(
+        CATEGORY_CONTEXT,
+        "establishment-context",
+        "copie",
+        {
+            "source_id": str(description.id),
+            "text": text,
+            "content_hash": hashlib.sha256(text.encode()).hexdigest(),
+            "source_updated_at": description.updated_at.isoformat(),
+        },
+        "contexte_etablissement",
+    )
 
 
 def _document_rows(payload: dict) -> list[DossierRow]:

@@ -125,11 +125,50 @@ class AnalysisLimit(_Strict):
     message: str = Field(min_length=1, max_length=500)
 
 
+class SuggestionTask(_Strict):
+    task: str = Field(min_length=1, max_length=500)
+    business_unit_id: str | None = None
+    position: int = Field(default=1, ge=1, le=50)
+    description: str = Field(default="", max_length=2000)
+
+
+class SuggestionAssignee(_Strict):
+    membership_id: str = Field(min_length=1, max_length=64)
+    business_unit_id: str = Field(min_length=1, max_length=64)
+
+
+class SuggestionProposal(_Strict):
+    key: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    tasks: list[SuggestionTask] = Field(default_factory=list, max_length=10)
+    pilot_business_unit_id: str | None = None
+    assignees: list[SuggestionAssignee] = Field(default_factory=list, max_length=20)
+
+
+class MechanismProposal(_Strict):
+    key: str = Field(min_length=1, max_length=80)
+    formulation: str = Field(min_length=1, max_length=4000)
+    global_formulation: str = Field(default="", max_length=4000)
+    conditions: str = Field(default="", max_length=2000)
+    limits: str = Field(default="", max_length=2000)
+    uncertainty: str = Field(default="", max_length=2000)
+    evidence_item_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+class Proposals(_Strict):
+    """Drafts only. Not a Houston plan, a KPI target, or active Knowledge."""
+
+    suggestions: list[SuggestionProposal] = Field(default_factory=list, max_length=20)
+    mechanisms: list[MechanismProposal] = Field(default_factory=list, max_length=20)
+
+
 class BrainAnalysisV1(_Strict):
     schema_version: Literal["brain_analysis_v1"]
     subjects: list[Subject] = Field(min_length=1, max_length=40)
     coverage: list[PieceDisposition] = Field(max_length=2000)
     limits: list[AnalysisLimit] = Field(default_factory=list, max_length=40)
+    proposals: Proposals = Field(default_factory=Proposals)
 
 
 @dataclass(frozen=True)
@@ -311,6 +350,7 @@ def assess(payload, *, pieces, items, required_subject_keys=()) -> Assessment:
         issues.append(ContractIssue("insufficient_coverage", ("coverage",)))
     for index, subject in enumerate(parsed.subjects):
         _check_subject(subject, index, by_id, issues)
+    _check_proposals(parsed, by_id, issues)
     return Assessment(tuple(issues), keys, parsed)
 
 
@@ -398,12 +438,54 @@ def openai_strict_response_format() -> dict:
     limit = _strict_object(
         {"code": {"type": "string"}, "message": {"type": "string"}},
     )
+    suggestion_task = _strict_object(
+        {
+            "task": {"type": "string"},
+            "business_unit_id": {"type": ["string", "null"]},
+            "position": {"type": "integer"},
+            "description": {"type": "string"},
+        }
+    )
+    suggestion_assignee = _strict_object(
+        {
+            "membership_id": {"type": "string"},
+            "business_unit_id": {"type": "string"},
+        }
+    )
+    suggestion = _strict_object(
+        {
+            "key": {"type": "string"},
+            "title": {"type": "string"},
+            "description": {"type": "string"},
+            "tasks": {"type": "array", "items": {"$ref": "#/$defs/suggestion_task"}},
+            "pilot_business_unit_id": {"type": ["string", "null"]},
+            "assignees": {"type": "array", "items": {"$ref": "#/$defs/suggestion_assignee"}},
+        }
+    )
+    mechanism = _strict_object(
+        {
+            "key": {"type": "string"},
+            "formulation": {"type": "string"},
+            "global_formulation": {"type": "string"},
+            "conditions": {"type": "string"},
+            "limits": {"type": "string"},
+            "uncertainty": {"type": "string"},
+            "evidence_item_ids": {"type": "array", "items": {"type": "string"}},
+        }
+    )
+    proposals = _strict_object(
+        {
+            "suggestions": {"type": "array", "items": {"$ref": "#/$defs/suggestion"}},
+            "mechanisms": {"type": "array", "items": {"$ref": "#/$defs/mechanism"}},
+        }
+    )
     schema = _strict_object(
         {
             "schema_version": {"type": "string", "const": SCHEMA_VERSION},
             "subjects": {"type": "array", "items": {"$ref": "#/$defs/subject"}},
             "coverage": {"type": "array", "items": {"$ref": "#/$defs/coverage"}},
             "limits": {"type": "array", "items": {"$ref": "#/$defs/limit"}},
+            "proposals": {"$ref": "#/$defs/proposals"},
         }
     )
     schema["$defs"] = {
@@ -414,6 +496,11 @@ def openai_strict_response_format() -> dict:
         "subject": subject,
         "coverage": coverage,
         "limit": limit,
+        "suggestion_task": suggestion_task,
+        "suggestion_assignee": suggestion_assignee,
+        "suggestion": suggestion,
+        "mechanism": mechanism,
+        "proposals": proposals,
     }
     return {
         "type": "json_schema",
@@ -423,6 +510,27 @@ def openai_strict_response_format() -> dict:
             "schema": schema,
         },
     }
+
+
+def _check_proposals(parsed: BrainAnalysisV1, by_id: dict, issues: list[ContractIssue]) -> None:
+    seen_suggestions: set[str] = set()
+    for index, suggestion in enumerate(parsed.proposals.suggestions):
+        if suggestion.key in seen_suggestions:
+            issues.append(ContractIssue("response_invalid", ("proposals", "suggestions", index)))
+        seen_suggestions.add(suggestion.key)
+    seen_mechanisms: set[str] = set()
+    for index, mechanism in enumerate(parsed.proposals.mechanisms):
+        if mechanism.key in seen_mechanisms:
+            issues.append(ContractIssue("response_invalid", ("proposals", "mechanisms", index)))
+        seen_mechanisms.add(mechanism.key)
+        for offset, item_id in enumerate(mechanism.evidence_item_ids):
+            if str(item_id) not in by_id:
+                issues.append(
+                    ContractIssue(
+                        "invalid_reference",
+                        ("proposals", "mechanisms", index, "evidence_item_ids", offset),
+                    )
+                )
 
 
 def _check_subject(subject: Subject, index: int, by_id: dict, issues: list[ContractIssue]) -> None:

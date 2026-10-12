@@ -44,7 +44,10 @@ from houston.brain.models import (
 from houston.brain.objectives import record_objective_revision
 from houston.brain.records import EXTRACTOR_ID, EXTRACTOR_VERSION
 from houston.comments.models import Comment
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import (
+    EstablishmentActivityDescription,
+    EstablishmentMembership,
+)
 from houston.observations.models import Observation
 from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_CREATED,
@@ -547,12 +550,35 @@ def test_capture_keeps_feed_excluded_signals_late_declarations_and_a_stable_copy
     copied_item = dossier.items.get(stable_key=f"objective-revision:{copied.id}")
     assert copied_item.payload["revision_id"] == str(copied.id)
     assert copied_item.payload["indicator"] == "Couverture froid"
+    assert copied_item.payload["decision"] == "recorded"
+    assert copied_item.payload["success_condition"] == ""
     with pytest.raises(BrainWorkError) as refused:
         capture_dossier(analysis.id)
     assert refused.value.code == "dossier_already_closed"
     assert (
         dossier.items.get(stable_key=f"signal:{resolved.id}").payload["title"] == "Panne hors feed"
     )
+
+
+def test_activity_description_is_copied_at_close_and_a_later_edit_stays_out():
+    period_start, period_end = _period()
+    establishment = create_establishment(name="Dossier contexte", timezone="Europe/Paris")
+    owner = _owner(establishment)
+    EstablishmentActivityDescription.objects.create(
+        establishment=establishment,
+        description="Hôtel saisonnier, salle et petit-déjeuner.",
+    )
+    reporting = _reporting(establishment, owner.user, period_start, period_end)
+    dossier = capture_dossier(_analysis(owner, reporting).id)
+    item = dossier.items.get(category="establishment_context")
+    assert item.role == "copie"
+    assert item.payload["text"] == "Hôtel saisonnier, salle et petit-déjeuner."
+    assert item.payload["source_id"]
+    EstablishmentActivityDescription.objects.filter(establishment=establishment).update(
+        description="Texte vivant modifié après la fermeture du dossier."
+    )
+    item.refresh_from_db()
+    assert item.payload["text"] == "Hôtel saisonnier, salle et petit-déjeuner."
 
 
 def test_empty_establishment_still_records_every_minimal_search():
@@ -566,7 +592,10 @@ def test_empty_establishment_still_records_every_minimal_search():
     assert runs["objectifs_pertinents"].examined_count == 0
     assert runs["objectifs_pertinents"].retained_count == 0
     assert runs["declarations_tardives"].examined_count == 0
-    assert dossier.items.count() == 0
+    context = dossier.items.get()
+    assert context.category == "establishment_context"
+    assert context.role == "absent"
+    assert context.payload == {"present": False}
     assert dossier.closed_at is not None
 
 

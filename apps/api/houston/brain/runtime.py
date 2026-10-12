@@ -19,10 +19,12 @@ from houston.ai.models import AIUsageLog
 from houston.brain.capture import capture_dossier
 from houston.brain.collection import REQUIRED_SEARCHES
 from houston.brain.configuration import (
+    call_payload,
     digest,
     estimate_tokens,
     follow_up_ceilings,
     frozen_extraction,
+    frozen_knowledge,
     runtime_ceilings,
 )
 from houston.brain.contract import (
@@ -470,12 +472,14 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
     analysis = _running(analysis_id, token)
     if analysis is None or not _guard(analysis, token):
         return
+    knowledge = frozen_knowledge(analysis.configuration)
     try:
         planned = plan_lots(
             sections_from_payload(extraction.payload),
             per_call_input_tokens=ceilings["per_call_input_tokens"],
             total_input_tokens=ceilings["total_input_tokens"],
             max_calls=ceilings["max_calls"],
+            knowledge=knowledge,
         )
     except BrainWorkError as exc:
         _fail(analysis_id, token, exc.code)
@@ -490,7 +494,11 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         _fail(analysis_id, token, "insufficient_coverage")
         return
     synthesis_tokens = (
-        estimate_tokens(synthesis_envelope(pieces, items, runs)) if len(planned) > 1 else 0
+        estimate_tokens(
+            call_payload(synthesis_envelope(pieces, items, runs), analysis.configuration)
+        )
+        if len(planned) > 1
+        else 0
     )
     reserved = sum(lot.reserved_input_tokens for lot in planned) + synthesis_tokens
     calls = len(planned) + (1 if len(planned) > 1 else 0)
@@ -530,14 +538,16 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         if analysis.provider_calls_used >= ceilings["max_calls"]:
             _fail(analysis_id, token, "budget_exceeded")
             return
-        sent = lot.payload
-        sent_tokens = 0
-        if len(planned) == 1:
-            sent = analysis_envelope(lot.payload["sections"], pieces, items, runs)
-            sent_tokens = estimate_tokens(sent)
-            if sent_tokens > ceilings["per_call_input_tokens"]:
-                _fail(analysis_id, token, "budget_exceeded")
-                return
+        body = (
+            analysis_envelope(lot.payload["sections"], pieces, items, runs)
+            if len(planned) == 1
+            else lot.payload
+        )
+        sent = call_payload(body, analysis.configuration)
+        sent_tokens = estimate_tokens(sent)
+        if sent_tokens > ceilings["per_call_input_tokens"]:
+            _fail(analysis_id, token, "budget_exceeded")
+            return
         result = provider.complete(
             analysis_id=str(analysis_id),
             lot_key=lot.stable_key,
@@ -821,7 +831,7 @@ def _settle(
             token=token,
             provider=provider,
             lot_key=SYNTHESIS_KEY,
-            payload=synthesis_envelope(pieces, items, runs),
+            payload=call_payload(synthesis_envelope(pieces, items, runs), configuration),
             ceilings=ceilings,
             configuration=configuration,
         )
@@ -870,11 +880,14 @@ def _correct(
         token=token,
         provider=provider,
         lot_key=CORRECTION_KEY,
-        payload=correction_envelope(
-            assessment.issues,
-            pieces,
-            items,
-            assessment.subject_keys,
+        payload=call_payload(
+            correction_envelope(
+                assessment.issues,
+                pieces,
+                items,
+                assessment.subject_keys,
+            ),
+            configuration,
         ),
         ceilings=ceilings,
         configuration=configuration,
@@ -1012,13 +1025,17 @@ def _guard(analysis: BrainAnalysis | None, token) -> bool:
 
 
 def _complete(analysis_id, token, result: dict | None = None) -> bool:
-    completed = _transition(
-        analysis_id,
-        token,
-        status=BrainAnalysis.Status.COMPLETED,
-        only_if_not_canceled=True,
-        result=result,
-    )
+    try:
+        completed = _transition(
+            analysis_id,
+            token,
+            status=BrainAnalysis.Status.COMPLETED,
+            only_if_not_canceled=True,
+            result=result,
+        )
+    except BrainWorkError as exc:
+        _fail(analysis_id, token, exc.code)
+        return False
     if completed:
         logger.info(
             "brain_analysis_completed",
@@ -1079,6 +1096,10 @@ def _transition(
             return False
         if only_if_not_canceled and row.cancel_requested_at is not None:
             return False
+        if status == BrainAnalysis.Status.COMPLETED:
+            from houston.brain.publication import persist_completed_analysis
+
+            persist_completed_analysis(row, result)
         row.status = status
         if failure_code:
             row.failure_code = failure_code

@@ -8,7 +8,7 @@ import json
 from django.conf import settings
 
 from houston.brain.errors import BrainWorkError
-from houston.brain.models import BrainAnalysis, BrainExtraction
+from houston.brain.models import BrainAnalysis, BrainExtraction, BrainKnowledgeVersion
 
 _UNUSABLE = "La configuration figée de l'analyse est inutilisable."
 
@@ -25,14 +25,13 @@ RUNTIME_CEILING_KEYS = (
 
 
 def admission_configuration(extraction: BrainExtraction) -> dict:
-    knowledge = (settings.HOUSTON_BRAIN_KNOWLEDGE_VERSION or "").strip()
     return {
         "extractor_id": extraction.extractor_id,
         "extractor_version": extraction.extractor_version,
         "source_sha256": extraction.source_sha256,
         "schema_version": settings.HOUSTON_BRAIN_SCHEMA_VERSION,
         "prompt_version": settings.HOUSTON_BRAIN_PROMPT_VERSION,
-        "knowledge_version": knowledge or None,
+        "knowledge": selected_knowledge(),
         "model": settings.HOUSTON_BRAIN_MODEL,
         "provider": settings.HOUSTON_BRAIN_PROVIDER,
         "ceilings": {
@@ -52,6 +51,69 @@ def admission_configuration(extraction: BrainExtraction) -> dict:
             "attempt_soft_seconds": int(settings.HOUSTON_BRAIN_ATTEMPT_SOFT_SECONDS),
             "attempt_hard_seconds": int(settings.HOUSTON_BRAIN_ATTEMPT_HARD_SECONDS),
         },
+    }
+
+
+def empty_knowledge() -> dict:
+    """No Knowledge is selected. This is not a default corpus."""
+    return {
+        "version_id": None,
+        "selection": "none",
+        "formulation": "",
+        "conditions": "",
+        "limits": "",
+        "uncertainty": "",
+    }
+
+
+def selected_knowledge() -> dict:
+    """Copy the active version's content at admission. Later edits are not read again."""
+    version = (
+        BrainKnowledgeVersion.objects.filter(is_active=True)
+        .only("id", "global_formulation", "conditions", "limits", "uncertainty")
+        .first()
+    )
+    if version is None:
+        return empty_knowledge()
+    return _knowledge_snapshot(version)
+
+
+def frozen_knowledge(configuration: object) -> dict:
+    """Content already copied onto the analysis. The live version row is not loaded."""
+    if not isinstance(configuration, dict):
+        return empty_knowledge()
+    raw = configuration.get("knowledge")
+    if not isinstance(raw, dict):
+        return empty_knowledge()
+    version_id = raw.get("version_id")
+    selection = raw.get("selection")
+    if selection not in {"none", "active"}:
+        selection = "active" if version_id else "none"
+    return {
+        "version_id": None if not version_id else str(version_id),
+        "selection": selection,
+        "formulation": str(raw.get("formulation") or ""),
+        "conditions": str(raw.get("conditions") or ""),
+        "limits": str(raw.get("limits") or ""),
+        "uncertainty": str(raw.get("uncertainty") or ""),
+    }
+
+
+def call_payload(body: dict, configuration: object) -> dict:
+    """Attach the frozen Knowledge to one provider call."""
+    payload = dict(body)
+    payload["knowledge"] = frozen_knowledge(configuration)
+    return payload
+
+
+def _knowledge_snapshot(version: BrainKnowledgeVersion) -> dict:
+    return {
+        "version_id": str(version.id),
+        "selection": "active",
+        "formulation": version.global_formulation,
+        "conditions": version.conditions,
+        "limits": version.limits,
+        "uncertainty": version.uncertainty,
     }
 
 

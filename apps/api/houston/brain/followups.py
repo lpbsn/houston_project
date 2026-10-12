@@ -18,7 +18,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
-from houston.brain.configuration import digest, estimate_tokens, follow_up_ceilings
+from houston.brain.configuration import (
+    digest,
+    estimate_tokens,
+    follow_up_ceilings,
+    frozen_knowledge,
+)
 from houston.brain.errors import BrainWorkError
 from houston.brain.models import (
     BrainAnalysis,
@@ -367,7 +372,7 @@ def _context_payload(message, analysis, by_id, required_ids, ceilings) -> dict:
         "question": message.body,
         "purpose": message.purpose,
         "frozen_configuration": {
-            "knowledge_version": config.get("knowledge_version"),
+            "knowledge": frozen_knowledge(config),
             "schema_version": config.get("schema_version"),
             "prompt_version": config.get("prompt_version"),
             "model": config.get("model"),

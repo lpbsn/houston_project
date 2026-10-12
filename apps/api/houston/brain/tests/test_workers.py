@@ -15,7 +15,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
-from houston.brain.configuration import digest
+from houston.brain.configuration import digest, frozen_knowledge
 from houston.brain.contract import minimal_analysis
 from houston.brain.lots import plan_lots, sections_from_payload
 from houston.brain.models import BrainAnalysis, BrainLot, BrainWorkerBeat
@@ -258,6 +258,7 @@ def test_a_live_worker_reuses_a_validated_lot_without_calling_the_provider(setti
         per_call_input_tokens=ceilings["per_call_input_tokens"],
         total_input_tokens=ceilings["total_input_tokens"],
         max_calls=ceilings["max_calls"],
+        knowledge=frozen_knowledge(analysis.configuration),
     )
     lot = planned[0]
     writer = uuid.uuid4()

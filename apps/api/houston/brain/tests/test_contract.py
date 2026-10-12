@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from houston.brain.configuration import estimate_tokens
+from houston.brain.configuration import empty_knowledge, estimate_tokens
 from houston.brain.contract import CORRECTION_KEY, SCHEMA_VERSION, minimal_analysis
 from houston.brain.lots import plan_lots, sections_from_payload
 from houston.brain.models import BrainAnalysis, BrainLot, BrainSearchRun
@@ -166,7 +166,8 @@ def test_a_hostile_instruction_does_not_grant_success(monkeypatch):
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.FAILED
     assert analysis.failure_code == "response_invalid"
-    assert analysis.configuration["knowledge_version"] is None
+    assert analysis.configuration["knowledge"]["selection"] == "none"
+    assert analysis.configuration["knowledge"]["formulation"] == ""
     assert _HOSTILE not in _blob(provider.calls[1]["payload"])
     assert "coverage_complete" not in analysis.configuration
 
@@ -176,7 +177,8 @@ def test_hostile_text_kept_as_data_can_still_complete(monkeypatch):
     _run(analysis, [_valid])
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.COMPLETED
-    assert analysis.configuration["knowledge_version"] is None
+    assert analysis.configuration["knowledge"]["selection"] == "none"
+    assert analysis.configuration["knowledge"]["formulation"] == ""
     assert _HOSTILE in _blob(analysis.reporting.extractions.get().payload)
 
 
@@ -351,7 +353,7 @@ def _numeric_table(settings, *, raw_repeat: int):
         "rows": parent["rows"][:1],
         "piece_id": f"{parent['piece_id']}-p0000",
     }
-    per_call = estimate_tokens({"sections": [child]})
+    per_call = estimate_tokens({"sections": [child], "knowledge": empty_knowledge()})
     settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = per_call
     settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = per_call * 20
     settings.HOUSTON_BRAIN_MAX_CALLS = 8
@@ -362,6 +364,7 @@ def _numeric_table(settings, *, raw_repeat: int):
         per_call_input_tokens=per_call,
         total_input_tokens=per_call * 20,
         max_calls=8,
+        knowledge=empty_knowledge(),
     )
     assert len(planned) > 1
     assert any("-p" in piece for piece in _pieces(planned))
@@ -388,7 +391,7 @@ def _subdivided(settings):
         "locator": parent["locator"],
         "piece_id": f"{parent['piece_id']}-p0000",
     }
-    per_call = estimate_tokens({"sections": [child]})
+    per_call = estimate_tokens({"sections": [child], "knowledge": empty_knowledge()})
     settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = per_call
     settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = per_call * 20
     settings.HOUSTON_BRAIN_MAX_CALLS = 8
@@ -399,6 +402,7 @@ def _subdivided(settings):
         per_call_input_tokens=per_call,
         total_input_tokens=per_call * 20,
         max_calls=8,
+        knowledge=empty_knowledge(),
     )
     assert len(planned) > 1
     assert any("-p" in piece for piece in _pieces(planned))

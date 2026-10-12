@@ -67,7 +67,9 @@ def test_owner_admission_inserts_one_queued_analysis_and_slot():
     assert analysis.status == BrainAnalysis.Status.QUEUED
     assert analysis.author_id == owner.user_id
     assert analysis.configuration["extractor_id"] == EXTRACTOR_ID
-    assert analysis.configuration["knowledge_version"] is None
+    assert analysis.configuration["knowledge"]["selection"] == "none"
+    assert analysis.configuration["knowledge"]["version_id"] is None
+    assert analysis.configuration["knowledge"]["formulation"] == ""
     slot = BrainSlot.objects.get(analysis=analysis)
     assert slot.kind == BrainSlot.Kind.ANALYSIS
     assert slot.status == BrainSlot.Status.QUEUED

@@ -8,14 +8,36 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from django.db import connections
+from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.brain.admission import admit_brain_work
-from houston.brain.configuration import digest, estimate_tokens
-from houston.brain.contract import SYNTHESIS_KEY, minimal_analysis
+from houston.brain.configuration import (
+    call_payload,
+    digest,
+    empty_knowledge,
+    estimate_tokens,
+    frozen_knowledge,
+    selected_knowledge,
+)
+from houston.brain.contract import (
+    CORRECTION_KEY,
+    SYNTHESIS_KEY,
+    minimal_analysis,
+    synthesis_envelope,
+)
+from houston.brain.followups import run_brain_follow_up
 from houston.brain.lots import plan_lots, sections_from_payload
-from houston.brain.models import BrainAnalysis, BrainDossier, BrainExtraction, BrainLot, BrainSlot
-from houston.brain.provider import ProviderCallResult
+from houston.brain.models import (
+    BrainAnalysis,
+    BrainDossier,
+    BrainDossierItem,
+    BrainExtraction,
+    BrainKnowledgeVersion,
+    BrainLot,
+    BrainSlot,
+)
+from houston.brain.provider import FakeBrainProvider, ProviderCallResult
 from houston.brain.runtime import (
     claim_analysis,
     request_analysis_cancel,
@@ -179,7 +201,8 @@ def test_validated_lot_is_reused_after_a_knowledge_setting_change(monkeypatch, s
     writer = first_lot.attempt_token
     settings.HOUSTON_BRAIN_KNOWLEDGE_VERSION = "knowledge-activated"
     analysis.refresh_from_db()
-    assert analysis.configuration["knowledge_version"] is None
+    assert analysis.configuration["knowledge"]["selection"] == "none"
+    assert analysis.configuration["knowledge"]["formulation"] == ""
     follow = ScriptedProvider(
         [
             _ok("two"),
@@ -220,6 +243,7 @@ def test_input_hash_and_configuration_hash_are_compared_separately(monkeypatch):
         per_call_input_tokens=ceilings["per_call_input_tokens"],
         total_input_tokens=ceilings["total_input_tokens"],
         max_calls=ceilings["max_calls"],
+        knowledge=frozen_knowledge(analysis.configuration),
     )
     lot = planned[0]
     BrainLot.objects.create(
@@ -359,9 +383,203 @@ def _two_section_ceilings() -> tuple[int, int]:
         "locator": {"block": 1},
         "piece_id": "s0001",
     }
-    single = estimate_tokens({"sections": [one]})
-    both = estimate_tokens({"sections": [one, two]})
+    knowledge = empty_knowledge()
+    single = estimate_tokens({"sections": [one], "knowledge": knowledge})
+    both = estimate_tokens({"sections": [one, two], "knowledge": knowledge})
     per_call = max(single, both - 1)
-    assert estimate_tokens({"sections": [one]}) <= per_call
-    assert estimate_tokens({"sections": [one, two]}) > per_call
+    assert single <= per_call
+    assert both > per_call
     return per_call, both
+
+
+def test_frozen_knowledge_is_sent_and_a_later_edit_does_not_change_it(monkeypatch):
+    _allow_publish(monkeypatch)
+    monkeypatch.setattr("houston.brain.runtime.publish_brain_follow_up", lambda *_a, **_k: True)
+    BrainKnowledgeVersion.objects.create(
+        global_formulation="CONNAISSANCE-FIGEE-SERVICE",
+        conditions="Plusieurs services.",
+        limits="N'explique pas une cause locale.",
+        uncertainty="Hypothèse générale.",
+        approved_at=timezone.now(),
+        is_active=True,
+    )
+    snapshot = selected_knowledge()
+    analysis = _prepare(pytest_settings(), ["Note de service."])
+    provider = ScriptedProvider(
+        [
+            ProviderCallResult(
+                output={"schema_version": "brain_analysis_v1"},
+                truncated=False,
+                input_tokens=1,
+                output_tokens=1,
+            ),
+            ProviderCallResult(
+                output=minimal_analysis(["s0000"]),
+                truncated=False,
+                input_tokens=1,
+                output_tokens=1,
+            ),
+        ]
+    )
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.COMPLETED
+    assert [call["lot_key"] for call in provider.calls] == ["lot-0001", CORRECTION_KEY]
+    assert provider.calls[0]["payload"]["knowledge"] == snapshot
+    assert provider.calls[1]["payload"]["knowledge"] == snapshot
+    stored = BrainLot.objects.get(analysis=analysis)
+    assert stored.configuration_hash == digest(analysis.configuration)
+    assert stored.input_hash == digest(
+        {
+            "knowledge": snapshot,
+            "sections": provider.calls[0]["payload"]["sections"],
+        }
+    )
+    synthesis = call_payload(synthesis_envelope([], [], []), analysis.configuration)
+    assert synthesis["knowledge"] == snapshot
+    version = BrainKnowledgeVersion.objects.get(pk=snapshot["version_id"])
+    version.global_formulation = "CONNAISSANCE-REMPLACEE"
+    version.is_active = False
+    version.save(update_fields=["global_formulation", "is_active", "updated_at"])
+    BrainKnowledgeVersion.objects.create(
+        global_formulation="AUTRE-VERSION-ACTIVEE",
+        approved_at=timezone.now(),
+        is_active=True,
+    )
+    analysis.refresh_from_db()
+    assert analysis.configuration["knowledge"] == snapshot
+    assert BrainLot.objects.get(pk=stored.id).configuration_hash == stored.configuration_hash
+    item = BrainDossierItem.objects.filter(dossier__analysis=analysis).first()
+
+    class _Recording(FakeBrainProvider):
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, *, analysis_id, lot_key, payload, timeout_seconds):
+            self.calls.append(payload)
+            return super().complete(
+                analysis_id=analysis_id,
+                lot_key=lot_key,
+                payload=payload,
+                timeout_seconds=timeout_seconds,
+            )
+
+    follow = _Recording()
+    message = admit_brain_work(
+        user=analysis.author,
+        establishment_id=analysis.establishment_id,
+        analysis_id=analysis.id,
+        request_id="connaissance",
+        body="Que dit le dossier ?",
+        purpose="explain",
+        cited_item_ids=[str(item.id)],
+    )
+    run_brain_follow_up(message.id, message.attempt_token, provider=follow)
+    message.refresh_from_db()
+    assert message.status == message.Status.COMPLETED
+    sent = json.dumps(follow.calls[0], ensure_ascii=False)
+    assert follow.calls[0]["frozen_configuration"]["knowledge"] == snapshot
+    assert "CONNAISSANCE-REMPLACEE" not in sent
+    assert "AUTRE-VERSION-ACTIVEE" not in sent
+
+
+def test_multi_lot_synthesis_counts_frozen_knowledge_in_its_budget(monkeypatch, settings):
+    _allow_publish(monkeypatch)
+    version = BrainKnowledgeVersion.objects.create(
+        global_formulation="CONNAISSANCE-SYNTHESE-FIGEE",
+        conditions="Condition explicite figée pour la synthèse.",
+        limits="Limite figée pour la synthèse.",
+        uncertainty="Incertitude figée pour la synthèse.",
+        approved_at=timezone.now(),
+        is_active=True,
+    )
+    snapshot = selected_knowledge()
+    texts = ["alpha " * 2000, "bravo " * 2000]
+    preview = sections_from_payload(
+        {
+            "measures": [],
+            "qualitative": [
+                {"kind": "paragraph", "text": text, "locator": {"block": index}}
+                for index, text in enumerate(texts)
+            ],
+        }
+    )
+    per_call = estimate_tokens({"sections": [preview[0]], "knowledge": snapshot})
+    both = estimate_tokens({"sections": preview, "knowledge": snapshot})
+    assert both > per_call
+    total = per_call * 6
+    settings.HOUSTON_BRAIN_MAX_CALLS = 4
+    analysis = _prepare(settings, texts, per_call=per_call, total=total)
+    assert analysis.configuration["knowledge"] == snapshot
+
+    class _LotsThenSynthesis:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, *, analysis_id, lot_key, payload, timeout_seconds):
+            del analysis_id, timeout_seconds
+            self.calls.append({"lot_key": lot_key, "payload": payload})
+            if len(self.calls) == 1:
+                version.global_formulation = "CONNAISSANCE-REMPLACEE-AVANT-SYNTHESE"
+                version.conditions = "Conditions remplacées."
+                version.limits = "Limites remplacées."
+                version.uncertainty = "Incertitude remplacée."
+                version.is_active = False
+                version.save(
+                    update_fields=[
+                        "global_formulation",
+                        "conditions",
+                        "limits",
+                        "uncertainty",
+                        "is_active",
+                        "updated_at",
+                    ]
+                )
+                BrainKnowledgeVersion.objects.create(
+                    global_formulation="AUTRE-VERSION-ACTIVEE-POUR-SYNTHESE",
+                    conditions="Autre condition vivante.",
+                    limits="Autre limite vivante.",
+                    uncertainty="Autre incertitude vivante.",
+                    approved_at=timezone.now(),
+                    is_active=True,
+                )
+            piece_ids = (
+                list(payload["required_piece_ids"])
+                if lot_key == SYNTHESIS_KEY
+                else ["s0000"]
+            )
+            return ProviderCallResult(
+                output=minimal_analysis(piece_ids),
+                truncated=False,
+                input_tokens=1,
+                output_tokens=1,
+            )
+
+    provider = _LotsThenSynthesis()
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.COMPLETED
+    assert [call["lot_key"] for call in provider.calls] == [
+        "lot-0001",
+        "lot-0002",
+        SYNTHESIS_KEY,
+    ]
+    synthesis = provider.calls[2]["payload"]
+    assert synthesis["knowledge"] == snapshot
+    sent = json.dumps(synthesis, ensure_ascii=False)
+    assert "CONNAISSANCE-REMPLACEE-AVANT-SYNTHESE" not in sent
+    assert "AUTRE-VERSION-ACTIVEE-POUR-SYNTHESE" not in sent
+    bare = {key: value for key, value in synthesis.items() if key != "knowledge"}
+    synthesis_tokens = estimate_tokens(synthesis)
+    assert synthesis_tokens > estimate_tokens(bare)
+    ceilings = analysis.configuration["ceilings"]
+    planned = plan_lots(
+        sections_from_payload(analysis.reporting.extractions.get().payload),
+        per_call_input_tokens=ceilings["per_call_input_tokens"],
+        total_input_tokens=ceilings["total_input_tokens"],
+        max_calls=ceilings["max_calls"],
+        knowledge=snapshot,
+    )
+    assert len(planned) == 2
+    lot_reserved = sum(lot.reserved_input_tokens for lot in planned)
+    assert analysis.reserved_input_tokens == lot_reserved + synthesis_tokens

@@ -22,8 +22,11 @@ from houston.brain.models import (
     BrainDossier,
     BrainDossierItem,
     BrainLot,
+    BrainMechanismCandidate,
     BrainMessage,
+    BrainObjectiveEvaluation,
     BrainSlot,
+    BrainSuggestion,
 )
 from houston.brain.provider import FakeBrainProvider
 from houston.brain.recovery import recover_brain_works
@@ -72,7 +75,14 @@ def _completed(*, knowledge: str = "k-figee"):
         result=minimal_analysis(["s0000"]),
     )
     configuration = dict(analysis.configuration)
-    configuration["knowledge_version"] = knowledge
+    configuration["knowledge"] = {
+        "version_id": knowledge,
+        "selection": "active",
+        "formulation": f"Formule figée {knowledge}.",
+        "conditions": "Condition figée.",
+        "limits": "Limite figée.",
+        "uncertainty": "Incertitude figée.",
+    }
     analysis.configuration = configuration
     analysis.save(update_fields=["configuration", "updated_at"])
     dossier = BrainDossier.objects.create(
@@ -167,7 +177,10 @@ def test_explanation_and_hypothesis_use_the_frozen_dossier(settings):
     body = json.dumps(provider.calls[0], ensure_ascii=False)
     assert "PREUVE-INTACTE-SALLE" in body
     assert "FORBIDDEN_LIVE" not in body
-    assert provider.calls[0]["frozen_configuration"]["knowledge_version"] == "k-figee"
+    frozen = provider.calls[0]["frozen_configuration"]["knowledge"]
+    assert frozen["version_id"] == "k-figee"
+    assert frozen["formulation"] == "Formule figée k-figee."
+    assert frozen["conditions"] == "Condition figée."
     assert "k-vivant" not in body
     slot_free = _ask(
         owner,
@@ -588,7 +601,8 @@ def test_unusable_configuration_proposes_reanalysis_without_replacing_it(setting
     assert message.status == BrainMessage.Status.FAILED
     assert message.failure_code == "configuration_unusable"
     assert message.result["reanalysis"]["launched"] is False
-    assert analysis.configuration["knowledge_version"] == "k-figee"
+    assert analysis.configuration["knowledge"]["version_id"] == "k-figee"
+    assert analysis.configuration["knowledge"]["formulation"] == "Formule figée k-figee."
     assert "follow_up_max_calls" not in analysis.configuration["ceilings"]
     assert _snapshot(analysis) == before
 
@@ -628,6 +642,9 @@ def test_model_output_cannot_publish_a_decision_or_an_unknown_source(monkeypatch
     assert unlabeled.status == BrainMessage.Status.FAILED
     assert unlabeled.failure_code == "response_invalid"
     assert _snapshot(analysis) == before
+    assert BrainSuggestion.objects.count() == 0
+    assert BrainObjectiveEvaluation.objects.count() == 0
+    assert BrainMechanismCandidate.objects.count() == 0
 
 
 def test_follow_up_transport_loss_does_not_change_the_completed_analysis(monkeypatch, settings):

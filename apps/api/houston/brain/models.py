@@ -446,7 +446,7 @@ class BrainSearchRun(BaseModel):
 
 
 class BrainObjective(BaseModel):
-    """Establishment objective. Evaluations and the current bilan stay out of this lot."""
+    """Living objective. The bilan points at an evaluation and does not rewrite a revision."""
 
     establishment = models.ForeignKey(
         "establishments.Establishment",
@@ -456,6 +456,13 @@ class BrainObjective(BaseModel):
     current_revision = models.ForeignKey(
         "BrainObjectiveRevision",
         on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+    )
+    current_bilan = models.ForeignKey(
+        "BrainObjectiveEvaluation",
+        on_delete=models.SET_NULL,
         related_name="+",
         null=True,
         blank=True,
@@ -486,11 +493,21 @@ class BrainObjectiveRevision(BaseModel):
     scope = models.CharField(max_length=255, blank=True, default="")
     reference = models.CharField(max_length=255, blank=True, default="")
     target = models.CharField(max_length=255, blank=True, default="")
+    success_condition = models.CharField(max_length=32, blank=True, default="")
     due_on = models.DateField(null=True, blank=True)
     measurement_period_start = models.DateField(null=True, blank=True)
     measurement_period_end = models.DateField(null=True, blank=True)
     method = models.TextField(blank=True, default="")
     content_hash = models.CharField(max_length=64)
+    decision = models.CharField(max_length=16, default="recorded")
+    justification = models.TextField(blank=True, default="")
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         constraints = [
@@ -505,6 +522,16 @@ class BrainObjectiveRevision(BaseModel):
                     measurement_period_end__gt=F("measurement_period_start"),
                 ),
                 name="brain_rev_measure_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(decision__in=["recorded", "accepted", "modified", "refused"]),
+                name="brain_rev_decision_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    success_condition__in=["", "eq", "gt", "gte", "lt", "lte", "qualitative"]
+                ),
+                name="brain_rev_cond_chk",
             ),
         ]
         indexes = [
@@ -572,3 +599,266 @@ class BrainWorkerBeat(models.Model):
 
     def __str__(self) -> str:
         return f"BrainWorkerBeat {self.process_name} {self.in_flight}/{self.concurrency}"
+
+
+class BrainSuggestion(BaseModel):
+    """Editable plan draft. Conversion stores the Houston plan id without a cascade."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        CONVERTED = "converted", "Converted"
+
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_suggestions",
+    )
+    analysis = models.ForeignKey(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="suggestions",
+    )
+    stable_key = models.CharField(max_length=80)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    current_revision = models.ForeignKey(
+        "BrainSuggestionRevision",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+    )
+    action_plan_id = models.UUIDField(null=True, blank=True)
+    converted_at = models.DateTimeField(null=True, blank=True)
+    converted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["analysis", "stable_key"],
+                name="brain_sug_an_key_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(status__in=["draft", "converted"]),
+                name="brain_sug_status_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(status="draft", action_plan_id__isnull=True)
+                | Q(status="converted", action_plan_id__isnull=False),
+                name="brain_sug_plan_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["establishment", "status"], name="brain_sug_est_stat_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainSuggestion {self.stable_key} [{self.status}]"
+
+
+class BrainSuggestionRevision(BaseModel):
+    suggestion = models.ForeignKey(
+        BrainSuggestion,
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    number = models.PositiveIntegerField()
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    tasks = models.JSONField(default=list)
+    pilot_business_unit_id = models.UUIDField(null=True, blank=True)
+    assignees = models.JSONField(default=list)
+    start_at = models.DateTimeField(null=True, blank=True)
+    end_at = models.DateTimeField(null=True, blank=True)
+    occurrence_date = models.DateField(null=True, blank=True)
+    all_day = models.BooleanField(default=False)
+    requires_validation = models.BooleanField(default=True)
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="brain_suggestion_revisions",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["suggestion", "number"],
+                name="brain_sugrev_num_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(number__gte=1),
+                name="brain_sugrev_num_chk",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainSuggestionRevision {self.suggestion_id}#{self.number}"
+
+
+class BrainObjectiveEvaluation(BaseModel):
+    """One reading of a captured revision. It does not rewrite that revision."""
+
+    class Outcome(models.TextChoices):
+        REACHED = "reached", "Reached"
+        NOT_REACHED = "not_reached", "Not reached"
+        NON_EVALUABLE = "non_evaluable", "Non evaluable"
+        QUALITATIVE = "qualitative", "Qualitative"
+
+    analysis = models.ForeignKey(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="objective_evaluations",
+    )
+    objective = models.ForeignKey(
+        BrainObjective,
+        on_delete=models.PROTECT,
+        related_name="evaluations",
+    )
+    revision = models.ForeignKey(
+        BrainObjectiveRevision,
+        on_delete=models.PROTECT,
+        related_name="evaluations",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_objective_evaluations",
+    )
+    measured_period_start = models.DateField()
+    measured_period_end = models.DateField()
+    outcome = models.CharField(max_length=32, choices=Outcome.choices)
+    reason = models.CharField(max_length=80, blank=True, default="")
+    source_item_ids = models.JSONField(default=list)
+    measure = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["analysis", "revision"],
+                name="brain_eval_an_rev_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(measured_period_end__gt=F("measured_period_start")),
+                name="brain_eval_period_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(outcome__in=["reached", "not_reached", "non_evaluable", "qualitative"]),
+                name="brain_eval_outcome_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["objective", "measured_period_end"],
+                name="brain_eval_obj_end_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainObjectiveEvaluation {self.revision_id} [{self.outcome}]"
+
+
+class BrainKnowledgeVersion(BaseModel):
+    """Platform formulation. Approval does not activate it."""
+
+    global_formulation = models.TextField()
+    conditions = models.TextField(blank=True, default="")
+    limits = models.TextField(blank=True, default="")
+    uncertainty = models.TextField(blank=True, default="")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_active"],
+                condition=Q(is_active=True),
+                name="brain_know_one_active",
+            ),
+            models.CheckConstraint(
+                condition=~Q(is_active=True) | Q(approved_at__isnull=False),
+                name="brain_know_active_appr_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["approved_at"], name="brain_know_appr_idx"),
+        ]
+
+    def __str__(self) -> str:
+        state = "active" if self.is_active else "inactive"
+        return f"BrainKnowledgeVersion {self.id} [{state}]"
+
+
+class BrainMechanismCandidate(BaseModel):
+    """Client candidate. Platform reads the global formulation, not the private evidence."""
+
+    class Status(models.TextChoices):
+        CANDIDATE = "candidate", "Candidate"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    analysis = models.ForeignKey(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="mechanism_candidates",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_mechanism_candidates",
+    )
+    stable_key = models.CharField(max_length=80)
+    formulation = models.TextField()
+    global_formulation = models.TextField(blank=True, default="")
+    conditions = models.TextField(blank=True, default="")
+    limits = models.TextField(blank=True, default="")
+    uncertainty = models.TextField(blank=True, default="")
+    origin = models.CharField(max_length=32, default="analysis")
+    private_evidence = models.JSONField(default=list)
+    global_representation = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.CANDIDATE,
+    )
+    knowledge_version = models.ForeignKey(
+        BrainKnowledgeVersion,
+        on_delete=models.PROTECT,
+        related_name="candidates",
+        null=True,
+        blank=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["analysis", "stable_key"],
+                name="brain_mech_an_key_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(status__in=["candidate", "approved", "rejected"]),
+                name="brain_mech_status_chk",
+            ),
+            models.CheckConstraint(
+                condition=~Q(status="approved") | Q(knowledge_version__isnull=False),
+                name="brain_mech_appr_ver_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="brain_mech_stat_cr_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainMechanismCandidate {self.stable_key} [{self.status}]"
