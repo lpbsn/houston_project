@@ -181,6 +181,10 @@ class Signal(BaseModel):
                 fields=["establishment", "activity_subject"],
                 name="signal_est_act_subject_idx",
             ),
+            models.Index(
+                fields=["establishment", "created_at"],
+                name="signal_est_created_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(

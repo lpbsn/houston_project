@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
@@ -100,3 +102,295 @@ class BrainExtraction(BaseModel):
 
     def __str__(self) -> str:
         return f"BrainExtraction {self.extractor_id}@{self.extractor_version}"
+
+
+class BrainAnalysis(BaseModel):
+    """One explicit analysis request. Configuration is copied at admission and left unchanged."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
+
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_analyses",
+    )
+    reporting = models.ForeignKey(
+        BrainReporting,
+        on_delete=models.CASCADE,
+        related_name="analyses",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="authored_brain_analyses",
+    )
+    idempotency_key = models.CharField(max_length=128)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+    )
+    attempt_token = models.UUIDField(default=uuid.uuid4)
+    attempt_count = models.PositiveIntegerField(default=0)
+    transient_retries_used = models.PositiveIntegerField(default=0)
+    transport_republish_count = models.PositiveIntegerField(default=0)
+    transport_stall_since = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    cancel_requested_at = models.DateTimeField(null=True, blank=True)
+    configuration = models.JSONField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "idempotency_key"],
+                name="brain_an_est_idem_uniq",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    status__in=[
+                        "queued",
+                        "running",
+                        "completed",
+                        "failed",
+                        "canceled",
+                    ]
+                ),
+                name="brain_an_status_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["author"], name="brain_an_author_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainAnalysis {self.id} [{self.status}]"
+
+
+class BrainCapacity(models.Model):
+    """Single lock row. Admission locks it and releases the lock at commit."""
+
+    singleton_key = models.PositiveSmallIntegerField(primary_key=True, default=1)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(singleton_key=1),
+                name="brain_capacity_singleton",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return "BrainCapacity"
+
+
+class BrainSlot(BaseModel):
+    """One active Brain work for an establishment. Uniqueness is the slot, not an analysis index."""
+
+    class Kind(models.TextChoices):
+        ANALYSIS = "analysis", "Analysis"
+        FOLLOW_UP = "follow_up", "Follow-up"
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_slots",
+    )
+    analysis = models.ForeignKey(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="slots",
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    status = models.CharField(max_length=16, choices=Status.choices)
+    token = models.UUIDField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment"],
+                condition=Q(status__in=["queued", "running"]),
+                name="brain_slot_one_active",
+            ),
+            models.CheckConstraint(
+                condition=Q(kind__in=["analysis", "follow_up"]),
+                name="brain_slot_kind_chk",
+            ),
+            models.CheckConstraint(
+                condition=Q(status__in=["queued", "running"]),
+                name="brain_slot_status_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["analysis"], name="brain_slot_analysis_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainSlot {self.establishment_id} [{self.kind}/{self.status}]"
+
+
+class BrainDossier(BaseModel):
+    """Frozen capture. closed_at is written with the items; nothing is rewritten after that."""
+
+    analysis = models.OneToOneField(
+        BrainAnalysis,
+        on_delete=models.CASCADE,
+        related_name="dossier",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_dossiers",
+    )
+    timezone = models.CharField(max_length=63)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    capture_started_at = models.DateTimeField()
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(period_end__gt=F("period_start")),
+                name="brain_dos_period_chk",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        state = "closed" if self.closed_at else "open"
+        return f"BrainDossier {self.analysis_id} [{state}]"
+
+
+class BrainDossierItem(BaseModel):
+    """Copied source. source identity lives in the payload, with no cascade back to the live row."""
+
+    dossier = models.ForeignKey(
+        BrainDossier,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    category = models.CharField(max_length=32)
+    stable_key = models.CharField(max_length=96)
+    role = models.CharField(max_length=32)
+    payload = models.JSONField()
+    reason = models.CharField(max_length=80, blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["dossier", "stable_key"],
+                name="brain_item_dos_key_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["dossier", "category"], name="brain_item_dos_cat_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainDossierItem {self.category}:{self.stable_key}"
+
+
+class BrainSearchRun(BaseModel):
+    """One executed search, including a search that retained nothing."""
+
+    dossier = models.ForeignKey(
+        BrainDossier,
+        on_delete=models.CASCADE,
+        related_name="search_runs",
+    )
+    code = models.CharField(max_length=64)
+    criteria = models.JSONField()
+    examined_count = models.PositiveIntegerField()
+    retained_count = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["dossier", "code"],
+                name="brain_search_dos_code_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainSearchRun {self.code} {self.retained_count}/{self.examined_count}"
+
+
+class BrainObjective(BaseModel):
+    """Establishment objective. Evaluations and the current bilan stay out of this lot."""
+
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_objectives",
+    )
+    current_revision = models.ForeignKey(
+        "BrainObjectiveRevision",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["establishment"], name="brain_obj_est_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainObjective {self.id}"
+
+
+class BrainObjectiveRevision(BaseModel):
+    objective = models.ForeignKey(
+        BrainObjective,
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brain_objective_revisions",
+    )
+    indicator = models.CharField(max_length=255)
+    unit = models.CharField(max_length=64, blank=True, default="")
+    scope = models.CharField(max_length=255, blank=True, default="")
+    reference = models.CharField(max_length=255, blank=True, default="")
+    target = models.CharField(max_length=255, blank=True, default="")
+    due_on = models.DateField(null=True, blank=True)
+    measurement_period_start = models.DateField(null=True, blank=True)
+    measurement_period_end = models.DateField(null=True, blank=True)
+    method = models.TextField(blank=True, default="")
+    content_hash = models.CharField(max_length=64)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(
+                    measurement_period_start__isnull=True,
+                    measurement_period_end__isnull=True,
+                )
+                | Q(
+                    measurement_period_start__isnull=False,
+                    measurement_period_end__isnull=False,
+                    measurement_period_end__gt=F("measurement_period_start"),
+                ),
+                name="brain_rev_measure_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["objective", "created_at"], name="brain_rev_obj_cr_idx"),
+            models.Index(fields=["establishment", "created_at"], name="brain_rev_est_cr_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"BrainObjectiveRevision {self.id}"
