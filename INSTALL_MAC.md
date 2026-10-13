@@ -49,7 +49,7 @@ Optionnel : `OPENAI_API_KEY` (serveur uniquement), `HOUSTON_AI_*`, `VITE_API_BAS
 ## Autres profils
 
 - Frontend dans Docker : `make up` (pas `make web-dev` en parallèle). Rebuild images : `make up-build`.
-- Init granulaires : `make migrate` · `make import-catalog` · `make catalog-check` (14 BU / 134 AS catalogue global, pas les instances établissement).
+- Init granulaires : `make migrate` · `make import-catalog` · `make catalog-check` (seed versionné : 19 BU / 161 sujets. L’import ne retire pas les lignes de catalogue déjà en base et absentes du CSV ; `catalog-check` ne réussit que si la base a exactement ces compteurs. Ce ne sont pas les instances établissement).
 - Types API après pull qui change le contrat : `make schema` puis `make web-api-generate`.
 - Après `git pull` : `make build-backend` si Dockerfiles/deps ; sinon `make bootstrap-dev` ; `make web-install` si `package-lock.json` a changé.
 
