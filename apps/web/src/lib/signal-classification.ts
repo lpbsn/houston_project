@@ -1,5 +1,7 @@
 /** Compatibility display fields from Signal/Obs summaries — never use *_key as identifiers (UUIDs only). */
 export type SignalClassificationInput = {
+  responsible_business_unit_color_index?: number | null
+  affected_business_unit_color_index?: number | null
   affected_business_unit_id?: string | null
   affected_business_unit_key?: string | null
   affected_business_unit_label?: string | null
