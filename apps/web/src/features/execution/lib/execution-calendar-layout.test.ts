@@ -1,187 +1,69 @@
 import { describe, expect, it } from 'vitest'
-
 import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
+import { buildCalendarSpans, executionCalendarDateRange } from './execution-calendar-layout'
 
-import {
-  allDayDatesForItem,
-  civilCoverageOnDay,
-  isExecutionAllDay,
-  isTimedDayLaneContinuation,
-  occupiesAllDayLane,
-  occupiesMonthCell,
-  splitOverlappingColumns,
-  timedIntervalOnDay,
-} from './execution-calendar-layout'
-
-function item(
-  id: string,
-  startAt: string | null,
-  endAt: string | null,
-  allDay = false,
-): ActionPlanExecutionFeedItem {
-  return {
-    id,
-    title: id,
-    start_at: startAt,
-    end_at: endAt,
-    all_day: allDay,
-  } as ActionPlanExecutionFeedItem
+function item(id: string, start: string | null, end: string | null, allDay = false) {
+  return { id, start_at: start, end_at: end, all_day: allDay } as ActionPlanExecutionFeedItem
 }
+const civil = combineCivilDateTimeToIso
+const days = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']
 
-function civil(date: string, time: string): string {
-  return combineCivilDateTimeToIso(date, time)
-}
-
-describe('execution-calendar-layout', () => {
-  it('places overlapping timed events in adjacent columns', () => {
-    const first = {
-      item: item('a', '2026-09-08T08:00:00.000Z', '2026-09-08T10:00:00.000Z'),
-      startMin: 60,
-      endMin: 180,
-    }
-    const second = {
-      item: item('b', '2026-09-08T09:00:00.000Z', '2026-09-08T11:00:00.000Z'),
-      startMin: 120,
-      endMin: 240,
-    }
-    const placed = splitOverlappingColumns([first, second])
-    expect(placed).toHaveLength(2)
-    expect(new Set(placed.map((block) => block.column)).size).toBe(2)
-    expect(placed.every((block) => block.columnCount >= 2)).toBe(true)
-  })
-
-  it('keeps all-day events out of the timed grid', () => {
-    expect(
-      timedIntervalOnDay(
-        item('all', '2026-09-08T22:00:00.000Z', '2026-09-09T21:59:59.000Z', true),
-        '2026-09-08',
-      ),
-    ).toBeNull()
-  })
-
-  it('projects a timed span by civil coverage without inferring all_day', () => {
-    const span = item('span', civil('2026-09-08', '14:00'), civil('2026-09-13', '15:00'))
-    expect(span.all_day).toBe(false)
-    expect(timedIntervalOnDay(span, '2026-09-08')).toEqual({ startMin: 14 * 60, endMin: 24 * 60 })
-    expect(civilCoverageOnDay(span, '2026-09-09')).toEqual({ kind: 'full_day' })
-    expect(civilCoverageOnDay(span, '2026-09-12')).toEqual({ kind: 'full_day' })
-    expect(timedIntervalOnDay(span, '2026-09-09')).toBeNull()
-    expect(timedIntervalOnDay(span, '2026-09-13')).toEqual({ startMin: 0, endMin: 15 * 60 })
-    expect(occupiesAllDayLane(span, '2026-09-08')).toBe(false)
-    expect(occupiesAllDayLane(span, '2026-09-10')).toBe(true)
-    expect(occupiesMonthCell(span, '2026-09-10')).toBe(true)
-    expect(occupiesMonthCell(span, '2026-09-08')).toBe(true)
-  })
-
-  it('puts a midnight-starting full first day in the day lane', () => {
-    const span = item('midnight-start', civil('2026-09-08', '00:00'), civil('2026-09-13', '15:00'))
-    expect(civilCoverageOnDay(span, '2026-09-08')).toEqual({ kind: 'full_day' })
-    expect(timedIntervalOnDay(span, '2026-09-08')).toBeNull()
-    expect(occupiesAllDayLane(span, '2026-09-08')).toBe(true)
-    expect(isTimedDayLaneContinuation(span, '2026-09-08')).toBe(false)
-    expect(isTimedDayLaneContinuation(span, '2026-09-09')).toBe(true)
-  })
-
-  it('drops a zero-length segment when end_at is exactly midnight', () => {
-    const span = item('midnight-end', civil('2026-09-08', '14:00'), civil('2026-09-13', '00:00'))
-    expect(civilCoverageOnDay(span, '2026-09-13')).toEqual({ kind: 'none' })
-    expect(timedIntervalOnDay(span, '2026-09-13')).toBeNull()
-    expect(occupiesAllDayLane(span, '2026-09-13')).toBe(false)
-    expect(occupiesMonthCell(span, '2026-09-13')).toBe(false)
-    expect(occupiesMonthCell(span, '2026-09-12')).toBe(true)
-    expect(civilCoverageOnDay(span, '2026-09-12')).toEqual({ kind: 'full_day' })
-  })
-
-  it('keeps two consecutive partial days in the time grid', () => {
-    const span = item('two-days', civil('2026-09-08', '14:00'), civil('2026-09-09', '15:00'))
-    expect(timedIntervalOnDay(span, '2026-09-08')).toEqual({ startMin: 14 * 60, endMin: 24 * 60 })
-    expect(timedIntervalOnDay(span, '2026-09-09')).toEqual({ startMin: 0, endMin: 15 * 60 })
-    expect(occupiesAllDayLane(span, '2026-09-08')).toBe(false)
-    expect(occupiesAllDayLane(span, '2026-09-09')).toBe(false)
-  })
-
-  it('keeps open-ended timed events as a 60-minute start-day block', () => {
-    const open = item('open', civil('2026-09-08', '14:00'), null)
-    expect(timedIntervalOnDay(open, '2026-09-08')).toEqual({ startMin: 14 * 60, endMin: 15 * 60 })
-    expect(civilCoverageOnDay(open, '2026-09-09')).toEqual({ kind: 'none' })
-    expect(occupiesMonthCell(open, '2026-09-08')).toBe(true)
-  })
-
-  it('projects midnight-adjacent instants in UTC instead of Paris', () => {
-    const crossing = item('utc-midnight', '2026-09-08T22:00:00.000Z', '2026-09-08T23:00:00.000Z')
-    expect(civilCoverageOnDay(crossing, '2026-09-08', 'UTC')).toEqual({
-      kind: 'partial',
-      startMin: 22 * 60,
-      endMin: 23 * 60,
-    })
-    expect(civilCoverageOnDay(crossing, '2026-09-09', 'UTC')).toEqual({ kind: 'none' })
-    expect(civilCoverageOnDay(crossing, '2026-09-09')).toEqual({
-      kind: 'partial',
-      startMin: 0,
-      endMin: 60,
-    })
-  })
-
-  it('places a spring-forward timed slot on civil clock minutes', () => {
-    const spring = item('dst-spring', '2026-03-29T00:30:00.000Z', '2026-03-29T01:30:00.000Z')
-    expect(timedIntervalOnDay(spring, '2026-03-29')).toEqual({ startMin: 90, endMin: 210 })
-  })
-
-  it('keeps day-lane, week coverage, and month-cell membership aligned', () => {
-    const span = item('parity', civil('2026-09-08', '14:00'), civil('2026-09-13', '00:00'))
-    const days = [
-      '2026-09-07',
-      '2026-09-08',
-      '2026-09-09',
-      '2026-09-12',
-      '2026-09-13',
-    ]
-    for (const day of days) {
-      const coverage = civilCoverageOnDay(span, day)
-      expect(occupiesMonthCell(span, day)).toBe(coverage.kind !== 'none')
-      expect(occupiesAllDayLane(span, day)).toBe(coverage.kind === 'full_day')
+describe('date-only execution calendar', () => {
+  it('creates a single Tuesday–Friday band from timed or all-day plans without mutating dates', () => {
+    for (const allDay of [false, true]) {
+      const plan = item('a', civil('2026-10-13', '14:30'), civil('2026-10-16', '10:00'), allDay)
+      const original = { ...plan }
+      const spans = buildCalendarSpans([plan], days)
+      expect(spans).toHaveLength(1)
+      expect(spans[0]).toMatchObject({ startColumn: 1, endColumn: 4, lane: 0, continuesBefore: false, continuesAfter: false })
+      expect(plan).toEqual(original)
     }
   })
 
-  it('keeps multi-day all_day dates aligned across day lane, week, and month', () => {
-    const span = item(
-      'all-day-span',
-      civil('2026-09-08', '00:00'),
-      civil('2026-09-10', '23:59'),
-      true,
-    )
-    const dates = allDayDatesForItem(span)
-    expect(dates).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
-    for (const day of dates) {
-      expect(occupiesAllDayLane(span, day)).toBe(true)
-      expect(occupiesMonthCell(span, day)).toBe(true)
-      expect(timedIntervalOnDay(span, day)).toBeNull()
-    }
-    expect(occupiesAllDayLane(span, '2026-09-07')).toBe(false)
-    expect(occupiesMonthCell(span, '2026-09-07')).toBe(false)
-    expect(occupiesAllDayLane(span, '2026-09-11')).toBe(false)
-    expect(occupiesMonthCell(span, '2026-09-11')).toBe(false)
+  it('stacks overlapping ranges and reuses a lane only after its last day', () => {
+    const plans = [item('a', civil('2026-10-12', '08:00'), civil('2026-10-14', '10:00')),
+      item('b', civil('2026-10-14', '12:00'), civil('2026-10-16', '12:00')),
+      item('c', civil('2026-10-15', '08:00'), civil('2026-10-15', '09:00'))]
+    const spans = buildCalendarSpans(plans, days)
+    expect(spans.map(s => [s.item.id, s.lane])).toEqual([['a', 0], ['b', 1], ['c', 0]])
+    expect(buildCalendarSpans([...plans].reverse(), days)).toEqual(spans)
   })
 
-  it('does not treat a timed civil full day as all_day', () => {
-    const timed = item(
-      'timed-sentinel',
-      civil('2026-09-08', '00:00'),
-      civil('2026-09-08', '23:59'),
-      false,
-    )
-    expect(isExecutionAllDay(timed)).toBe(false)
-    expect(civilCoverageOnDay(timed, '2026-09-08')).toEqual({
-      kind: 'partial',
-      startMin: 0,
-      endMin: 23 * 60 + 59,
-    })
-    expect(occupiesAllDayLane(timed, '2026-09-08')).toBe(false)
-    expect(occupiesMonthCell(timed, '2026-09-08')).toBe(true)
-    expect(timedIntervalOnDay(timed, '2026-09-08')).toEqual({
-      startMin: 0,
-      endMin: 23 * 60 + 59,
-    })
+  it('clips at both edges and marks continuation without duplicating a plan per day', () => {
+    const spans = buildCalendarSpans([item('a', civil('2026-10-10', '14:00'), civil('2026-10-21', '15:00'))], days)
+    expect(spans).toHaveLength(1)
+    expect(spans[0]).toMatchObject({ startColumn: 0, endColumn: 6, continuesBefore: true, continuesAfter: true })
+  })
+
+  it('uses the establishment timezone, not the browser timezone', () => {
+    const plan = item('a', '2026-10-12T23:30:00Z', '2026-10-13T23:30:00Z')
+    expect(executionCalendarDateRange(plan, 'Europe/Paris')).toEqual({ start: '2026-10-13', end: '2026-10-14' })
+    expect(executionCalendarDateRange(plan, 'UTC')).toEqual({ start: '2026-10-12', end: '2026-10-13' })
+  })
+
+  it('preserves exclusive midnight for timed plans and inclusive dates for all-day plans', () => {
+    const plan = item('a', civil('2026-10-12', '14:00'), civil('2026-10-14', '00:00'))
+    expect(executionCalendarDateRange(plan)?.end).toBe('2026-10-13')
+    expect(executionCalendarDateRange({ ...plan, all_day: true })?.end).toBe('2026-10-14')
+    expect(executionCalendarDateRange({ ...plan, end_at: '2026-10-13T22:00:30Z' })?.end).toBe('2026-10-14')
+  })
+
+  it('does not enumerate years of civil days for long plans', () => {
+    const spans = buildCalendarSpans([item('a', '2000-01-01T12:00:00Z', '2099-12-31T12:00:00Z', true)], days)
+    expect(spans).toHaveLength(1)
+    expect(spans[0].endColumn).toBe(6)
+  })
+
+  it('keeps an open-ended plan on its start date and excludes unplanned or out-of-window plans', () => {
+    const open = item('open', civil('2026-10-13', '14:00'), null)
+    expect(executionCalendarDateRange(open)).toEqual({ start: '2026-10-13', end: '2026-10-13' })
+    expect(buildCalendarSpans([open, item('unplanned', null, null), item('past', civil('2026-10-01', '14:00'), null)], days)).toHaveLength(1)
+    expect(buildCalendarSpans([open], [])).toEqual([])
+  })
+
+  it('handles a daylight-saving week using civil dates', () => {
+    const plan = item('dst', civil('2026-10-24', '14:00'), civil('2026-10-26', '15:00'))
+    expect(buildCalendarSpans([plan], ['2026-10-24', '2026-10-25', '2026-10-26'])[0]).toMatchObject({ startColumn: 0, endColumn: 2 })
   })
 })
