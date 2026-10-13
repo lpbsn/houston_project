@@ -371,6 +371,24 @@ def synthesis_envelope(pieces, *, intermediates, required_subject_keys, knowledg
     }
 
 
+def analysis_correction_majorant(pieces, items, *, key_slots: int, knowledge) -> int:
+    """Shell of the correction one analysis call may send.
+
+    Pieces, public sources, key slots, and Knowledge are known before the call.
+    Issues are empty here; the reserved key slots dominate a short issue list.
+    """
+    from houston.brain.configuration import estimate_tokens
+
+    payload = correction_envelope(
+        (),
+        pieces,
+        items,
+        [f"k{index:04d}" for index in range(key_slots)],
+    )
+    payload["knowledge"] = knowledge
+    return estimate_tokens(payload)
+
+
 def correction_envelope(
     issues,
     pieces,

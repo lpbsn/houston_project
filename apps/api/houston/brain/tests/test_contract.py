@@ -51,8 +51,9 @@ def test_a_false_claim_of_complete_coverage_fails(monkeypatch):
     assert analysis.result is None
     assert len(provider.calls) == 2
     assert provider.calls[1]["lot_key"] == CORRECTION_KEY
-    stored = BrainLot.objects.get(analysis=analysis)
+    stored = BrainLot.objects.get(analysis=analysis, stable_key="lot-0001")
     assert stored.output["subjects"][0]["statement"] == "La couverture est complète."
+    assert BrainLot.objects.filter(analysis=analysis, stable_key=CORRECTION_KEY).exists()
 
 
 def test_a_forgotten_subdivided_piece_fails_without_a_correction(monkeypatch, settings):
@@ -222,7 +223,7 @@ def test_a_missing_search_fails_without_a_correction(monkeypatch):
     assert BrainLot.objects.filter(analysis=analysis).count() == 1
 
 
-def test_correction_past_the_call_budget_fails(monkeypatch, settings):
+def test_a_single_lot_without_a_correction_slot_is_refused_before_any_call(monkeypatch, settings):
     settings.HOUSTON_BRAIN_MAX_CALLS = 1
     analysis = _prepare(settings, ["Budget."])
     _allow_publish(monkeypatch)
@@ -230,7 +231,10 @@ def test_correction_past_the_call_budget_fails(monkeypatch, settings):
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.FAILED
     assert analysis.failure_code == "budget_exceeded"
-    assert len(provider.calls) == 1
+    assert provider.calls == []
+    assert analysis.reserved_input_tokens == 0
+    assert analysis.consumed_input_tokens == 0
+    assert analysis.provider_calls_used == 0
 
 
 def test_a_subdivided_numeric_table_reaches_synthesis(monkeypatch, settings):

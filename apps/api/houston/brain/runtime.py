@@ -34,6 +34,7 @@ from houston.brain.contract import (
     SCHEMA_VERSION,
     SYNTHESIS_KEY,
     accepted_result,
+    analysis_correction_majorant,
     apply_coverage,
     assess,
     correction_envelope,
@@ -47,7 +48,7 @@ from houston.brain.contract import (
     synthesis_input_majorant,
 )
 from houston.brain.errors import BrainWorkError, CaptureTimeout, CaptureVolumeExceeded
-from houston.brain.lots import plan_lots, sections_from_payload
+from houston.brain.lots import PlannedLot, plan_lots, sections_from_payload
 from houston.brain.models import (
     BrainAnalysis,
     BrainDossier,
@@ -548,7 +549,6 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         _fail(analysis_id, token, "budget_exceeded")
         return
     synthesis_tokens = 0
-    correction_tokens = 0
     if len(planned) > 1:
         synthesis_tokens = synthesis_input_majorant(
             pieces,
@@ -562,11 +562,22 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             knowledge=knowledge,
             per_call_output_tokens=ceilings["per_call_output_tokens"],
         )
+        tail_calls = 2
+    else:
+        # The one analysis call can still require a correction. Reserve that envelope
+        # with the same gate as the multi-lot correction, before any provider call.
+        correction_tokens = analysis_correction_majorant(
+            pieces,
+            items,
+            key_slots=MAX_SUBJECTS,
+            knowledge=knowledge,
+        )
+        tail_calls = 1
     envelopes_fit = all(lot.reserved_input_tokens <= useful for lot in planned)
     tails_fit = synthesis_tokens <= useful and correction_tokens <= useful
     reserved = sum(lot.reserved_input_tokens for lot in planned) + synthesis_tokens
     reserved += correction_tokens
-    calls = len(planned) + (2 if len(planned) > 1 else 0)
+    calls = len(planned) + tail_calls
     if (
         not envelopes_fit
         or not tails_fit
@@ -603,12 +614,16 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         if analysis.provider_calls_used >= ceilings["max_calls"]:
             _fail(analysis_id, token, "budget_exceeded")
             return
-        result = provider.complete(
-            analysis_id=str(analysis_id),
+        result = _invoke_provider(
+            provider,
+            analysis_id=analysis_id,
+            token=token,
             lot_key=lot.stable_key,
             payload=lot.payload,
             timeout_seconds=ceilings["provider_timeout_seconds"],
         )
+        if result is None:
+            return
         outcome = _accept_call(
             analysis_id=analysis_id,
             token=token,
@@ -769,82 +784,6 @@ def _accept_call(
         return "written"
 
 
-def _charge_free_call(
-    *,
-    analysis_id,
-    token,
-    result: ProviderCallResult,
-    ceilings: dict[str, int],
-    configuration: dict,
-    reserved_tokens: int,
-) -> str:
-    """Count a synthesis or correction. It does not create a lot."""
-    acceptable = _output_acceptable(result, ceilings["per_call_output_tokens"])
-    charged = result.input_tokens if result.input_tokens is not None else reserved_tokens
-    now = timezone.now()
-    with transaction.atomic():
-        row = (
-            BrainAnalysis.objects.select_for_update()
-            .filter(id=analysis_id, attempt_token=token, status=_RUNNING)
-            .first()
-        )
-        if row is None or row.cancel_requested_at is not None:
-            return "stopped"
-        calls = row.provider_calls_used + 1
-        consumed = row.consumed_input_tokens + max(0, charged)
-        over_budget = (
-            calls > ceilings["max_calls"]
-            or consumed > ceilings["total_input_tokens"]
-            or (
-                result.input_tokens is not None
-                and result.input_tokens > ceilings["per_call_input_tokens"]
-            )
-        )
-        row.provider_calls_used = calls
-        row.consumed_input_tokens = consumed
-        row.lease_expires_at = now + timedelta(seconds=ceilings["lease_seconds"])
-        if not acceptable or over_budget:
-            code = "provider_output_rejected" if not acceptable else "budget_exceeded"
-            row.status = BrainAnalysis.Status.FAILED
-            row.failure_code = code
-            row.lease_expires_at = None
-            row.save(
-                update_fields=[
-                    "provider_calls_used",
-                    "consumed_input_tokens",
-                    "lease_expires_at",
-                    "status",
-                    "failure_code",
-                    "updated_at",
-                ]
-            )
-            BrainSlot.objects.filter(analysis_id=analysis_id).delete()
-            _usage(
-                row,
-                configuration=configuration,
-                result=result,
-                error_code=code,
-                status=AIUsageLog.Status.FAILED,
-            )
-            return "failed"
-        row.save(
-            update_fields=[
-                "provider_calls_used",
-                "consumed_input_tokens",
-                "lease_expires_at",
-                "updated_at",
-            ]
-        )
-        _usage(
-            row,
-            configuration=configuration,
-            result=result,
-            error_code="",
-            status=AIUsageLog.Status.SUCCEEDED,
-        )
-        return "accepted"
-
-
 def _lot_output_accepted(analysis_id, token, output, lot, items) -> bool:
     """A reading lot covers only its own piece ids. Failure does not open a correction."""
     assessment = assess(output, pieces=_reading_piece_ids(lot), items=items)
@@ -916,6 +855,7 @@ def _settle(
             ceilings=ceilings,
             configuration=configuration,
             started=started,
+            reserved_tokens=correction_tokens,
         )
         return
     prepared = _prepare_synthesis(
@@ -1106,29 +1046,89 @@ def _contract_call(
     analysis = _running(analysis_id, token)
     if analysis is None:
         return None
+    config_hash = digest(configuration)
+    envelope_hash = digest(payload)
+    existing = _validated_lot(analysis_id, lot_key)
+    if existing is not None:
+        if _same_lot(existing, envelope_hash, config_hash):
+            return existing.output
+        _fail(analysis_id, token, "configuration_unusable")
+        return None
     actual = estimate_tokens(payload)
     reserved = actual if reserved_tokens is None else reserved_tokens
     useful = useful_input_tokens(ceilings["per_call_input_tokens"])
-    if actual > useful or not _within_call_budget(analysis, reserved, ceilings):
+    if (
+        actual > useful
+        or (reserved_tokens is not None and actual > reserved_tokens)
+        or not _within_call_budget(analysis, reserved, ceilings)
+    ):
         _fail(analysis_id, token, "budget_exceeded")
         return None
-    result = provider.complete(
-        analysis_id=str(analysis_id),
+    result = _invoke_provider(
+        provider,
+        analysis_id=analysis_id,
+        token=token,
         lot_key=lot_key,
         payload=payload,
         timeout_seconds=ceilings["provider_timeout_seconds"],
     )
-    outcome = _charge_free_call(
+    if result is None:
+        return None
+    step = PlannedLot(
+        stable_key=lot_key,
+        payload=payload,
+        input_hash=envelope_hash,
+        reserved_input_tokens=reserved,
+    )
+    outcome = _accept_call(
         analysis_id=analysis_id,
         token=token,
+        lot=step,
+        config_hash=config_hash,
         result=result,
         ceilings=ceilings,
         configuration=configuration,
-        reserved_tokens=reserved,
+        sent_tokens=reserved,
     )
-    if outcome != "accepted":
+    if outcome == "reused":
+        stored = _validated_lot(analysis_id, lot_key)
+        if stored is not None and _same_lot(stored, envelope_hash, config_hash):
+            return stored.output
+        return None
+    if outcome != "written":
         return None
     return result.output
+
+
+def _invoke_provider(provider, *, analysis_id, token, lot_key, payload, timeout_seconds):
+    """Call the adapter. A contract error is terminal and does not spend the transient retry."""
+    try:
+        return provider.complete(
+            analysis_id=str(analysis_id),
+            lot_key=lot_key,
+            payload=payload,
+            timeout_seconds=timeout_seconds,
+        )
+    except BrainProviderUnavailable:
+        raise
+    except BrainWorkError:
+        _fail(analysis_id, token, "response_invalid")
+        return None
+
+
+def _validated_lot(analysis_id, stable_key):
+    return BrainLot.objects.filter(
+        analysis_id=analysis_id,
+        stable_key=stable_key,
+        status=BrainLot.Status.VALIDATED,
+    ).first()
+
+
+def _same_lot(existing, input_hash: str, configuration_hash: str) -> bool:
+    return (
+        existing.input_hash == input_hash
+        and existing.configuration_hash == configuration_hash
+    )
 
 
 def _finish(analysis_id, token, parsed, items) -> None:
