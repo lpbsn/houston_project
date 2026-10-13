@@ -12,10 +12,16 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from houston.brain.bounded import extract_bounded
-from houston.brain.errors import ExtractionRejected, ReportingRejected
-from houston.brain.models import BrainExtraction, BrainReporting
+from houston.brain.errors import (
+    BrainAccessDenied,
+    BrainWorkError,
+    ExtractionRejected,
+    ReportingRejected,
+)
+from houston.brain.models import BrainAnalysis, BrainExtraction, BrainReporting
 from houston.brain.records import EXTRACTOR_ID, EXTRACTOR_VERSION
 from houston.brain.sniff import sniff_format
+from houston.establishments.permissions import resolve_establishment_admin_actor
 from houston.uploads.private_storage import (
     delete_private_media_object_idempotent,
     get_private_media_storage,
@@ -139,6 +145,56 @@ def prepare_reporting(
     )
     reporting.refresh_from_db()
     return reporting
+
+
+def confirm_reporting_period(
+    *,
+    user,
+    establishment_id,
+    reporting_id,
+    period_start: date,
+    period_end: date,
+) -> BrainReporting:
+    """Confirm the business period once. A later change is a new reporting."""
+    if resolve_establishment_admin_actor(user, establishment_id) is None:
+        raise BrainAccessDenied()
+    _validate_period(period_start, period_end)
+    with transaction.atomic():
+        reporting = (
+            BrainReporting.objects.select_for_update()
+            .filter(pk=reporting_id, establishment_id=establishment_id)
+            .first()
+        )
+        if reporting is None or reporting.status != BrainReporting.Status.READY:
+            raise BrainWorkError(
+                code="reporting_not_ready",
+                message="Le reporting n'est pas prêt pour une période.",
+            )
+        if reporting.period_confirmed_at is not None:
+            if reporting.period_start == period_start and reporting.period_end == period_end:
+                return reporting
+            raise BrainWorkError(
+                code="period_already_confirmed",
+                message=(
+                    "La période confirmée ne se modifie pas. "
+                    "Importez un nouveau reporting."
+                ),
+            )
+        if BrainAnalysis.objects.filter(reporting_id=reporting.id).exists():
+            raise BrainWorkError(
+                code="period_already_confirmed",
+                message=(
+                    "La période confirmée ne se modifie pas. "
+                    "Importez un nouveau reporting."
+                ),
+            )
+        reporting.period_start = period_start
+        reporting.period_end = period_end
+        reporting.period_confirmed_at = timezone.now()
+        reporting.save(
+            update_fields=["period_start", "period_end", "period_confirmed_at", "updated_at"]
+        )
+        return reporting
 
 
 def cleanup_abandoned_reporting_drafts(*, now=None) -> int:

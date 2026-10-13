@@ -11,6 +11,7 @@ import {
 const EST_ID = '22222222-2222-4222-8222-222222222222'
 const SIGNAL_ID = '33333333-3333-4333-8333-333333333333'
 const EXEC_ID = '44444444-4444-4444-8444-444444444444'
+const ANALYSIS_ID = '55555555-5555-4555-8555-555555555555'
 
 describe('scoped terrain routes', () => {
   it('parses Cross dashboard and hub pages', () => {
@@ -48,6 +49,18 @@ describe('scoped terrain routes', () => {
       page: 'operational-config',
     })
     expect(parseAppRoute('/cross/operational-config').kind).toBe('unknown')
+    expect(parseScopedTerrainRoute(`/e/${EST_ID}/brain`)).toEqual({
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: EST_ID },
+      page: 'brain',
+    })
+    expect(parseScopedTerrainRoute(`/e/${EST_ID}/brain/${ANALYSIS_ID}`)).toEqual({
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: EST_ID },
+      page: 'brain',
+      analysisId: ANALYSIS_ID,
+    })
+    expect(parseScopedTerrainRoute('/cross/brain')).toBeNull()
     expect(parseAppRoute('/cross/general').kind).toBe('unknown')
     expect(parseAppRoute('/cross/history')).toEqual({
       kind: 'history',
@@ -93,6 +106,8 @@ describe('scoped terrain routes', () => {
         { type: 'establishment', establishmentId: EST_ID },
         'operational-config',
       ),
+      `/e/${EST_ID}/brain`,
+      `/e/${EST_ID}/brain/${ANALYSIS_ID}`,
       serializeScopedSignalDetailPath(
         { type: 'establishment', establishmentId: EST_ID },
         SIGNAL_ID,

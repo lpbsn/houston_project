@@ -390,6 +390,38 @@ def request_analysis_cancel(analysis_id) -> str:
         return row.status
 
 
+def request_follow_up_cancel(message_id) -> str:
+    """Terminal cancel of one follow-up. The completed analysis stays completed."""
+    now = timezone.now()
+    terminal = (
+        BrainMessage.Status.COMPLETED,
+        BrainMessage.Status.FAILED,
+        BrainMessage.Status.CANCELED,
+    )
+    with transaction.atomic():
+        row = BrainMessage.objects.select_for_update().filter(id=message_id).first()
+        if row is None:
+            return ""
+        if row.status in terminal:
+            return row.status
+        if row.cancel_requested_at is None:
+            row.cancel_requested_at = now
+        row.status = BrainMessage.Status.CANCELED
+        row.failure_code = row.failure_code or "cancel_requested"
+        row.lease_expires_at = None
+        row.save(
+            update_fields=[
+                "status",
+                "failure_code",
+                "cancel_requested_at",
+                "lease_expires_at",
+                "updated_at",
+            ]
+        )
+        BrainSlot.objects.filter(message_id=message_id).delete()
+        return row.status
+
+
 def write_validated_lot(
     *,
     analysis_id,

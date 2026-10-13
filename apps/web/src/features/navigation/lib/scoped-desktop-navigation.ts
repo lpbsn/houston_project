@@ -129,7 +129,7 @@ function establishmentItems(
     items.push({
       id: 'brain',
       label: 'Spore Brain',
-      href: null,
+      href: serializeScopedTerrainPath(scope, 'brain'),
       group: 1,
     })
   }

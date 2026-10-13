@@ -3,10 +3,11 @@ import { PlatformEstablishmentsPage } from '@/features/platform/pages/platform-e
 import { PlatformOnboardingWizardPage } from '@/features/platform/pages/platform-onboarding-wizard-page'
 import { PlatformOnboardingsPage } from '@/features/platform/pages/platform-onboardings-page'
 import { PlatformOrganizationsPage } from '@/features/platform/pages/platform-organizations-page'
+import { PlatformKnowledgePage } from '@/features/platform/pages/platform-knowledge-page'
 import { PlatformUsersPage } from '@/features/platform/pages/platform-users-page'
 
 type PlatformAppProps = {
-  section: 'onboardings' | 'organizations' | 'establishments' | 'users'
+  section: 'onboardings' | 'organizations' | 'establishments' | 'users' | 'knowledge'
   resourceId?: string
   onNavigate: (path: string) => void
 }
@@ -31,6 +32,7 @@ export function PlatformApp({ section, resourceId, onNavigate }: PlatformAppProp
         <PlatformEstablishmentsPage resourceId={resourceId} />
       ) : null}
       {section === 'users' ? <PlatformUsersPage resourceId={resourceId} /> : null}
+      {section === 'knowledge' ? <PlatformKnowledgePage /> : null}
     </PlatformShell>
   )
 }

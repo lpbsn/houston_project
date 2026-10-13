@@ -79,6 +79,32 @@ describe('usesTerrainShell', () => {
     ).toBe(true)
   })
 
+  it('configures Spore Brain as a desktop hub that keeps the mobile navigation chrome', () => {
+    const analysisId = '55555555-5555-4555-8555-555555555555'
+    expect(
+      getTerrainRouteConfig({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: '11111111-1111-4111-8111-111111111111' },
+        page: 'brain',
+        analysisId,
+      }),
+    ).toEqual({
+      topbarVariant: 'hub',
+      pageTitle: 'Spore Brain',
+      showBottomNav: true,
+      mainScroll: 'auto',
+      showTopbarBottomBorder: false,
+    })
+    expect(
+      getTerrainContentKey({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: '11111111-1111-4111-8111-111111111111' },
+        page: 'brain',
+        analysisId,
+      }),
+    ).toBe(`scoped-est-11111111-1111-4111-8111-111111111111-brain-${analysisId}`)
+  })
+
   it('configures scoped operational config as a hub without bottom nav', () => {
     expect(
       getTerrainRouteConfig({

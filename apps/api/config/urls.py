@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/v1/", include("houston.comments.api.urls")),
     path("api/v1/", include("houston.notifications.api.urls")),
     path("api/v1/", include("houston.analytics.api.urls")),
+    path("api/v1/", include("houston.brain.api.urls")),
     path("api/v1/cross/", include("houston.cross.api.urls")),
 ]
 

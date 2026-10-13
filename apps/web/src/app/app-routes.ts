@@ -63,7 +63,7 @@ export type AppRoute =
   | { kind: 'password-reset' }
   | {
       kind: 'platform'
-      section: 'onboardings' | 'organizations' | 'establishments' | 'users'
+      section: 'onboardings' | 'organizations' | 'establishments' | 'users' | 'knowledge'
       resourceId?: string
     }
   | { kind: 'history'; scope: TerrainScope | null }
@@ -80,7 +80,7 @@ export function getAppRouteKey(route: AppRoute): string {
     case 'static':
       return `static:${route.path}`
     case 'scoped-terrain':
-      return `scoped-terrain:${terrainScopeKey(route.scope)}:${route.page}`
+      return `scoped-terrain:${terrainScopeKey(route.scope)}:${route.page}:${route.analysisId ?? ''}`
     case 'signal-detail':
       return `signal-detail:${route.signalId}:${terrainScopeKey(route.scope)}`
     case 'signal-action-create':
@@ -233,7 +233,13 @@ function parseTeamMemberId(pathname: string): string | null {
   return membershipId
 }
 
-const PLATFORM_SECTIONS = ['onboardings', 'organizations', 'establishments', 'users'] as const
+const PLATFORM_SECTIONS = [
+  'onboardings',
+  'organizations',
+  'establishments',
+  'users',
+  'knowledge',
+] as const
 
 function parsePlatformRoute(pathname: string): Extract<AppRoute, { kind: 'platform' }> | null {
   if (pathname === '/platform') {
@@ -344,8 +350,13 @@ export function serializeAppRoute(route: AppRoute): string {
   switch (route.kind) {
     case 'static':
       return route.path
-    case 'scoped-terrain':
-      return serializeScopedTerrainPath(route.scope, route.page)
+    case 'scoped-terrain': {
+      const path = serializeScopedTerrainPath(route.scope, route.page)
+      if (route.page === 'brain' && route.analysisId && route.scope.type === 'establishment') {
+        return `${path}/${route.analysisId}`
+      }
+      return path
+    }
     case 'signal-detail':
       return route.scope
         ? serializeScopedSignalDetailPath(route.scope, route.signalId)
