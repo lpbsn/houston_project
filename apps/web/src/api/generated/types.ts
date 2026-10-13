@@ -2991,6 +2991,7 @@ export interface components {
         ActionPlanBusinessUnit: {
             /** Format: uuid */
             id: string;
+            color_index?: number | null;
             specific_name: string;
             instance_description: string;
             active: boolean;
@@ -3535,10 +3536,12 @@ export interface components {
             affected_business_unit_id: string | null;
             affected_business_unit_key: string | null;
             affected_business_unit_label: string | null;
+            affected_business_unit_color_index?: number | null;
             /** Format: uuid */
             responsible_business_unit_id: string | null;
             responsible_business_unit_key: string | null;
             responsible_business_unit_label: string | null;
+            responsible_business_unit_color_index?: number | null;
             /** Format: uuid */
             activity_subject_id: string | null;
             activity_subject_normalized_name: string | null;
@@ -4036,6 +4039,7 @@ export interface components {
         BusinessUnitTreeItem: {
             /** Format: uuid */
             id: string;
+            color_index?: number | null;
             specific_name: string;
             instance_description: string;
             active: boolean;
@@ -4904,8 +4908,10 @@ export interface components {
             title: string;
             affected_business_unit_key: string;
             affected_business_unit_label: string;
+            affected_business_unit_color_index?: number | null;
             responsible_business_unit_key: string;
             responsible_business_unit_label: string;
+            responsible_business_unit_color_index?: number | null;
             activity_subject_key: string;
             activity_subject_label: string;
             location_text: string;
@@ -5461,10 +5467,12 @@ export interface components {
             /** Format: uuid */
             affected_business_unit_id?: string | null;
             affected_business_unit_key?: string | null;
+            affected_business_unit_color_index?: number | null;
             affected_business_unit_label?: string | null;
             /** Format: uuid */
             responsible_business_unit_id?: string | null;
             responsible_business_unit_key?: string | null;
+            responsible_business_unit_color_index?: number | null;
             responsible_business_unit_label?: string | null;
             /** Format: uuid */
             activity_subject_id?: string | null;
@@ -5540,10 +5548,12 @@ export interface components {
             /** Format: uuid */
             affected_business_unit_id?: string | null;
             affected_business_unit_key?: string | null;
+            affected_business_unit_color_index?: number | null;
             affected_business_unit_label?: string | null;
             /** Format: uuid */
             responsible_business_unit_id?: string | null;
             responsible_business_unit_key?: string | null;
+            responsible_business_unit_color_index?: number | null;
             responsible_business_unit_label?: string | null;
             /** Format: uuid */
             activity_subject_id?: string | null;
@@ -5603,9 +5613,11 @@ export interface components {
             reporter_display_name: string | null;
             /** Format: uuid */
             affected_business_unit_id: string | null;
+            affected_business_unit_color_index?: number | null;
             affected_business_unit_label: string | null;
             /** Format: uuid */
             responsible_business_unit_id: string | null;
+            responsible_business_unit_color_index?: number | null;
             responsible_business_unit_label: string | null;
             activity_subject_label: string | null;
             activity_subject_normalized_name: string | null;
@@ -5679,10 +5691,12 @@ export interface components {
             /** Format: uuid */
             affected_business_unit_id?: string | null;
             affected_business_unit_key?: string | null;
+            affected_business_unit_color_index?: number | null;
             affected_business_unit_label?: string | null;
             /** Format: uuid */
             responsible_business_unit_id?: string | null;
             responsible_business_unit_key?: string | null;
+            responsible_business_unit_color_index?: number | null;
             responsible_business_unit_label?: string | null;
             /** Format: uuid */
             activity_subject_id?: string | null;
