@@ -1,3 +1,4 @@
+import { ActionPlanPoleBadges } from '@/features/action-plans/components/action-plan-pole-badges'
 import type { ReactNode } from 'react'
 import { Bell, Pin } from 'lucide-react'
 
@@ -7,7 +8,6 @@ import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { terrainFeedAvatar } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 import { getActionPlanStatusBadgeVariant } from '@/features/action-plans/components/action-plan-status-badge'
-import { actionPlanBusinessUnitPrimaryLabel } from '@/features/action-plans/lib/action-plan-display'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
 import { TemporalProgressBar } from './temporal-progress-bar'
@@ -19,11 +19,9 @@ import {
   formatActionPlanFeedCardDelayLabel,
   formatActionPlanFeedCardStatusLabel,
   formatActionPlanFeedMarkedDoneLine,
-  formatActionPlanFeedOtherPolesCountLabel,
   formatActionPlanFeedStartsInLabel,
   formatActionPlanFeedTerminalDateLabel,
   formatActionPlanFeedValidatedLine,
-  getActionPlanFeedOtherPoles,
 } from '../lib/action-plan-execution-feed-card-display'
 import {
   ExecutionFeedDelayChip,
@@ -145,7 +143,6 @@ function PoleHeader({
   showBell?: boolean
   onTogglePin?: (item: ExecutionFeedCardItem) => void
 }) {
-  const other = getActionPlanFeedOtherPoles(item)
   return (
     <div className="flex items-center gap-2">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -157,14 +154,7 @@ function PoleHeader({
           {showBell ? <Bell className="mr-1 h-3 w-3" aria-hidden /> : null}
           {formatActionPlanFeedCardStatusLabel(item)}
         </HoustonBadge>
-        <HoustonBadge variant="gray" className="max-w-[9rem] truncate">
-          {actionPlanBusinessUnitPrimaryLabel(item.pilot_business_unit)}
-        </HoustonBadge>
-        {other.otherCount > 0 ? (
-          <HoustonBadge variant="gray" className="shrink-0">
-            {formatActionPlanFeedOtherPolesCountLabel(other.otherCount)}
-          </HoustonBadge>
-        ) : null}
+        <ActionPlanPoleBadges {...item} />
       </div>
       {onTogglePin ? <FeedPinButton item={item} onTogglePin={onTogglePin} /> : null}
     </div>
