@@ -66,8 +66,6 @@ function wrap(item: Partial<ActionPlanExecutionFeedItem> & { id: string; title: 
   }
 }
 
-const TIME_GRID_INITIAL_SCROLL_TOP = 8 * 48
-
 const emptyCalendarData = {
   timezone: 'Europe/Paris' as const,
   items: [] as ReturnType<typeof wrap>[],
@@ -107,7 +105,7 @@ afterEach(() => {
 })
 
 describe('ExecutionCalendarView', () => {
-  it('keeps overlapping timed events independently clickable', () => {
+  it('keeps overlapping plans independently clickable', () => {
     const onOpen = vi.fn()
     render(
       <ExecutionCalendarView
@@ -146,7 +144,7 @@ describe('ExecutionCalendarView', () => {
     expect(onOpen).toHaveBeenCalledWith('exec-b')
   })
 
-  it('keeps unplanned collapsed and places 00:00 in the dedicated time scroller', () => {
+  it('keeps unplanned collapsed outside the date-only scroller', () => {
     render(
       <ExecutionCalendarView
         granularity="day"
@@ -198,16 +196,15 @@ describe('ExecutionCalendarView', () => {
       gridCard.compareDocumentPosition(unplannedToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
 
-    const scroller = screen.getByTestId('calendar-time-scroller')
-    expect(scroller.scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
-    expect(scroller.textContent).toContain('00:00')
-    expect(scroller.contains(screen.getByText('Journée'))).toBe(false)
-    expect(screen.getByText('Journée').compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const scroller = screen.getByTestId('calendar-date-scroller')
+    expect(scroller.scrollTop).toBe(0)
+    expect(scroller.textContent).not.toContain('00:00')
+    expect(screen.queryByText('Journée')).toBeNull()
     expect(screen.getByRole('button', { name: /Brief cuisine/ }).textContent).toContain('En cours')
     const allDayChip = screen.getByRole('button', { name: /Inventaire/ })
     expect(allDayChip.textContent).toContain('En cours')
-    expect(allDayChip.textContent).not.toContain('Restaurant')
-    expect(screen.getByTestId('calendar-all-day-lane').contains(allDayChip)).toBe(true)
+    expect(allDayChip.textContent).toContain('Restaurant')
+    expect(scroller.contains(allDayChip)).toBe(true)
   })
 
   it('keeps unplanned pending_validation collapsed and names them on the header', () => {
@@ -253,7 +250,7 @@ describe('ExecutionCalendarView', () => {
     expect(screen.queryByRole('button', { name: /Nouvelle fuite/ })).toBeNull()
   })
 
-  it('renders scheduled and pending_validation timed events on the day grid', () => {
+  it('renders scheduled and pending_validation plans on the day grid', () => {
     render(
       <ExecutionCalendarView
         granularity="day"
@@ -290,9 +287,9 @@ describe('ExecutionCalendarView', () => {
     const scheduled = screen.getByRole('button', { name: /Brief planifié/ })
     const pending = screen.getByRole('button', { name: /Brief à valider/ })
     expect(scheduled.textContent).toContain('Planifiée')
-    expect(scheduled.querySelector('svg')).toBeNull()
+    expect(scheduled.getAttribute('aria-label')).toContain('Planifiée')
     expect(pending.textContent).toContain('Validation')
-    expect(pending.querySelector('svg')).toBeTruthy()
+    expect(pending.getAttribute('aria-label')).toContain('Validation')
   })
 
   it('keeps status and org on month chips', () => {
@@ -323,7 +320,7 @@ describe('ExecutionCalendarView', () => {
     )
 
     const chip = screen.getByRole('button', { name: /Brief cuisine/ })
-    expect(chip.textContent).toContain('En cours')
+    expect(chip.getAttribute('aria-label')).toContain('En cours')
     expect(chip.textContent).toContain('Restaurant')
   })
 
@@ -383,7 +380,7 @@ describe('ExecutionCalendarView', () => {
     expect(collectOverflowYScrollElements(scroller)).toEqual([])
   })
 
-  it('opens the same execution from a timed grid block and a day-lane continuation', () => {
+  it('renders one continuous execution button across the visible week', () => {
     mockToday('2026-09-08')
     const onOpen = vi.fn()
     render(
@@ -412,8 +409,8 @@ describe('ExecutionCalendarView', () => {
     )
 
     const chips = screen.getAllByRole('button', { name: /Chantier toiture/ })
-    const suiteChip = chips.find((chip) => chip.textContent?.includes('Suite'))
-    expect(suiteChip).toBeTruthy()
+    expect(chips).toHaveLength(1)
+    expect(chips[0].getAttribute('data-continues-after')).toBe('true')
     fireEvent.click(chips[0])
     fireEvent.click(chips[chips.length - 1])
     expect(onOpen).toHaveBeenCalledWith('exec-span')
@@ -448,10 +445,10 @@ describe('ExecutionCalendarView', () => {
 
     const chip = screen.getByRole('button', { name: /Ouverture site/ })
     expect(chip.textContent).not.toContain('Suite')
-    expect(screen.getByTestId('calendar-time-scroller').contains(chip)).toBe(false)
+    expect(screen.getByTestId('calendar-date-scroller').contains(chip)).toBe(true)
   })
 
-  it('keeps a full-day timed span on month cells without using the day-lane projection', () => {
+  it('renders a multi-day execution once per month row', () => {
     render(
       <ExecutionCalendarView
         granularity="month"
@@ -477,7 +474,8 @@ describe('ExecutionCalendarView', () => {
       />,
     )
 
-    expect(screen.getAllByRole('button', { name: /Chantier toiture/ }).length).toBeGreaterThan(1)
+    expect(screen.getAllByRole('button', { name: /Chantier toiture/ })).toHaveLength(1)
+    expect(screen.getByTestId('calendar-span-exec-month-span').style.gridColumn).toBe('2 / 8')
     expect(screen.queryByText('Suite')).toBeNull()
   })
 
@@ -523,10 +521,10 @@ describe('ExecutionCalendarView', () => {
     expect(card.textContent?.indexOf('AM') ?? -1).toBeLessThan(card.textContent?.indexOf(createdLabel) ?? -1)
     expect(card.textContent).not.toMatch(/08:00|10:00/)
     expect(card.textContent).not.toContain('En cours')
-    expect(screen.getByTestId('calendar-time-scroller').contains(card)).toBe(false)
+    expect(screen.getByTestId('calendar-date-scroller').contains(card)).toBe(false)
   })
 
-  it('keeps the time scroller as the day-grid owner when unplanned is expanded', () => {
+  it('keeps the date scroller as the day-grid owner when unplanned is expanded', () => {
     render(
       <ExecutionCalendarView
         granularity="day"
@@ -568,9 +566,9 @@ describe('ExecutionCalendarView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
 
     const hub = screen.getByTestId('calendar-hub-scroller')
-    const timeScroller = screen.getByTestId('calendar-time-scroller')
+    const timeScroller = screen.getByTestId('calendar-date-scroller')
     const unplannedList = screen.getByTestId('calendar-unplanned-list')
-    expect(timeScroller.textContent).toContain('00:00')
+    expect(timeScroller.textContent).not.toContain('00:00')
     expect(screen.queryByText('Journée')).toBeNull()
     expect(screen.queryByTestId('calendar-all-day-lane')).toBeNull()
     expect(timeScroller.contains(screen.getByRole('button', { name: /Sans créneau A/ }))).toBe(false)
@@ -578,7 +576,7 @@ describe('ExecutionCalendarView', () => {
     expect(collectOverflowYScrollElements(hub)).toEqual([timeScroller, unplannedList])
   })
 
-  it('keeps week vertical overflow on the time scroller without a nested horizontal canvas', () => {
+  it('keeps week vertical overflow on the date scroller without a nested horizontal canvas', () => {
     render(
       <ExecutionCalendarView
         granularity="week"
@@ -607,170 +605,48 @@ describe('ExecutionCalendarView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
 
     const hub = screen.getByTestId('calendar-hub-scroller')
-    const timeScroller = screen.getByTestId('calendar-time-scroller')
+    const timeScroller = screen.getByTestId('calendar-date-scroller')
     expect(collectOverflowYScrollElements(hub)).toEqual([
       timeScroller,
       screen.getByTestId('calendar-unplanned-list'),
     ])
   })
 
-  it('aligns the time grid to 08:00 only when first entering the day or week grid', () => {
-    const viewProps = {
-      month: '2026-09',
-      isError: false,
-      error: null,
-      onRetry: () => undefined,
-      onOpenExecution: () => undefined,
-      data: emptyCalendarData,
-    }
-    const { rerender } = render(
-      <ExecutionCalendarView granularity="day" days={['2026-09-08']} isLoading={false} {...viewProps} />,
-    )
-
-    const firstScroller = screen.getByTestId('calendar-time-scroller')
-    expect(firstScroller.scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
-
-    firstScroller.scrollTop = 100
-    rerender(
-      <ExecutionCalendarView granularity="day" days={['2026-09-09']} isLoading={false} {...viewProps} />,
-    )
-    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
-
-    rerender(
-      <ExecutionCalendarView granularity="week" days={['2026-09-08', '2026-09-09']} isLoading={false} {...viewProps} />,
-    )
-    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
-
-    rerender(
-      <ExecutionCalendarView granularity="day" days={['2026-09-10']} isLoading {...viewProps} />,
-    )
-    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
-    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
-    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
-
-    rerender(
-      <ExecutionCalendarView granularity="day" days={['2026-09-10']} isLoading={false} {...viewProps} />,
-    )
-    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
-
-    rerender(
-      <ExecutionCalendarView
-        granularity="month"
-        days={['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']}
-        isLoading={false}
-        {...viewProps}
-      />,
-    )
-    rerender(
-      <ExecutionCalendarView granularity="day" days={['2026-09-11']} isLoading={false} {...viewProps} />,
-    )
-    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
+  it('has no hourly grid or initial hour scroll in date-only views', () => {
+    render(<ExecutionCalendarView granularity="day" days={['2026-09-08']} month="2026-09"
+      isLoading={false} isError={false} error={null} onRetry={() => undefined}
+      onOpenExecution={() => undefined} data={emptyCalendarData} />)
+    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByText('08:00')).toBeNull()
+    expect(screen.getByTestId('calendar-date-scroller').scrollTop).toBe(0)
+    expect(screen.getByText('Aucun plan sur cette période.')).toBeTruthy()
   })
 
-  it('caps day-lane events and keeps timed partials out of the lane overflow sheet', () => {
+  it('stacks all plans without hiding them behind a per-day overflow', () => {
     const onOpen = vi.fn()
-    render(
-      <ExecutionCalendarView
-        granularity="day"
-        days={['2026-09-08']}
-        month="2026-09"
-        isLoading={false}
-        isError={false}
-        error={null}
-        onRetry={() => undefined}
-        onOpenExecution={onOpen}
-        data={{
-          timezone: 'Europe/Paris',
-          items: [
-            wrap({
-              id: 'exec-timed',
-              title: 'Brief cuisine',
-              start_at: '2026-09-08T07:00:00.000Z',
-              end_at: '2026-09-08T09:00:00.000Z',
-            }),
-            wrap({
-              id: 'exec-all-day-a',
-              title: 'Inventaire A',
-              all_day: true,
-              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
-              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
-            }),
-            wrap({
-              id: 'exec-all-day-b',
-              title: 'Inventaire B',
-              all_day: true,
-              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
-              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
-            }),
-            wrap({
-              id: 'exec-all-day-c',
-              title: 'Inventaire C',
-              all_day: true,
-              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
-              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
-            }),
-          ],
-          unplanned: [],
-        }}
-      />,
-    )
-
-    expect(screen.getByRole('button', { name: /Inventaire A/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Inventaire B/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Inventaire C/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '+1 de plus' }))
-
-    expect(screen.getByRole('dialog', { name: '08/09/2026' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Inventaire C/ })).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: /Brief cuisine/ }).length).toBe(1)
-    expect(screen.getByTestId('calendar-time-scroller').contains(screen.getByRole('button', { name: /Brief cuisine/ }))).toBe(
-      true,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: /Inventaire C/ }))
-    expect(onOpen).toHaveBeenCalledWith('exec-all-day-c')
+    const items = Array.from({ length: 6 }, (_, i) => wrap({ id: `plan-${i}`, title: `Plan ${i}`, all_day: i % 2 === 0 }))
+    render(<ExecutionCalendarView granularity="day" days={['2026-09-08']} month="2026-09"
+      isLoading={false} isError={false} error={null} onRetry={() => undefined}
+      onOpenExecution={onOpen} data={{ ...emptyCalendarData, items }} />)
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole('button', { name: new RegExp(`Plan ${i}`) }))
+    expect(onOpen).toHaveBeenCalledTimes(6)
+    expect(screen.queryByText(/de plus/)).toBeNull()
   })
 
-  it('caps week-lane events independently of the month cell set', () => {
-    mockToday('2026-09-08')
-    render(
-      <ExecutionCalendarView
-        granularity="week"
-        days={['2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14']}
-        month="2026-09"
-        isLoading={false}
-        isError={false}
-        error={null}
-        onRetry={() => undefined}
-        onOpenExecution={() => undefined}
-        data={{
-          timezone: 'Europe/Paris',
-          items: [
-            wrap({
-              id: 'exec-all-day-a',
-              title: 'Inventaire A',
-              all_day: true,
-              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
-              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
-            }),
-            wrap({
-              id: 'exec-all-day-b',
-              title: 'Inventaire B',
-              all_day: true,
-              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
-              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
-            }),
-          ],
-          unplanned: [],
-        }}
-      />,
-    )
-
-    expect(screen.getByRole('button', { name: /Inventaire A/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Inventaire B/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '+1 de plus' }))
-    expect(screen.getByRole('dialog', { name: '08/09/2026' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Inventaire B/ })).toBeTruthy()
+  it('continues one execution across two month rows with the same target', () => {
+    const onOpen = vi.fn()
+    const item = wrap({ id: 'span', title: 'Chantier', start_at: combineCivilDateTimeToIso('2026-09-10', '14:00'), end_at: combineCivilDateTimeToIso('2026-09-15', '15:00') })
+    render(<ExecutionCalendarView granularity="month" days={[...MONDAY_WEEK, '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20']} month="2026-09"
+      isLoading={false} isError={false} error={null} onRetry={() => undefined}
+      onOpenExecution={onOpen} data={{ ...emptyCalendarData, items: [item] }} />)
+    const spans = screen.getAllByTestId('calendar-span-span')
+    expect(spans).toHaveLength(2)
+    expect(spans[0].style.gridColumn).toBe('4 / 8')
+    expect(spans[0].getAttribute('data-continues-after')).toBe('true')
+    expect(spans[1].style.gridColumn).toBe('1 / 3')
+    expect(spans[1].getAttribute('data-continues-before')).toBe('true')
+    spans.forEach((button) => fireEvent.click(button))
+    expect(onOpen.mock.calls).toEqual([['span'], ['span']])
   })
 
   it('shows a 3-day compact week window stepped by one day', () => {
@@ -791,7 +667,7 @@ describe('ExecutionCalendarView', () => {
 
     expect(visibleWeekDays()).toEqual(['2026-09-07', '2026-09-08', '2026-09-09'])
     expect(screen.queryByTestId('calendar-weekday-2026-09-10')).toBeNull()
-    expect(screen.getByTestId('calendar-time-scroller').textContent).toContain('00:00')
+    expect(screen.getByTestId('calendar-date-scroller').textContent).not.toContain('00:00')
     expect(screen.getByRole('button', { name: 'Jours précédents de la semaine' })).toHaveProperty(
       'disabled',
       true,
@@ -986,7 +862,7 @@ describe('ExecutionCalendarView', () => {
     expect(screen.queryByTestId('calendar-week-next-days')).toBeNull()
   })
 
-  it('keeps one, two, and three overlapping timed events independently clickable in the compact week', () => {
+  it('keeps one, two, and three overlapping plans independently clickable in the compact week', () => {
     mockToday('2026-09-07')
     const onOpen = vi.fn()
     render(
@@ -1053,7 +929,7 @@ describe('ExecutionCalendarView', () => {
     expect(onOpen).toHaveBeenCalledWith('exec-triple-c')
   })
 
-  it('keeps the first calendar load as a full replacement without a time scroller', () => {
+  it('keeps the first calendar load as a full replacement without a date scroller', () => {
     render(
       <ExecutionCalendarView
         granularity="day"
@@ -1068,7 +944,7 @@ describe('ExecutionCalendarView', () => {
     )
 
     expect(screen.getByText('Chargement du calendrier…')).toBeTruthy()
-    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByTestId('calendar-date-scroller')).toBeNull()
     expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
   })
 
@@ -1115,7 +991,7 @@ describe('ExecutionCalendarView', () => {
 
     expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
     expect(screen.queryByTestId('calendar-weekday-2026-09-08')).toBeNull()
-    expect(screen.getByTestId('calendar-time-scroller')).toBeTruthy()
+    expect(screen.getByTestId('calendar-date-scroller')).toBeTruthy()
     expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
     expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
@@ -1211,7 +1087,7 @@ describe('ExecutionCalendarView', () => {
     )
 
     expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
-    expect(screen.getByTestId('calendar-time-scroller')).toBeTruthy()
+    expect(screen.getByTestId('calendar-date-scroller')).toBeTruthy()
   })
 
   it('does not show period pending when the current key already has data', () => {
@@ -1285,7 +1161,7 @@ describe('ExecutionCalendarView', () => {
     )
 
     expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
-    expect(screen.getByTestId('calendar-time-scroller')).toBeTruthy()
+    expect(screen.getByTestId('calendar-date-scroller')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
     expect(screen.getByTestId('calendar-period-error')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
@@ -1307,7 +1183,7 @@ describe('ExecutionCalendarView', () => {
     )
 
     expect(screen.getByText('Impossible de charger le calendrier.')).toBeTruthy()
-    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByTestId('calendar-date-scroller')).toBeNull()
     expect(screen.queryByTestId('calendar-period-error')).toBeNull()
   })
 
