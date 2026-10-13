@@ -131,9 +131,8 @@ def _follow_up_result(payload: dict, mode: str) -> ProviderCallResult:
 
 
 def _piece_ids(payload: dict) -> list[str]:
-    required = payload.get("required_piece_ids") if isinstance(payload, dict) else None
-    if isinstance(required, list) and required:
-        return [str(item) for item in required if item]
+    if isinstance(payload, dict) and isinstance(payload.get("required_piece_ids"), list):
+        return [str(item) for item in payload["required_piece_ids"] if item]
     found = []
     for section in payload.get("sections") or []:
         if isinstance(section, dict) and section.get("piece_id"):

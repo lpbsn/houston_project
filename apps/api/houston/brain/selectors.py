@@ -53,6 +53,9 @@ _FAILURE_MESSAGES = {
     "transient_exhausted": "Le traitement a échoué après la reprise autorisée.",
     "empty_document": "Le document ne contient pas de contenu analysable.",
     "insufficient_coverage": "Une partie requise du document n'a pas été traitée.",
+    "partition_incomplete": (
+        "Le dossier n'a pas été réparti en entier. Aucun résultat partiel n'est publié."
+    ),
     "provider_unavailable": "Le service d'analyse est indisponible.",
     "unknown_reference": "Une référence hors dossier a été refusée.",
     "response_invalid": "La réponse d'analyse n'a pas pu être validée.",

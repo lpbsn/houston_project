@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from houston.brain.configuration import empty_knowledge, estimate_tokens
+from houston.brain.configuration import (
+    empty_knowledge,
+    estimate_tokens,
+    provider_fixed_input_tokens,
+)
 from houston.brain.contract import CORRECTION_KEY, SCHEMA_VERSION, minimal_analysis
-from houston.brain.lots import plan_lots, sections_from_payload
+from houston.brain.lots import plan_lots, reading_envelope, sections_from_payload
 from houston.brain.models import BrainAnalysis, BrainLot, BrainSearchRun
 from houston.brain.provider import ProviderCallResult
 from houston.brain.runtime import run_brain_analysis
@@ -51,17 +55,15 @@ def test_a_false_claim_of_complete_coverage_fails(monkeypatch):
     assert stored.output["subjects"][0]["statement"] == "La couverture est complète."
 
 
-def test_a_forgotten_subdivided_piece_fails_and_lot_output_is_not_evidence(monkeypatch, settings):
+def test_a_forgotten_subdivided_piece_fails_without_a_correction(monkeypatch, settings):
     analysis, planned = _subdivided(settings)
-    provider = _run(
-        analysis,
-        [_marker()] * len(planned) + [_omit_last, _omit_last],
-    )
+    provider = _run(analysis, [_drop_piece] * len(planned))
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.FAILED
     assert analysis.failure_code == "insufficient_coverage"
-    synthesis = next(call for call in provider.calls if call["lot_key"] == "synthesis")
-    assert "INTERMEDIATE_SYNTHESIS" not in _blob(synthesis["payload"])
+    assert all(call["lot_key"] != "synthesis" for call in provider.calls)
+    assert all(call["lot_key"] != "correction" for call in provider.calls)
+    assert len(provider.calls) == 1
 
 
 def test_a_citation_outside_the_dossier_is_corrected_once(monkeypatch):
@@ -232,21 +234,20 @@ def test_correction_past_the_call_budget_fails(monkeypatch, settings):
 
 
 def test_a_subdivided_numeric_table_reaches_synthesis(monkeypatch, settings):
-    analysis, planned, marker = _numeric_table(settings, raw_repeat=400)
-    provider = _run(analysis, [_marker()] * len(planned) + [_valid])
+    analysis, planned = _subdivided(settings)
+    provider = _run(analysis, [_valid] * (len(planned) + 1))
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.COMPLETED
     synthesis = next(call for call in provider.calls if call["lot_key"] == "synthesis")
-    blob = _blob(synthesis["payload"])
-    assert marker not in blob
-    assert blob.count('"4188"') == 1
-    assert any(
-        marker in _blob(call["payload"])
-        for call in provider.calls
-        if call["lot_key"] != "synthesis"
-    )
-    lot_reserved = sum(lot.reserved_input_tokens for lot in planned)
-    assert analysis.reserved_input_tokens == lot_reserved + estimate_tokens(synthesis["payload"])
+    assert "sources" not in synthesis["payload"]
+    assert "4188" not in _blob(synthesis["payload"])
+    assert synthesis["payload"]["intermediates"]
+    assert any("4188" in _blob(call["payload"]) for call in provider.calls if call["lot_key"] != "synthesis")
+    stored = [entry["piece_id"] for entry in analysis.result["coverage"]]
+    union = []
+    for lot in BrainLot.objects.filter(analysis=analysis).order_by("stable_key"):
+        union.extend(entry["piece_id"] for entry in lot.output["coverage"])
+    assert stored == union
 
 
 def test_a_subdivided_table_is_refused_when_synthesis_exceeds_the_call(monkeypatch, settings):
@@ -317,14 +318,52 @@ def test_a_search_code_without_an_executed_scope_fails(monkeypatch):
     assert analysis.result is None
 
 
-def test_a_valid_synthesis_does_not_receive_lot_output(monkeypatch, settings):
+def test_a_missing_lot_subject_is_refused(monkeypatch, settings):
     analysis, planned = _subdivided(settings)
-    provider = _run(analysis, [_marker()] * len(planned) + [_valid])
+    provider = _run(analysis, [_valid] * len(planned) + [_drop_required_key, _drop_required_key])
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.FAILED
+    assert analysis.failure_code == "material_subject_removed"
+    assert provider.calls[-1]["lot_key"] == "correction"
+    assert "candidate" in provider.calls[-1]["payload"]
+    assert "intermediates" not in provider.calls[-1]["payload"]
+    assert "sources" not in provider.calls[-1]["payload"]
+
+
+def test_duplicate_subject_keys_do_not_call_synthesis(monkeypatch, settings):
+    analysis, _planned = _subdivided(settings)
+    provider = _run(analysis, [_same_key, _same_key])
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.FAILED
+    assert analysis.failure_code == "response_invalid"
+    assert len(provider.calls) == 2
+    assert all(call["lot_key"] != "synthesis" for call in provider.calls)
+
+
+def test_forty_one_subject_keys_do_not_call_synthesis(monkeypatch, settings):
+    analysis, _planned = _subdivided(settings)
+    provider = _run(analysis, [_many_subjects(21, "gauche"), _many_subjects(20, "droite")])
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.FAILED
+    assert analysis.failure_code == "budget_exceeded"
+    assert len(provider.calls) == 2
+    assert all(call["lot_key"] != "synthesis" for call in provider.calls)
+
+
+def test_a_valid_synthesis_receives_intermediate_subjects_not_the_catalogue(monkeypatch, settings):
+    analysis, planned = _subdivided(settings)
+    provider = _run(analysis, [_marked_lot] * len(planned) + [_valid])
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.COMPLETED
     synthesis = next(call for call in provider.calls if call["lot_key"] == "synthesis")
-    assert "INTERMEDIATE_SYNTHESIS" not in _blob(synthesis["payload"])
+    blob = _blob(synthesis["payload"])
+    assert "INTERMEDIATE_SYNTHESIS" not in blob
+    assert "structured_summary" not in blob
+    assert "sources" not in synthesis["payload"]
+    assert "Sujet intermédiaire lu." in blob
     assert set(synthesis["payload"]["required_piece_ids"]) == set(_pieces(planned))
+    assert synthesis["payload"]["intermediates"]
+    assert all(item["intermediate"] is True for item in synthesis["payload"]["intermediates"])
 
 
 def _numeric_table(settings, *, raw_repeat: int):
@@ -352,17 +391,19 @@ def _numeric_table(settings, *, raw_repeat: int):
         "locator": parent["locator"],
         "rows": parent["rows"][:1],
         "piece_id": f"{parent['piece_id']}-p0000",
+        "item_ids": [parent["rows"][0]["stable_key"]],
     }
-    per_call = estimate_tokens({"sections": [child], "knowledge": empty_knowledge()})
-    settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = per_call
-    settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = per_call * 20
+    per_call = estimate_tokens(reading_envelope([child], empty_knowledge()))
+    call_ceiling = per_call + provider_fixed_input_tokens()
+    settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = call_ceiling
+    settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = call_ceiling * 20
     settings.HOUSTON_BRAIN_MAX_CALLS = 8
     analysis = _prepare(settings, ["remplace"])
     _replace(analysis, **payload)
     planned = plan_lots(
         sections_from_payload(payload),
-        per_call_input_tokens=per_call,
-        total_input_tokens=per_call * 20,
+        per_call_input_tokens=call_ceiling,
+        total_input_tokens=call_ceiling * 20,
         max_calls=8,
         knowledge=empty_knowledge(),
     )
@@ -372,40 +413,31 @@ def _numeric_table(settings, *, raw_repeat: int):
 
 
 def _subdivided(settings):
-    """One qualitative block split by paragraph. The text stays out of the source index."""
-    paragraph = "Salle calme. " * 800
-    payload = {
-        "measures": [],
-        "qualitative": [
-            {
-                "kind": "paragraph",
-                "text": "\n\n".join((paragraph, paragraph, paragraph)),
-                "locator": {"block": 0},
-            }
-        ],
-    }
-    parent = sections_from_payload(payload)[0]
-    child = {
-        "kind": "paragraph",
-        "text": paragraph,
-        "locator": parent["locator"],
-        "piece_id": f"{parent['piece_id']}-p0000",
-    }
-    per_call = estimate_tokens({"sections": [child], "knowledge": empty_knowledge()})
-    settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = per_call
-    settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = per_call * 20
-    settings.HOUSTON_BRAIN_MAX_CALLS = 8
-    analysis = _prepare(settings, ["remplace"])
-    _replace(analysis, **payload)
-    planned = plan_lots(
-        sections_from_payload(payload),
-        per_call_input_tokens=per_call,
-        total_input_tokens=per_call * 20,
-        max_calls=8,
-        knowledge=empty_knowledge(),
+    """Two sections that do not share a call. The public catalogue stays out of synthesis."""
+    from houston.brain.capture import capture_dossier
+    from houston.brain.configuration import frozen_knowledge
+    from houston.brain.runtime import _dossier_context
+
+    repeats = 30_000
+    analysis = _prepare(
+        settings,
+        [("alpha " * repeats) + " INTERMEDIATE_SYNTHESIS 4188", "bravo " * repeats],
     )
-    assert len(planned) > 1
-    assert any("-p" in piece for piece in _pieces(planned))
+    capture_dossier(analysis.id)
+    context = _dossier_context(analysis.id)
+    assert context is not None
+    _dossier, items, runs = context
+    ceilings = analysis.configuration["ceilings"]
+    planned = plan_lots(
+        sections_from_payload(analysis.reporting.extractions.get().payload),
+        per_call_input_tokens=ceilings["per_call_input_tokens"],
+        total_input_tokens=ceilings["total_input_tokens"],
+        max_calls=ceilings["max_calls"],
+        knowledge=frozen_knowledge(analysis.configuration),
+        searches=sorted({run.code for run in runs}),
+        items=items,
+    )
+    assert len(planned) == 2
     return analysis, planned
 
 
@@ -472,7 +504,25 @@ def _done(body: dict) -> ProviderCallResult:
 
 
 def _valid(payload) -> ProviderCallResult:
-    return _done(minimal_analysis(list(payload["required_piece_ids"])))
+    if payload.get("role") == "synthesis" or (
+        payload.get("role") == "correction" and "candidate" in payload
+    ):
+        keys = list(payload.get("required_subject_keys") or ["sujet"])
+        template = minimal_analysis([])["subjects"][0]
+        body = minimal_analysis([])
+        body["coverage"] = []
+        body["subjects"] = []
+        body["proposals"] = {"suggestions": [], "mechanisms": []}
+        for key in keys:
+            subject = dict(template)
+            subject["key"] = key
+            body["subjects"].append(subject)
+        return _done(body)
+    pieces = list(payload.get("required_piece_ids") or [])
+    body = minimal_analysis(pieces)
+    if payload.get("role") == "analysis" and pieces:
+        body["subjects"][0]["key"] = pieces[0]
+    return _done(body)
 
 
 def _omit_last(payload) -> ProviderCallResult:
@@ -497,14 +547,14 @@ def _outside(payload) -> ProviderCallResult:
 
 
 def _difference(payload, published, unit="EUR") -> ProviderCallResult:
-    sources = [source for source in payload["sources"] if source.get("value")]
+    entries = _measure_entries(payload)
     body = minimal_analysis(list(payload["required_piece_ids"]))
     body["subjects"][0]["gaps"] = []
-    body["subjects"][0]["evidence"] = [_citation(sources[0])]
+    body["subjects"][0]["evidence"] = [_citation(entries[0])]
     body["subjects"][0]["calculations"] = [
         {
             "operation": "difference",
-            "operands": [_citation(sources[0]), _citation(sources[1])],
+            "operands": [_citation(entries[0]), _citation(entries[1])],
             "published_value": published,
             "unit": unit,
         }
@@ -513,18 +563,18 @@ def _difference(payload, published, unit="EUR") -> ProviderCallResult:
 
 
 def _swapped_locator(payload) -> ProviderCallResult:
-    sources = [source for source in payload["sources"] if source.get("value")]
+    entries = _measure_entries(payload)
     body = minimal_analysis(list(payload["required_piece_ids"]))
     body["subjects"][0]["gaps"] = []
     body["subjects"][0]["evidence"] = [
-        {"item_id": sources[0]["item_id"], "locator": sources[1]["locators"][0]}
+        {"item_id": entries[0]["item_id"], "locator": entries[1]["locator"]}
     ]
     body["subjects"][0]["calculations"] = [
         {
             "operation": "difference",
             "operands": [
-                {"item_id": sources[0]["item_id"], "locator": sources[1]["locators"][0]},
-                {"item_id": sources[1]["item_id"], "locator": sources[1]["locators"][0]},
+                {"item_id": entries[0]["item_id"], "locator": entries[1]["locator"]},
+                {"item_id": entries[1]["item_id"], "locator": entries[1]["locator"]},
             ],
             "published_value": "20",
             "unit": "EUR",
@@ -534,14 +584,14 @@ def _swapped_locator(payload) -> ProviderCallResult:
 
 
 def _ratio(payload) -> ProviderCallResult:
-    sources = [source for source in payload["sources"] if source.get("value")]
+    entries = _measure_entries(payload)
     body = minimal_analysis(list(payload["required_piece_ids"]))
     body["subjects"][0]["gaps"] = []
-    body["subjects"][0]["evidence"] = [_citation(sources[0])]
+    body["subjects"][0]["evidence"] = [_citation(entries[0])]
     body["subjects"][0]["calculations"] = [
         {
             "operation": "ratio",
-            "operands": [_citation(sources[0]), _citation(sources[1])],
+            "operands": [_citation(entries[0]), _citation(entries[1])],
             "published_value": "2",
             "unit": None,
         }
@@ -550,10 +600,10 @@ def _ratio(payload) -> ProviderCallResult:
 
 
 def _reported(payload) -> ProviderCallResult:
-    sources = [source for source in payload["sources"] if source.get("value") == "100"]
+    entries = [entry for entry in _measure_entries(payload) if _entry_value(entry) == "100"]
     body = minimal_analysis(list(payload["required_piece_ids"]))
     body["subjects"][0]["reported_facts"] = [
-        {"citation": _citation(sources[0]), "declared_as": "reported"}
+        {"citation": _citation(entries[0]), "declared_as": "reported"}
     ]
     return _done(body)
 
@@ -578,17 +628,85 @@ def _hostile(payload) -> ProviderCallResult:
     return _done(body)
 
 
-def _marker() -> ProviderCallResult:
-    return ProviderCallResult(
-        output={"marker": "INTERMEDIATE_SYNTHESIS"},
-        truncated=False,
-        input_tokens=1,
-        output_tokens=1,
-    )
+def _marked_lot(payload) -> ProviderCallResult:
+    pieces = list(payload.get("required_piece_ids") or [])
+    body = minimal_analysis(pieces)
+    if pieces:
+        body["subjects"][0]["key"] = pieces[0]
+    body["subjects"][0]["statement"] = "Sujet intermédiaire lu."
+    return _done(body)
 
 
-def _citation(source: dict) -> dict:
-    return {"item_id": source["item_id"], "locator": source["locators"][0]}
+def _drop_piece(payload) -> ProviderCallResult:
+    body = minimal_analysis([])
+    body["subjects"][0]["key"] = "manque"
+    return _done(body)
+
+
+def _drop_required_key(payload) -> ProviderCallResult:
+    result = _valid(payload)
+    body = result.output
+    body["subjects"] = body["subjects"][:1]
+    body["subjects"][0]["key"] = "autre"
+    return _done(body)
+
+
+def _same_key(payload) -> ProviderCallResult:
+    pieces = list(payload.get("required_piece_ids") or [])
+    body = minimal_analysis(pieces)
+    body["subjects"][0]["key"] = "meme"
+    return _done(body)
+
+
+def _many_subjects(count: int, prefix: str):
+    def _build(payload) -> ProviderCallResult:
+        pieces = list(payload.get("required_piece_ids") or [])
+        template = minimal_analysis([])["subjects"][0]
+        body = minimal_analysis(pieces)
+        body["subjects"] = []
+        for index in range(count):
+            subject = dict(template)
+            subject["key"] = f"{prefix}-{index:02d}"
+            body["subjects"].append(subject)
+        return _done(body)
+
+    return _build
+
+
+def _citation(entry: dict) -> dict:
+    return {"item_id": entry["item_id"], "locator": entry["locator"]}
+
+
+def _measure_entries(payload: dict) -> list[dict]:
+    entries = []
+    for section in payload.get("sections") or []:
+        rows = section.get("rows") or []
+        if rows:
+            entries.extend(row for row in rows if row.get("item_id") and row.get("value_kind"))
+            continue
+        if section.get("item_id") and section.get("value_kind"):
+            entries.append(section)
+    if entries:
+        return entries
+    for source in payload.get("sources") or []:
+        if not source.get("value") or not source.get("locators"):
+            continue
+        entries.append(
+            {
+                "item_id": source["item_id"],
+                "locator": source["locators"][0],
+                "value": source.get("value"),
+                "text": str(source.get("value")),
+            }
+        )
+    return entries
+
+
+def _entry_value(entry: dict) -> str:
+    if entry.get("value") not in (None, ""):
+        return str(entry["value"])
+    parts = str(entry.get("text") or "").split()
+    return parts[1] if len(parts) > 1 else ""
 
 
 def _pieces(planned) -> list[str]:

@@ -25,6 +25,11 @@ _SYSTEM_PROMPT = (
 )
 
 
+def system_prompt() -> str:
+    """System message the adapter sends. Call budgets estimate this text."""
+    return _SYSTEM_PROMPT
+
+
 class OpenAIBrainProvider:
     """Strict JSON schema call. The SDK does not retry; the engine owns the one correction."""
 
@@ -59,7 +64,7 @@ class OpenAIBrainProvider:
             response = self._client_for(timeout).chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt()},
                     {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
                 ],
                 response_format=openai_strict_response_format(),

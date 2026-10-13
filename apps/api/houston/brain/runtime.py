@@ -19,24 +19,32 @@ from houston.ai.models import AIUsageLog
 from houston.brain.capture import capture_dossier
 from houston.brain.collection import REQUIRED_SEARCHES
 from houston.brain.configuration import (
-    call_payload,
     digest,
     estimate_tokens,
     follow_up_ceilings,
     frozen_extraction,
     frozen_knowledge,
     runtime_ceilings,
+    useful_input_tokens,
 )
 from houston.brain.contract import (
     CORRECTION_KEY,
+    ENGINE_RULES,
+    MAX_SUBJECTS,
     SCHEMA_VERSION,
     SYNTHESIS_KEY,
     accepted_result,
-    analysis_envelope,
+    apply_coverage,
     assess,
     correction_envelope,
+    correction_input_majorant,
+    intermediate_result,
+    minimal_call_output,
+    ordered_coverage,
     piece_ids_of,
+    subject_keys_of,
     synthesis_envelope,
+    synthesis_input_majorant,
 )
 from houston.brain.errors import BrainWorkError, CaptureTimeout, CaptureVolumeExceeded
 from houston.brain.lots import plan_lots, sections_from_payload
@@ -505,6 +513,19 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
     if analysis is None or not _guard(analysis, token):
         return
     knowledge = frozen_knowledge(analysis.configuration)
+    context = _dossier_context(analysis_id)
+    if context is None:
+        _fail(analysis_id, token, "insufficient_coverage")
+        return
+    _dossier, items, runs = context
+    if not _searches_executed(runs):
+        _fail(analysis_id, token, "insufficient_coverage")
+        return
+    useful = useful_input_tokens(ceilings["per_call_input_tokens"])
+    if useful < estimate_tokens(list(ENGINE_RULES)):
+        _fail(analysis_id, token, "budget_exceeded")
+        return
+    searches = sorted({run.code for run in runs})
     try:
         planned = plan_lots(
             sections_from_payload(extraction.payload),
@@ -512,31 +533,43 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             total_input_tokens=ceilings["total_input_tokens"],
             max_calls=ceilings["max_calls"],
             knowledge=knowledge,
+            searches=searches,
+            items=items,
         )
     except BrainWorkError as exc:
         _fail(analysis_id, token, exc.code)
         return
-    context = _dossier_context(analysis_id)
-    if context is None:
-        _fail(analysis_id, token, "insufficient_coverage")
-        return
-    _dossier, items, runs = context
     pieces = piece_ids_of(planned)
-    if not _searches_executed(runs):
-        _fail(analysis_id, token, "insufficient_coverage")
+    if any(
+        estimate_tokens(minimal_call_output(_reading_piece_ids(lot)))
+        > ceilings["per_call_output_tokens"]
+        for lot in planned
+    ):
+        _fail(analysis_id, token, "budget_exceeded")
         return
-    synthesis_tokens = (
-        estimate_tokens(
-            call_payload(synthesis_envelope(pieces, items, runs), analysis.configuration)
+    synthesis_tokens = 0
+    correction_tokens = 0
+    if len(planned) > 1:
+        synthesis_tokens = synthesis_input_majorant(
+            pieces,
+            key_slots=MAX_SUBJECTS,
+            knowledge=knowledge,
+            per_call_output_tokens=ceilings["per_call_output_tokens"],
+            lot_count=len(planned),
         )
-        if len(planned) > 1
-        else 0
-    )
+        correction_tokens = correction_input_majorant(
+            key_slots=MAX_SUBJECTS,
+            knowledge=knowledge,
+            per_call_output_tokens=ceilings["per_call_output_tokens"],
+        )
+    envelopes_fit = all(lot.reserved_input_tokens <= useful for lot in planned)
+    tails_fit = synthesis_tokens <= useful and correction_tokens <= useful
     reserved = sum(lot.reserved_input_tokens for lot in planned) + synthesis_tokens
-    calls = len(planned) + (1 if len(planned) > 1 else 0)
-    synthesis_exceeds_call = synthesis_tokens > ceilings["per_call_input_tokens"]
+    reserved += correction_tokens
+    calls = len(planned) + (2 if len(planned) > 1 else 0)
     if (
-        synthesis_exceeds_call
+        not envelopes_fit
+        or not tails_fit
         or reserved > ceilings["total_input_tokens"]
         or calls > ceilings["max_calls"]
     ):
@@ -570,20 +603,10 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         if analysis.provider_calls_used >= ceilings["max_calls"]:
             _fail(analysis_id, token, "budget_exceeded")
             return
-        body = (
-            analysis_envelope(lot.payload["sections"], pieces, items, runs)
-            if len(planned) == 1
-            else lot.payload
-        )
-        sent = call_payload(body, analysis.configuration)
-        sent_tokens = estimate_tokens(sent)
-        if sent_tokens > ceilings["per_call_input_tokens"]:
-            _fail(analysis_id, token, "budget_exceeded")
-            return
         result = provider.complete(
             analysis_id=str(analysis_id),
             lot_key=lot.stable_key,
-            payload=sent,
+            payload=lot.payload,
             timeout_seconds=ceilings["provider_timeout_seconds"],
         )
         outcome = _accept_call(
@@ -594,9 +617,13 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             result=result,
             ceilings=ceilings,
             configuration=analysis.configuration,
-            sent_tokens=sent_tokens,
+            sent_tokens=lot.reserved_input_tokens,
         )
         if outcome not in {"written", "reused"}:
+            return
+        if len(planned) > 1 and not _lot_output_accepted(
+            analysis_id, token, result.output, lot, items
+        ):
             return
     validated_keys = set(
         BrainLot.objects.filter(
@@ -618,6 +645,8 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         ceilings=ceilings,
         configuration=analysis.configuration,
         started=started,
+        synthesis_tokens=synthesis_tokens,
+        correction_tokens=correction_tokens,
     )
 
 
@@ -816,6 +845,23 @@ def _charge_free_call(
         return "accepted"
 
 
+def _lot_output_accepted(analysis_id, token, output, lot, items) -> bool:
+    """A reading lot covers only its own piece ids. Failure does not open a correction."""
+    assessment = assess(output, pieces=_reading_piece_ids(lot), items=items)
+    if assessment.ok:
+        return True
+    code = assessment.issues[0].code if assessment.issues else "response_invalid"
+    _fail(analysis_id, token, code)
+    return False
+
+
+def _reading_piece_ids(lot) -> list[str]:
+    raw = lot.payload.get("required_piece_ids") if isinstance(lot.payload, dict) else None
+    if isinstance(raw, list):
+        return [str(piece_id) for piece_id in raw if piece_id]
+    return piece_ids_of([lot])
+
+
 def _settle(
     analysis_id,
     token,
@@ -826,6 +872,8 @@ def _settle(
     ceilings: dict[str, int],
     configuration: dict,
     started: float,
+    synthesis_tokens: int,
+    correction_tokens: int,
 ) -> None:
     analysis = _running(analysis_id, token)
     if analysis is None or not _guard(analysis, token):
@@ -854,22 +902,58 @@ def _settle(
             _fail(analysis_id, token, "lots_incomplete")
             return
         candidate = stored.output
-    else:
-        if not _renew(analysis_id, token, ceilings["lease_seconds"]):
-            _cancel_if_requested(analysis_id, token)
+        assessment = assess(candidate, pieces=pieces, items=items)
+        if assessment.ok and assessment.parsed is not None:
+            _finish(analysis_id, token, assessment.parsed, items)
             return
-        candidate = _contract_call(
-            analysis_id=analysis_id,
-            token=token,
+        _correct(
+            analysis_id,
+            token,
             provider=provider,
-            lot_key=SYNTHESIS_KEY,
-            payload=call_payload(synthesis_envelope(pieces, items, runs), configuration),
+            assessment=assessment,
+            pieces=pieces,
+            items=items,
             ceilings=ceilings,
             configuration=configuration,
+            started=started,
         )
-        if candidate is None:
-            return
-    assessment = assess(candidate, pieces=pieces, items=items)
+        return
+    prepared = _prepare_synthesis(
+        analysis_id,
+        token,
+        planned=planned,
+        pieces=pieces,
+    )
+    if prepared is None:
+        return
+    coverage, intermediates, required_keys = prepared
+    if not _renew(analysis_id, token, ceilings["lease_seconds"]):
+        _cancel_if_requested(analysis_id, token)
+        return
+    synthesis_payload = synthesis_envelope(
+        pieces,
+        intermediates=intermediates,
+        required_subject_keys=required_keys,
+        knowledge=frozen_knowledge(configuration),
+    )
+    candidate = _contract_call(
+        analysis_id=analysis_id,
+        token=token,
+        provider=provider,
+        lot_key=SYNTHESIS_KEY,
+        payload=synthesis_payload,
+        ceilings=ceilings,
+        configuration=configuration,
+        reserved_tokens=synthesis_tokens,
+    )
+    if candidate is None:
+        return
+    assessment = assess(
+        apply_coverage(candidate, coverage),
+        pieces=pieces,
+        items=items,
+        required_subject_keys=required_keys,
+    )
     if assessment.ok and assessment.parsed is not None:
         _finish(analysis_id, token, assessment.parsed, items)
         return
@@ -883,7 +967,55 @@ def _settle(
         ceilings=ceilings,
         configuration=configuration,
         started=started,
+        assembled_coverage=coverage,
+        candidate=candidate,
+        required_subject_keys=required_keys,
+        reserved_tokens=correction_tokens,
     )
+
+
+def _prepare_synthesis(analysis_id, token, *, planned, pieces):
+    """Lot keys and assembled coverage. A gap here does not call the provider."""
+    stored = {
+        row.stable_key: row
+        for row in BrainLot.objects.filter(
+            analysis_id=analysis_id,
+            status=BrainLot.Status.VALIDATED,
+        )
+    }
+    keys: list[str] = []
+    seen: set[str] = set()
+    coverage: list[dict] = []
+    intermediates = []
+    for lot in planned:
+        row = stored.get(lot.stable_key)
+        if row is None:
+            _fail(analysis_id, token, "lots_incomplete")
+            return None
+        piece_ids = _reading_piece_ids(lot)
+        for key in subject_keys_of(row.output):
+            if key in seen:
+                _fail(analysis_id, token, "response_invalid")
+                return None
+            seen.add(key)
+            keys.append(key)
+        ordered = ordered_coverage(row.output, piece_ids)
+        if ordered is None:
+            _fail(analysis_id, token, "insufficient_coverage")
+            return None
+        coverage.extend(ordered)
+        intermediate = intermediate_result(lot.stable_key, row.output, piece_ids)
+        if intermediate is None:
+            _fail(analysis_id, token, "insufficient_coverage")
+            return None
+        intermediates.append(intermediate)
+    if len(seen) > MAX_SUBJECTS:
+        _fail(analysis_id, token, "budget_exceeded")
+        return None
+    if {entry["piece_id"] for entry in coverage} != set(pieces):
+        _fail(analysis_id, token, "insufficient_coverage")
+        return None
+    return coverage, intermediates, keys
 
 
 def _correct(
@@ -897,6 +1029,10 @@ def _correct(
     ceilings: dict[str, int],
     configuration: dict,
     started: float,
+    assembled_coverage=None,
+    candidate=None,
+    required_subject_keys=None,
+    reserved_tokens: int | None = None,
 ) -> None:
     analysis = _running(analysis_id, token)
     if analysis is None or not _guard(analysis, token):
@@ -907,30 +1043,47 @@ def _correct(
     if not _renew(analysis_id, token, ceilings["lease_seconds"]):
         _cancel_if_requested(analysis_id, token)
         return
+    required = (
+        assessment.subject_keys if required_subject_keys is None else required_subject_keys
+    )
+    knowledge = frozen_knowledge(configuration)
+    if assembled_coverage is None:
+        correction_payload = correction_envelope(
+            assessment.issues,
+            pieces,
+            items,
+            required,
+        )
+        correction_payload["knowledge"] = knowledge
+    else:
+        correction_payload = correction_envelope(
+            assessment.issues,
+            pieces,
+            items,
+            required,
+            candidate=candidate if isinstance(candidate, dict) else {},
+            knowledge=knowledge,
+            assemble_coverage=True,
+        )
     corrected = _contract_call(
         analysis_id=analysis_id,
         token=token,
         provider=provider,
         lot_key=CORRECTION_KEY,
-        payload=call_payload(
-            correction_envelope(
-                assessment.issues,
-                pieces,
-                items,
-                assessment.subject_keys,
-            ),
-            configuration,
-        ),
+        payload=correction_payload,
         ceilings=ceilings,
         configuration=configuration,
+        reserved_tokens=reserved_tokens,
     )
     if corrected is None:
         return
+    if assembled_coverage is not None:
+        corrected = apply_coverage(corrected, assembled_coverage)
     second = assess(
         corrected,
         pieces=pieces,
         items=items,
-        required_subject_keys=assessment.subject_keys,
+        required_subject_keys=required,
     )
     if not second.ok or second.parsed is None:
         code = second.issues[0].code if second.issues else "response_invalid"
@@ -948,12 +1101,15 @@ def _contract_call(
     payload: dict,
     ceilings: dict[str, int],
     configuration: dict,
+    reserved_tokens: int | None = None,
 ) -> dict | None:
     analysis = _running(analysis_id, token)
     if analysis is None:
         return None
-    reserved = estimate_tokens(payload)
-    if not _within_call_budget(analysis, reserved, ceilings):
+    actual = estimate_tokens(payload)
+    reserved = actual if reserved_tokens is None else reserved_tokens
+    useful = useful_input_tokens(ceilings["per_call_input_tokens"])
+    if actual > useful or not _within_call_budget(analysis, reserved, ceilings):
         _fail(analysis_id, token, "budget_exceeded")
         return None
     result = provider.complete(
@@ -992,7 +1148,7 @@ def _finish(analysis_id, token, parsed, items) -> None:
 
 
 def _within_call_budget(analysis: BrainAnalysis, reserved: int, ceilings: dict[str, int]) -> bool:
-    if reserved > ceilings["per_call_input_tokens"]:
+    if reserved > useful_input_tokens(ceilings["per_call_input_tokens"]):
         return False
     if analysis.provider_calls_used + 1 > ceilings["max_calls"]:
         return False
@@ -1022,7 +1178,9 @@ def _dossier_context(analysis_id):
     dossier = BrainDossier.objects.filter(analysis_id=analysis_id, closed_at__isnull=False).first()
     if dossier is None:
         return None
-    return dossier, list(dossier.items.all()), list(dossier.search_runs.all())
+    items = list(dossier.items.order_by("stable_key", "id"))
+    runs = list(dossier.search_runs.order_by("code", "id"))
+    return dossier, items, runs
 
 
 def _output_acceptable(result: ProviderCallResult, per_call_output_tokens: int) -> bool:

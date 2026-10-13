@@ -99,13 +99,6 @@ def frozen_knowledge(configuration: object) -> dict:
     }
 
 
-def call_payload(body: dict, configuration: object) -> dict:
-    """Attach the frozen Knowledge to one provider call."""
-    payload = dict(body)
-    payload["knowledge"] = frozen_knowledge(configuration)
-    return payload
-
-
 def _knowledge_snapshot(version: BrainKnowledgeVersion) -> dict:
     return {
         "version_id": str(version.id),
@@ -126,6 +119,19 @@ def estimate_tokens(value: object) -> int:
     """Local size estimate used to place sections. It is not a provider tokenizer."""
     raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     return max(1, (len(raw) + 3) // 4)
+
+
+def provider_fixed_input_tokens() -> int:
+    """Local estimate of the system prompt and strict schema the adapter sends."""
+    from houston.brain.contract import openai_strict_response_format
+    from houston.brain.openai_provider import system_prompt
+
+    return estimate_tokens(system_prompt()) + estimate_tokens(openai_strict_response_format())
+
+
+def useful_input_tokens(per_call_input_tokens: int) -> int:
+    """Payload room left in one call after the prompt and the strict schema."""
+    return per_call_input_tokens - provider_fixed_input_tokens()
 
 
 def configuration_unusable() -> BrainWorkError:
