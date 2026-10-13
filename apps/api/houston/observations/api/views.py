@@ -161,8 +161,14 @@ class ObservationProcessingStatusView(EstablishmentScopedObservationMixin, APIVi
                         "title": summary.title,
                         "affected_business_unit_key": summary.affected_business_unit_key,
                         "affected_business_unit_label": summary.affected_business_unit_label,
+                        "affected_business_unit_color_index": (
+                            summary.affected_business_unit_color_index
+                        ),
                         "responsible_business_unit_key": summary.responsible_business_unit_key,
                         "responsible_business_unit_label": summary.responsible_business_unit_label,
+                        "responsible_business_unit_color_index": (
+                            summary.responsible_business_unit_color_index
+                        ),
                         "activity_subject_key": summary.activity_subject_key,
                         "activity_subject_label": summary.activity_subject_label,
                         "location_text": summary.location_text,
