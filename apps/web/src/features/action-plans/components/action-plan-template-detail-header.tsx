@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { HoustonBadge, TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -21,9 +22,9 @@ export function ActionPlanTemplateDetailHeader({ plan }: ActionPlanTemplateDetai
     <TerrainCard className="space-y-3">
       <h1 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{plan.title}</h1>
       <div className="flex flex-wrap items-center gap-1.5">
-        <HoustonBadge variant="gray" className="text-[10px]">
+        <BusinessUnitBadge colorIndex={plan.pilot_business_unit.color_index}>
           {plan.pilot_business_unit.specific_name}
-        </HoustonBadge>
+        </BusinessUnitBadge>
         {plan.requires_validation ? (
           <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">
             Validation requise
@@ -109,9 +110,13 @@ export function ActionPlanTemplateDetailSecondary({ plan }: ActionPlanTemplateDe
                   <span className="text-[#7D7B75]">
                     {summary.role === 'pilot' ? 'Pôle pilote :' : 'Pôle contributeur :'}
                   </span>
-                  <HoustonBadge variant="gray" className="text-[10px]">
+                  <BusinessUnitBadge colorIndex={
+                    plan.pilot_business_unit.id === summary.businessUnitId
+                      ? plan.pilot_business_unit.color_index
+                      : plan.tasks.find((task) => task.business_unit.id === summary.businessUnitId)?.business_unit.color_index
+                  }>
                     {summary.label}
-                  </HoustonBadge>
+                  </BusinessUnitBadge>
                   <span className="text-[#7D7B75]">
                     {summary.total} tâche{summary.total > 1 ? 's' : ''}
                   </span>
