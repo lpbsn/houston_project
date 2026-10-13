@@ -40,6 +40,7 @@ def _assert_lot5_business_unit_shape(payload: dict) -> None:
     assert set(payload.keys()) == {
         "id",
         "specific_name",
+        "color_index",
         "instance_description",
         "active",
         "generic",
