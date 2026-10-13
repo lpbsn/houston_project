@@ -629,6 +629,8 @@ class BusinessUnit(BaseModel):
     active = models.BooleanField(default=True)
     specific_name = models.CharField(max_length=255)
     normalized_specific_name = models.CharField(max_length=255)
+    # Presentation identity: assigned once by the domain service, never on rename.
+    color_index = models.PositiveIntegerField(null=True, blank=True, editable=False)
     routing_key = models.CharField(max_length=180)
     instance_description = models.TextField(blank=True, default="")
 
@@ -637,6 +639,10 @@ class BusinessUnit(BaseModel):
             models.UniqueConstraint(
                 fields=["establishment", "normalized_specific_name"],
                 name="bu_est_normalized_specific_name_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "color_index"],
+                name="bu_est_color_index_uniq",
             ),
             models.UniqueConstraint(
                 fields=["establishment", "routing_key"],
