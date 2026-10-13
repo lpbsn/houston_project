@@ -106,18 +106,18 @@ maintenance__securite_conformite,Sécurité & conformité,maintenance,"Conformit
 maintenance__logistique_consommables_techniques,Logistique & consommables techniques,maintenance,,1050
 maintenance__ouverture_fermeture_technique,Ouverture / fermeture technique,maintenance,,1060
 maintenance__prestataires_sous_traitance,Prestataires & sous-traitance,maintenance,,1070
-communication__reseaux_sociaux,Réseaux sociaux,communication,,1080
-communication__image_de_marque,Image de marque,communication,,1090
-communication__acquisition_visibilite,Acquisition & visibilité,communication,,1100
+communication__reseaux_sociaux,Réseaux sociaux,communication,"Préparation, publication et animation des contenus sur les comptes sociaux de l’entreprise. Inclut les interactions liées aux publications ; une demande d’assistance individuelle relève de la relation client.",1080
+communication__image_de_marque,Image de marque,communication,"Positionnement public, promesse, identité visuelle et cohérence des messages de l’entreprise. Exclut la conception des interfaces du produit et la négociation d’offres individuelles.",1090
+communication__acquisition_visibilite,Acquisition & visibilité,communication,"Conception et pilotage des actions destinées à faire connaître l’offre et attirer des prospects : campagnes, référencement et présence sur les canaux d’acquisition. Exclut le suivi commercial individuel.",1100
 communication__animation_communaute,Animation communauté,communication,,1110
-communication__communication_commerciale,Communication commerciale,communication,,1120
+communication__communication_commerciale,Communication commerciale,communication,"Création et mise à jour des présentations, brochures et supports de démonstration réutilisables pour la vente. Exclut les offres, propositions et négociations destinées à un prospect précis.",1120
 communication__crm_relation_client,CRM & relation client,communication,,1130
-communication__contenu_production,Contenu & production,communication,,1140
+communication__contenu_production,Contenu & production,communication,"Production de textes, visuels, vidéos, témoignages et cas clients réutilisables. Pour une action centrée sur la publication sur un réseau social, utiliser Réseaux sociaux ; pour un support de vente, utiliser Communication commerciale.",1140
 communication__e_reputation,E-réputation,communication,,1150
 communication__partenariats_influence,Partenariats & influence,communication,,1160
-communication__site_web_plateformes,Site web & plateformes,communication,,1170
+communication__site_web_plateformes,Site web & plateformes,communication,"Contenus, messages et parcours de conversion du site vitrine et des pages publiques de présentation. Exclut les fonctionnalités de l’application métier et les corrections techniques du site.",1170
 communication__communication_locale,Communication locale,communication,,1180
-communication__data_performance_marketing,Data & performance marketing,communication,,1190
+communication__data_performance_marketing,Data & performance marketing,communication,"Mesure et analyse de l’audience, des canaux d’acquisition, des conversions et des résultats des campagnes. Exclut l’adoption du produit par les clients et les performances techniques du logiciel.",1190
 rh__recrutement,Recrutement,rh,,1200
 rh__planning,Planning,rh,,1210
 rh__formation,Formation,rh,,1220
@@ -133,3 +133,30 @@ evenements_privatisations__communication,Communication,evenements_privatisations
 evenements_privatisations__commercialisation,commercialisation,evenements_privatisations,,1320
 evenements_privatisations__rh_planning,RH & planning,evenements_privatisations,,1330
 evenements_privatisations__facturation,Facturation,evenements_privatisations,,1340
+produit_numerique__besoins_opportunites,Besoins & opportunités,produit_numerique,"Problèmes utilisateurs, retours d’usage et idées d’évolution à explorer avant tout engagement de réalisation.",1350
+produit_numerique__strategie_priorisation,Stratégie & priorisation,produit_numerique,"Objectifs du produit, arbitrages de valeur, périmètre des versions et ordre des évolutions.",1360
+produit_numerique__cadrage_fonctionnel,Cadrage fonctionnel,produit_numerique,"Comportements attendus, règles métier, cas limites, périmètre et critères d’acceptation d’une évolution.",1370
+produit_numerique__experience_design,Expérience utilisateur & design,produit_numerique,"Parcours, navigation, interfaces, accessibilité et cohérence d’usage entre supports.",1380
+produit_numerique__validation_impact,Validation & impact produit,produit_numerique,"Adéquation d’une solution au besoin, recette fonctionnelle et résultats observés après livraison.",1390
+developpement_logiciel__fonctionnalites_integrations,Fonctionnalités & intégrations,developpement_logiciel,"Implémentation et évolution des fonctionnalités, API, automatisations et connexions à des services externes.",1400
+developpement_logiciel__anomalies_incidents,Anomalies & incidents,developpement_logiciel,"Dysfonctionnements, régressions et interruptions nécessitant diagnostic, correction et vérification.",1410
+developpement_logiciel__architecture_qualite,Architecture & qualité du code,developpement_logiciel,"Structure du logiciel, maintenabilité, dette technique, stratégie de tests et outillage de développement.",1420
+developpement_logiciel__performance_fiabilite,Performance & fiabilité,developpement_logiciel,"Temps de réponse, capacité, consommation de ressources et robustesse des traitements ; hors incident ponctuel déjà identifié.",1430
+developpement_logiciel__securite_donnees,Sécurité & données,developpement_logiciel,"Contrôles d’accès, vulnérabilités, isolation, intégrité et protection technique des données.",1440
+developpement_logiciel__infrastructure_livraisons,Infrastructure & livraisons,developpement_logiciel,"Environnements, hébergement, supervision, chaîne de déploiement, distribution et publication des applications.",1450
+commercial__prospection_qualification,Prospection & qualification,commercial,"Identification des prospects, prise de contact et évaluation du besoin, des interlocuteurs et du potentiel commercial.",1460
+commercial__demonstrations_propositions,Démonstrations & propositions,commercial,"Préparation des rendez-vous, démonstrations adaptées et formulation d’une proposition répondant au besoin du prospect.",1470
+commercial__offres_tarification,Offres & tarification,commercial,"Construction des offres, prix, périmètres inclus et conditions commerciales.",1480
+commercial__negociation_contrats,Négociation & contrats,commercial,"Négociations et engagements de vente, signatures, renouvellements et extensions contractuelles.",1490
+commercial__partenariats_distribution,Partenariats & distribution,commercial,"Apport d’affaires, distribution et accords ouvrant l’accès à de nouveaux clients.",1500
+relation_client__deploiement_configuration,Déploiement & configuration client,relation_client,"Préparation de la mise en service, paramétrage du compte, organisation des accès et coordination du lancement client.",1510
+relation_client__formation_accompagnement,Formation & accompagnement,relation_client,"Prise en main, supports d’aide et accompagnement des utilisateurs dans leurs pratiques.",1520
+relation_client__assistance,Assistance client,relation_client,"Questions et difficultés d’utilisation, diagnostic initial et suivi de la réponse apportée au client.",1530
+relation_client__adoption,Adoption & usage,relation_client,"Utilisation effective, freins rencontrés et actions permettant d’installer durablement les usages.",1540
+relation_client__satisfaction_fidelisation,Satisfaction & fidélisation,relation_client,"Bilans clients, satisfaction, risques de départ et actions de fidélisation hors négociation contractuelle.",1550
+gestion_entreprise__gouvernance_organisation,Gouvernance & organisation,gestion_entreprise,"Responsabilités, décisions entre associés, objectifs d’entreprise et organisation du travail interne.",1560
+gestion_entreprise__administratif_juridique,Administratif & juridique,gestion_entreprise,"Création et administration de la structure, documents généraux et suivi des obligations juridiques.",1570
+gestion_entreprise__finances_comptabilite,Finances & comptabilité,gestion_entreprise,"Trésorerie, budgets, facturation, encaissements, dépenses et coordination comptable.",1580
+gestion_entreprise__financement,Financement,gestion_entreprise,"Recherche de financements, aides, préparation des dossiers et suivi des démarches.",1590
+gestion_entreprise__achats_prestataires,Achats & prestataires,gestion_entreprise,"Sélection, abonnements, contrats fournisseurs et suivi économique des prestations.",1600
+gestion_entreprise__conformite_donnees,Conformité & gouvernance des données,gestion_entreprise,"Organisation des obligations relatives aux données, documentation et suivi des engagements ; les mesures techniques relèvent du développement logiciel.",1610
