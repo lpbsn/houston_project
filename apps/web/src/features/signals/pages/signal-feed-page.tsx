@@ -19,7 +19,6 @@ import {
   TerrainSectionLabel,
 } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { feedAuthorizationFingerprint } from '@/lib/feed-authorization'
 import {
   focusContinuesPageOne,
@@ -123,7 +122,7 @@ function SignalFeedPageContent({
   const auth = useAuth()
   const membershipRole = auth.bootstrap?.active_membership?.role ?? null
   const isCross = source === 'cross'
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const readingScopeKey = signalFeedReadingScopeKey(source, establishmentId)
   const [initialReading] = useState(() => readSignalFeedReading(readingScopeKey))
   const scrollRef = useRef<HTMLDivElement>(null)

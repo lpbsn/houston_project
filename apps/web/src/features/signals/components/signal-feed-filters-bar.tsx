@@ -6,7 +6,6 @@ import { TerrainFilterChip } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainFilterChipClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -45,7 +44,7 @@ export function SignalFeedFiltersBar({
   onReset,
   contentClassName,
 }: SignalFeedFiltersBarProps) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
   const [classificationPanelOpen, setClassificationPanelOpen] = useState(false)
   const normalizedFilters = normalizeSignalFeedFilters(filters)

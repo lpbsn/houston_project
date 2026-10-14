@@ -4,6 +4,10 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
+
 import { createBrowserHistory } from '@/app/app-history'
 import { AppRouteProvider } from '@/app/app-routes'
 import type { AnalyticsSignalReturnContext } from '@/features/analytics/lib/analytics-url-state'
@@ -1214,6 +1218,7 @@ describe('SignalDetailPage linked action plans', () => {
 
 describe('SignalDetailPage desktop actions', () => {
   it('shows comments under the content and keeps status in the context panel', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     window.history.replaceState(
       null,
@@ -1289,6 +1294,7 @@ describe('SignalDetailPage desktop actions', () => {
   })
 
   it('places comments after photos and linked plans in the main column', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     detailQueryMock.mockReturnValue({
       isLoading: false,
@@ -1325,6 +1331,7 @@ describe('SignalDetailPage desktop actions', () => {
   })
 
   it('shows a dedicated Lieu section under Classification on desktop', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     detailQueryMock.mockReturnValue({
       isLoading: false,
@@ -1347,6 +1354,7 @@ describe('SignalDetailPage desktop actions', () => {
   })
 
   it('shows similar-observations label in the desktop context panel', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     detailQueryMock.mockReturnValue({
       isLoading: false,
@@ -1363,6 +1371,7 @@ describe('SignalDetailPage desktop actions', () => {
   })
 
   it('still shows the linked plan on desktop without a resolve-via-plan hint', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     detailQueryMock.mockReturnValue({
       isLoading: false,

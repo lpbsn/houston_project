@@ -59,7 +59,6 @@ import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { notifySuccess } from '@/lib/success-toast'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -320,7 +319,7 @@ function InlineMetric({
 }
 
 function AnalyticsPatternDetailSkeleton() {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   return (
     <div
       className={cn('grid gap-3 md:grid-cols-2', isDesktopWeb && 'xl:grid-cols-4')}
@@ -465,7 +464,7 @@ function PatternSignalsSection({
   onReportIssue: (item: AnalyticsPatternSignalItem) => void
   issueReportSuccess: string | null
 }) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const items = useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
     [query.data],
@@ -773,7 +772,7 @@ function OwnerGovernancePanel({
   success: string | null
   onOpenAction: (action: OwnerGovernanceAction) => void
 }) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   if (!canShow) {
     return null
   }
@@ -1149,7 +1148,7 @@ function AnalyticsPatternDetailContent({
   governanceSuccess: string | null
   onOpenGovernanceAction: (action: OwnerGovernanceAction) => void
 }) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   return (
     <>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1301,7 +1300,7 @@ export function AnalyticsPatternDetailPage({
 }: AnalyticsPatternDetailPageProps) {
   const queryClient = useQueryClient()
   const { bootstrap, isBootstrapping, isReady } = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
   const canShowOwnerGovernance = canShowOwnerGovernanceActions(bootstrap)
   const [signalNavigationError, setSignalNavigationError] = useState<string | null>(null)

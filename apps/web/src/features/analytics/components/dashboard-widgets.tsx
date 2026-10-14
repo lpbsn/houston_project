@@ -51,7 +51,6 @@ import {
 } from '@/features/analytics/lib/dashboard-chart-scale'
 import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 const VOLUME_LABEL_LINES: Record<string, readonly [string, string]> = {
@@ -228,7 +227,7 @@ export function DashboardExportButton() {
 }
 
 export function DashboardFilterPlaceholders() {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   return (
     <div
       className={cn(

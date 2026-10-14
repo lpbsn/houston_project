@@ -203,6 +203,7 @@ describe('TerrainShell', () => {
   })
 
   it('always shows Chat in the mobile bottom nav', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     renderTerrainShell('auto', {
       activeNavPath: '/signals',
       showBottomNav: true,
@@ -214,31 +215,18 @@ describe('TerrainShell', () => {
     expect(shell?.className).not.toContain('--app-safe-left')
   })
 
-  it('keeps bottom navigation on mobile web and hides it on desktop web', () => {
-    const { unmount } = renderTerrainShell('auto', {
-      activeNavPath: '/signals',
-      showBottomNav: true,
-    })
-
-    const bottomNav = screen.getByRole('navigation', { name: 'Navigation terrain' })
-    expect(bottomNav.className).not.toContain('lg:hidden')
-    expect(screen.queryByLabelText('Navigation principale')).toBeNull()
-    const shell = screen.getByRole('main').closest('[data-terrain-shell-root]')
-    expect(shell?.className).toContain('max-w-md')
-    expect(shell?.className).not.toContain('max-w-none')
-    unmount()
-
-    lgViewportState.current = true
+  it('keeps the SaaS sidebar on narrow web without the mobile navigation', () => {
     renderTerrainShell('auto', {
-      activeNavPath: '/signals',
-      showBottomNav: true,
-      bootstrap: bootstrap([membership({ role: 'staff' })]),
+      activeNavPath: '/signals', showBottomNav: true,
+      bootstrap: bootstrap([membership({ role: 'manager' })]),
     })
+    const sidebar = screen.getByLabelText('Navigation principale')
+    expect(sidebar.getAttribute('data-collapsed')).toBe('true')
+    expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: 'Navigation terrain' })).toBeNull()
-    expect(screen.getByLabelText('Navigation principale')).toBeTruthy()
-    expect(screen.getByRole('main').closest('[data-terrain-shell-root]')?.className).toContain(
-      'max-w-none',
-    )
+    expect(screen.getByRole('main').closest('[data-terrain-shell-root]')?.className).toContain('max-w-none')
+    fireEvent.click(screen.getByRole('button', { name: 'Développer la navigation' }))
+    expect(sidebar.getAttribute('data-collapsed')).toBe('false')
   })
 
   it('keeps the mobile shell on native at a large viewport', () => {
@@ -263,6 +251,7 @@ describe('TerrainShell', () => {
   })
 
   it('hides bottom navigation while the native keyboard is open', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     mockNativeKeyboardOpen.current = true
     renderTerrainShell('auto', {
       showBottomNav: true,
@@ -272,6 +261,7 @@ describe('TerrainShell', () => {
   })
 
   it('shows the shared mobile nav on a destination page without marking a tab current', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     renderTerrainShell('auto', {
       showBottomNav: true,
     })
@@ -332,9 +322,23 @@ describe('TerrainShell', () => {
       'true',
     )
     expect(screen.getByText('execution')).toBeTruthy()
+
+    // Resizing changes the rail density, never the product surface or page instance.
+    const content = screen.getByText('execution')
+    lgViewportState.current = false
+    view.rerender(tree('execution'))
+    expect(screen.getByText('execution')).toBe(content)
+    expect(screen.queryByRole('navigation', { name: 'Navigation terrain' })).toBeNull()
+    expect(screen.getByLabelText('Navigation principale').getAttribute('data-collapsed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Développer la navigation' }))
+    expect(screen.getByLabelText('Navigation principale').getAttribute('data-collapsed')).toBe('false')
+    lgViewportState.current = true
+    view.rerender(tree('execution'))
+    expect(screen.getByLabelText('Navigation principale').getAttribute('data-collapsed')).toBe('true')
   })
 
-  it('publishes showBottomNav through the shell layout context', () => {
+  it.each(['web', 'native'])('publishes effective bottom navigation for %s', runtime => {
+    vi.stubEnv('VITE_APP_RUNTIME', runtime)
     function Probe() {
       const { showBottomNav } = useTerrainShellLayout()
       return createElement('div', { 'data-testid': 'layout-probe' }, String(showBottomNav))
@@ -363,6 +367,6 @@ describe('TerrainShell', () => {
       ),
     )
 
-    expect(screen.getByTestId('layout-probe').textContent).toBe('true')
+    expect(screen.getByTestId('layout-probe').textContent).toBe(String(runtime === 'native'))
   })
 })

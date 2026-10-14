@@ -5,6 +5,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
+
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 
 import { ActionPlanExecutionEditPage } from './action-plan-execution-edit-page'
@@ -248,6 +252,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
   })
 
   it('returns to the detail with calendar search from the desktop frame', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
@@ -389,6 +394,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
   })
 
   it('prefills an execution edit and keeps treated tasks read-only on desktop web', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,

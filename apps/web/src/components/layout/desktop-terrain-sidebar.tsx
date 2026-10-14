@@ -33,7 +33,6 @@ import {
   type ScopedDesktopNavItemId,
 } from '@/features/navigation/lib/scoped-desktop-navigation'
 import type { TerrainScope } from '@/app/scoped-terrain'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type DesktopTerrainSidebarProps = {
@@ -363,8 +362,7 @@ export function DesktopTerrainSidebar({
     scope: navigation.scope,
     bootstrap,
   })
-  const isLgViewport = useLgViewport()
-  const showSignOut = Boolean(onSignOut) && isDesktopWebLanding(isLgViewport)
+  const showSignOut = Boolean(onSignOut) && isDesktopWebLanding()
   const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose
   const topItems = navigation.items.filter((item) => item.group === 1)
   const middleItems = navigation.items.filter((item) => item.group === 2)

@@ -13,7 +13,6 @@ import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -49,7 +48,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   const { navigate } = useAppRoute()
   const navigateTo = onNavigate ?? navigate
   const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const establishmentId = activeMembership?.establishment_id ?? null
   const membershipId = activeMembership?.id ?? null
   const role = activeMembership?.role ?? null

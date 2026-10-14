@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -79,7 +78,7 @@ export function ChatPage({
   establishmentId: establishmentIdProp,
   selectedConversationId = null,
 }: ChatPageProps) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const auth = useAuth()
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
@@ -521,11 +520,11 @@ export function ChatPage({
         <div className="shrink-0">
           <ChatReconnectBanner status={connectionStatus} />
         </div>
-        <div className="flex min-h-0 flex-1" data-testid="chat-desktop-split">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row" data-testid="chat-desktop-split">
           <div
             className={cn(
-              'flex shrink-0 flex-col border-r border-[#E8E6DF]',
-              listCollapsed ? 'w-28' : 'w-[22rem]',
+              'flex min-h-0 max-h-[40%] w-full shrink-0 flex-col border-b border-[#E8E6DF] lg:max-h-none lg:border-r lg:border-b-0',
+              listCollapsed ? 'lg:w-28' : 'lg:w-[22rem]',
             )}
             data-testid="chat-discussions-rail"
             data-collapsed={listCollapsed ? 'true' : 'false'}

@@ -4,6 +4,10 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
+
 import { ActionPlansApiError } from '@/features/action-plans/api'
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
@@ -448,7 +452,7 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(screen.getByTestId('comment-section')).toBeTruthy()
   })
 
-  it('renders a single lifecycle footer inside the responsive desktop panel', () => {
+  it('renders a single lifecycle footer inside the terrain detail panel', () => {
     renderPage()
 
     const footer = screen.getByTestId('execution-validation-actions')
@@ -1398,6 +1402,7 @@ describe('ActionPlanExecutionDetailPage desktop composition', () => {
   })
 
   it('keeps tasks ahead of comments and leaves the context beside them', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     const onBack = vi.fn()
     renderPage({ onBack, withDesktopTopbar: true })
@@ -1451,6 +1456,7 @@ describe('ActionPlanExecutionDetailPage desktop composition', () => {
   })
 
   it('does not keep a task success banner above the title card', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     markTaskDoneMutateAsyncMock.mockResolvedValue({})
     renderPage()
@@ -1470,6 +1476,7 @@ describe('ActionPlanExecutionDetailPage desktop composition', () => {
   })
 
   it('scrolls to comments and keeps the direct comment link on desktop', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     mockLgViewport(true)
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView

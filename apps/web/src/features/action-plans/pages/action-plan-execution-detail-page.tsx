@@ -9,7 +9,6 @@ import {
   TerrainDetailTrailingSlot,
 } from '@/components/layout/terrain-detail-trailing-slot'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { TerrainCard, TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import {
   ActionDetailTabs,
@@ -99,7 +98,7 @@ function ActionPlanExecutionDetailPageContent({
 }: ActionPlanExecutionDetailPageContentProps) {
   const { navigate, search: locationSearch } = useAppRoute()
   const { activeMembership, user, bootstrap } = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const aiConsentGranted = readAiConsentStatus(user ?? bootstrap?.user) === 'granted'
   const { isOnline } = useNetworkStatus()
   const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId, executionId)

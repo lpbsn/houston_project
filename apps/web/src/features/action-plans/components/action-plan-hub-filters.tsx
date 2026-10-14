@@ -2,7 +2,6 @@ import { Input } from '@/components/ui/input'
 import { TerrainFilterChip } from '@/components/ui/terrain'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type ActionPlanHubFiltersProps = {
@@ -33,7 +32,7 @@ export function ActionPlanHubFilters({
   onBusinessUnitIdChange,
   onCreatedByMeChange,
 }: ActionPlanHubFiltersProps) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = (businessUnitQuery.data?.business_units ?? []).map((unit) => ({
     id: unit.id,

@@ -5,6 +5,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
+
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
@@ -450,6 +454,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('offers use and schedule on the template detail without execution comments', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
@@ -528,6 +533,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('shows the validation badge to a read-only viewer without action rights', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,

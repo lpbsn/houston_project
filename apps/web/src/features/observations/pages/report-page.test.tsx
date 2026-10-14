@@ -5,6 +5,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
+
 import { TerrainShellLayoutProvider } from '@/components/layout/terrain-shell-layout'
 import { ObservationsApiError } from '@/features/observations/api'
 import {

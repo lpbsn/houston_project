@@ -26,8 +26,9 @@ export type AuthenticatedLandingContext = {
   isDesktop?: boolean
 }
 
-export function isDesktopWebLanding(isLgViewport: boolean): boolean {
-  return getAppRuntime() === 'web' && isLgViewport
+/** Product experience follows the build runtime. Viewport only controls layout. */
+export function isDesktopWebLanding(): boolean {
+  return getAppRuntime() === 'web'
 }
 
 export function resolveAuthenticatedLanding(
@@ -62,7 +63,7 @@ export function resolveAuthenticatedLanding(
     return { kind: 'pending', path: '/pending-onboarding' }
   }
 
-  if (isPlatformOperatorActive(bootstrap) && isDesktopWebLanding(Boolean(context.isDesktop))) {
+  if (isPlatformOperatorActive(bootstrap) && isDesktopWebLanding()) {
     return { kind: 'platform', path: '/platform/onboardings' }
   }
 

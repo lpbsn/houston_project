@@ -15,7 +15,6 @@ import {
   getAuthenticatedLandingPath,
   isDesktopWebLanding,
 } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -1093,7 +1092,6 @@ export function DraftOnboardingWizard({
   afterCompletePath,
 }: DraftOnboardingWizardProps) {
   const queryClient = useQueryClient()
-  const isLgViewport = useLgViewport()
   const draftQuery = useOnboardingDraft(sessionId, {
     queryKey: draftQueryKey,
     queryFn: getDraft,
@@ -1281,7 +1279,7 @@ export function DraftOnboardingWizard({
     const landing =
       afterCompletePath ??
       getAuthenticatedLandingPath(bootstrap, {
-        isDesktop: isDesktopWebLanding(isLgViewport),
+        isDesktop: isDesktopWebLanding(),
       }) ??
       '/reporting'
     onNavigate?.(landing)

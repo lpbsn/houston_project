@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
 import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -63,7 +62,7 @@ function formatTaskCount(count: number): string {
 export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUsePageProps) {
   const { navigate } = useAppRoute()
   const { activeMembership, bootstrap } = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const establishmentId = activeMembership?.establishment_id ?? null
   const staffUseMode = isStaffActionPlanUsageRole(activeMembership?.role ?? null)

@@ -36,7 +36,6 @@ import {
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type AnalyticsPageProps = {
@@ -69,7 +68,7 @@ function isEstablishmentAuthorized(
 export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProps) {
   const { navigate } = useAppRoute()
   const auth = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const periodDays = useDashboardPeriodDays()
   const canRead = canShowAnalyticsNavigation(auth.bootstrap)
   const sessionEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null

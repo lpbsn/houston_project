@@ -36,14 +36,13 @@ describe('BrainPage', () => {
     expect(screen.queryByTestId('brain-computer-notice')).toBeNull()
   })
 
-  it('shows the computer notice without the workspace on mobile web', () => {
+  it('keeps the same workspace mounted when the browser becomes narrow', () => {
+    const view = render(createElement(BrainPage, { establishmentId: 'est-1', analysisId: 'analysis-1' }))
+    const workspace = screen.getByTestId('brain-workspace')
     surface.lg = false
-    render(createElement(BrainPage, { establishmentId: 'est-1', analysisId: 'analysis-1' }))
-    expect(screen.getByTestId('brain-computer-notice').textContent).toContain(
-      'Spore Brain est disponible sur ordinateur.',
-    )
-    expect(screen.queryByTestId('brain-workspace')).toBeNull()
-    expect(screen.queryByLabelText('Fichier de reporting')).toBeNull()
+    view.rerender(createElement(BrainPage, { establishmentId: 'est-1', analysisId: 'analysis-1' }))
+    expect(screen.getByTestId('brain-workspace')).toBe(workspace)
+    expect(screen.queryByTestId('brain-computer-notice')).toBeNull()
   })
 
   it('shows the computer notice on native even when the viewport is large', () => {

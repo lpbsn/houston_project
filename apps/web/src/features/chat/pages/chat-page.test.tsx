@@ -223,7 +223,7 @@ function renderChatPage(props: { selectedConversationId?: string | null } = {}) 
 
 describe('ChatPage flat conversation list', () => {
   beforeEach(() => {
-    runtimeState.current = 'web'
+    runtimeState.current = 'native'
     lgViewportState.current = false
     statusQueryMock.mockReturnValue(buildStatusQueryState())
     conversationsQueryMock.mockReturnValue(buildConversationsQueryState())
@@ -324,8 +324,8 @@ describe('ChatPage flat conversation list', () => {
     expect(screen.queryByText('Groupes')).toBeNull()
   })
 
-  it('renders the desktop split with an empty invite and a single reconnect banner', () => {
-    lgViewportState.current = true
+  it.each([true, false])('keeps the SaaS conversation workspace at wide=%s', wide => {
+    lgViewportState.current = wide
     runtimeState.current = 'web'
     conversationsQueryMock.mockReturnValue(
       buildConversationsQueryState({
@@ -1020,7 +1020,7 @@ describe('ChatPage flat conversation list', () => {
 
 describe('ChatPage scroll layout', () => {
   beforeEach(() => {
-    runtimeState.current = 'web'
+    runtimeState.current = 'native'
     lgViewportState.current = false
     statusQueryMock.mockReturnValue(buildStatusQueryState())
     conversationsQueryMock.mockReturnValue(buildConversationsQueryState())
