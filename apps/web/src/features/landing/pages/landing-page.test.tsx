@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { LandingPage } from './landing-page'
@@ -44,17 +44,12 @@ describe('LandingPage', () => {
     expect(screen.getByRole('link', { name: 'Support' }).getAttribute('href')).toBe('/support/')
   })
 
-  it('opens and closes the demo panel', () => {
+  it('links every commercial CTA to the contact form', () => {
     render(<LandingPage />)
-
-    const demo = document.getElementById('sp-demo')
-    expect(demo?.hasAttribute('hidden')).toBe(true)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Voir Spore en action ↗' }))
-    expect(demo?.hasAttribute('hidden')).toBe(false)
-    expect(screen.getByText('Votre démonstration Spore')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
-    expect(demo?.hasAttribute('hidden')).toBe(true)
+    for (const name of ['Demander une démo ↗', 'Voir Spore en action ↗', 'Découvrir Spore pour mon établissement ↗', 'Demander un devis groupe ↗']) {
+      expect(screen.getByRole('link', { name }).getAttribute('href')).toBe('#sp-contact')
+    }
+    expect(screen.getByRole('form', { name: 'Contacter Spore' })).toBeTruthy()
+    expect(screen.queryByText(/reste à configurer/)).toBeNull()
   })
 })
