@@ -188,7 +188,7 @@ describe('DesktopTerrainSidebar', () => {
     expect(navigate).toHaveBeenCalledWith('/cross/signals', { intent: 'primary' })
   })
 
-  it('keeps one destination list and an inert Spore Brain for an establishment owner', () => {
+  it('keeps one destination list and links Spore Brain for an establishment owner', () => {
     const navigate = vi.fn()
     renderSidebar(
       <DesktopTerrainSidebar
@@ -208,7 +208,7 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(destinations).queryByRole('heading')).toBeNull()
     expect(destinationOrder(destinations)).toEqual([
       'Dashboard',
-      'Spore Brain - Bientôt disponible',
+      'Spore Brain',
       'Nouvelle observation',
       'Observations',
       'Exécution',
@@ -217,13 +217,10 @@ describe('DesktopTerrainSidebar', () => {
       'Général',
       'Paramètres Analytics',
     ])
-    const brain = within(destinations).getByRole('button', {
-      name: 'Spore Brain - Bientôt disponible',
-    })
-    expect(brain).toHaveProperty('disabled', true)
-    expect(within(destinations).queryByRole('link', { name: /Spore Brain/ })).toBeNull()
+    const brain = within(destinations).getByRole('link', { name: 'Spore Brain' })
+    expect(brain.getAttribute('href')).toBe('/e/est-1/brain')
     fireEvent.click(brain)
-    expect(navigate).not.toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith('/e/est-1/brain', { intent: 'primary' })
   })
 
   it('hides Spore Brain for managers, staff, and Cross', () => {
@@ -428,9 +425,7 @@ describe('DesktopTerrainSidebar', () => {
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(sidebar.getAttribute('data-collapsed')).toBe('true')
     expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
-    expect(
-      within(sidebar).getByRole('button', { name: 'Spore Brain - Bientôt disponible' }),
-    ).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Spore Brain' })).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Scope : Spore Paris' })).toBeTruthy()
     expect(within(sidebar).getByLabelText('Marie Renaud')).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Déconnexion' })).toBeTruthy()

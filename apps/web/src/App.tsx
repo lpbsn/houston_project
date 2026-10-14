@@ -29,6 +29,7 @@ import {
   LazyTeamPage,
   LazyTeamMemberDetailPage,
   LazyOperationalConfigPage,
+  LazyBrainPage,
   LazyReportPage,
   LazySignalDetailPage,
   LazySignalFeedPage,
@@ -920,6 +921,17 @@ function App() {
           return null
         }
         return <LazyOperationalConfigPage establishmentId={scope.establishmentId} />
+      }
+      if (route.page === 'brain') {
+        if (scope.type !== 'establishment') {
+          return null
+        }
+        return (
+          <LazyBrainPage
+            establishmentId={scope.establishmentId}
+            analysisId={route.analysisId}
+          />
+        )
       }
       if (route.page === 'settings') {
         return (

@@ -126,6 +126,12 @@ export const LazyComingSoonPage = lazy(() =>
   })),
 )
 
+export const LazyBrainPage = lazy(() =>
+  import('@/features/brain/pages/brain-page').then((module) => ({
+    default: module.BrainPage,
+  })),
+)
+
 export const LazyOperationalConfigPage = lazy(() =>
   import('@/features/establishment-config/pages/operational-config-page').then((module) => ({
     default: module.OperationalConfigPage,

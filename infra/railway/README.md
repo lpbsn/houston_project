@@ -9,7 +9,7 @@ Houston builds from the **repository root**. Dockerfiles use selective `COPY` al
 | Setting | `api-web` | three workers | `celery-beat` |
 |---|---|---|---|
 | **Root Directory** | `/` | `/` | `/` |
-| **Config File path** | `/infra/railway/api-web/railway.toml` | `/infra/railway/celery-ai-interactive/railway.toml`, `/infra/railway/celery-operational/railway.toml`, `/infra/railway/celery-background/railway.toml` | `/infra/railway/celery-beat/railway.toml` |
+| **Config File path** | `/infra/railway/api-web/railway.toml` | `/infra/railway/celery-ai-interactive/railway.toml`, `/infra/railway/celery-operational/railway.toml`, `/infra/railway/celery-background/railway.toml`, `/infra/railway/celery-brain/railway.toml` | `/infra/railway/celery-beat/railway.toml` |
 
 Do **not** set Root Directory to `infra/railway/<service>` — that narrows the build context and breaks Docker builds.
 
@@ -25,6 +25,7 @@ Watch Paths express **functional build dependencies** — what should trigger a 
 | `celery-ai-interactive` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-ai-interactive/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-operational` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-operational/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-background` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-background/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `celery-brain` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-brain/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-beat` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-beat/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 
 > Le dashboard peut afficher une valeur différente, car Railway ne le met pas à jour depuis `railway.toml`. Pour chaque déploiement, la configuration en code prévaut. Vérifier la configuration effective dans les détails du déploiement via l'icône de fichier.

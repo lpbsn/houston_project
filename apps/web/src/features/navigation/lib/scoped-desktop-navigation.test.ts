@@ -206,7 +206,7 @@ describe('scoped desktop navigation', () => {
     expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 3, 3, 3])
     expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
       label: 'Spore Brain',
-      href: null,
+      href: '/e/est-owner/brain',
     })
     expect(ownerNav.items.map((item) => item.id)).not.toContain('operational-config')
     expect(

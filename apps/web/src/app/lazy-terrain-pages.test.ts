@@ -23,6 +23,7 @@ const LAZY_EXPORTS = [
   'LazyActionPlanTemplateUsePage',
   'LazyActionPlanExecutionDetailPage',
   'LazyActionPlanExecutionEditPage',
+  'LazyBrainPage',
   'LazyOperationalConfigPage',
   'LazyChatRealtimeProvider',
 ] as const

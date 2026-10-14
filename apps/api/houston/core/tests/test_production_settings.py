@@ -159,6 +159,39 @@ def test_production_deploy_check_rejects_openai_without_api_key(valid_production
         call_command("check", deploy=True)
 
 
+def test_production_deploy_check_rejects_brain_openai_without_api_key(valid_production_overrides):
+    valid_production_overrides["OPENAI_API_KEY"] = ""
+    valid_production_overrides["HOUSTON_AI_OBSERVATION_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_AI_TRANSCRIPTION_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_BRAIN_PROVIDER"] = "OpenAI"
+    with (
+        override_settings(**valid_production_overrides),
+        pytest.raises(SystemCheckError) as raised,
+    ):
+        call_command("check", deploy=True)
+    assert "core.E013" in str(raised.value)
+
+
+def test_production_deploy_check_allows_fake_brain_without_openai_key(valid_production_overrides):
+    valid_production_overrides["OPENAI_API_KEY"] = ""
+    valid_production_overrides["HOUSTON_AI_OBSERVATION_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_AI_TRANSCRIPTION_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_BRAIN_PROVIDER"] = "fake"
+    with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
+def test_production_deploy_check_allows_brain_openai_with_api_key(valid_production_overrides):
+    valid_production_overrides["HOUSTON_AI_OBSERVATION_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_AI_TRANSCRIPTION_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER"] = "fake"
+    valid_production_overrides["HOUSTON_BRAIN_PROVIDER"] = "openai"
+    with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
 def test_production_deploy_check_rejects_s3_backend_without_credentials(
     valid_production_overrides,
 ):

@@ -14,6 +14,7 @@ const SECTIONS = [
   { id: 'organizations', label: 'Organisations', href: '/platform/organizations' },
   { id: 'establishments', label: 'Établissements', href: '/platform/establishments' },
   { id: 'users', label: 'Utilisateurs', href: '/platform/users' },
+  { id: 'knowledge', label: 'Knowledge', href: '/platform/knowledge' },
 ] as const
 
 export type PlatformShellLayout = 'collection' | 'detail' | 'form'

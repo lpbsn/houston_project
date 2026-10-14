@@ -6,11 +6,13 @@ QUEUE_AI_INTERACTIVE = "ai_interactive"
 QUEUE_OPERATIONAL = "operational"
 QUEUE_AI_BACKGROUND = "ai_background"
 QUEUE_MAINTENANCE = "maintenance"
+QUEUE_BRAIN_ANALYSIS = "brain_analysis"
 
 WORKER_QUEUES = {
     "ai_interactive": (QUEUE_AI_INTERACTIVE,),
     "operational": (QUEUE_OPERATIONAL,),
     "background": (QUEUE_AI_BACKGROUND, QUEUE_MAINTENANCE),
+    "brain": (QUEUE_BRAIN_ANALYSIS,),
 }
 
 
@@ -24,6 +26,7 @@ CELERY_TASK_QUEUES = (
     _durable_queue(QUEUE_OPERATIONAL),
     _durable_queue(QUEUE_AI_BACKGROUND),
     _durable_queue(QUEUE_MAINTENANCE),
+    _durable_queue(QUEUE_BRAIN_ANALYSIS),
 )
 
 CELERY_TASK_ROUTES = {
@@ -65,6 +68,12 @@ CELERY_TASK_ROUTES = {
         "queue": QUEUE_MAINTENANCE
     },
     "houston.uploads.tasks.cleanup_expired_uploads_task": {"queue": QUEUE_MAINTENANCE},
+    "houston.brain.tasks.cleanup_abandoned_reporting_drafts_task": {
+        "queue": QUEUE_MAINTENANCE
+    },
+    "houston.brain.tasks.run_brain_analysis_task": {"queue": QUEUE_BRAIN_ANALYSIS},
+    "houston.brain.tasks.run_brain_follow_up_task": {"queue": QUEUE_BRAIN_ANALYSIS},
+    "houston.brain.tasks.recover_brain_analysis_task": {"queue": QUEUE_OPERATIONAL},
     "houston.gamification.tasks.rollover_gamification_seasons_task": {
         "queue": QUEUE_MAINTENANCE
     },

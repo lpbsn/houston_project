@@ -19,6 +19,7 @@ from houston.accounts.api.views import (
     PasswordResetRequestView,
     RefreshView,
 )
+from houston.brain.api.views import BrainReportingPreviewView
 from houston.core.api.permissions import DenyByDefault
 from houston.core.views import ClientRequirementsView, HealthView
 from houston.observations.api.media_views import ObservationMediaPreviewView
@@ -38,6 +39,7 @@ PUBLIC_API_VIEWS = frozenset(
         RefreshView,
         LogoutView,
         ObservationMediaPreviewView,
+        BrainReportingPreviewView,
     }
 )
 

@@ -12,6 +12,7 @@ const ESTABLISHMENT_PAGES = new Set([
   'general',
   'operational-config',
   'settings',
+  'brain',
 ])
 
 export type TerrainScope =
@@ -27,11 +28,13 @@ export type ScopedTerrainPage =
   | 'general'
   | 'operational-config'
   | 'settings'
+  | 'brain'
 
 export type ScopedTerrainRoute = {
   kind: 'scoped-terrain'
   scope: TerrainScope
   page: ScopedTerrainPage
+  analysisId?: string
 }
 
 export function isValidUuid(value: string): boolean {
@@ -155,6 +158,10 @@ export function parseScopedTerrainRoute(pathname: string): AppRoute | null {
 
   if (pageSegment === 'general' && detailId === 'history') {
     return { kind: 'history', scope }
+  }
+
+  if (pageSegment === 'brain' && detailId && isValidUuid(detailId)) {
+    return { kind: 'scoped-terrain', scope, page: 'brain', analysisId: detailId }
   }
 
   if (detailId) {

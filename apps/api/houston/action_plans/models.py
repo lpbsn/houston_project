@@ -419,6 +419,10 @@ class ActionPlanExecution(BaseModel):
                 name="ap_exec_signal_status_idx",
             ),
             models.Index(
+                fields=["establishment", "occurrence_date"],
+                name="ap_exec_est_occur_idx",
+            ),
+            models.Index(
                 fields=["status", "start_at"],
                 name="ap_exec_scheduled_promote_idx",
                 condition=Q(status=EXECUTION_STATUS_SCHEDULED),

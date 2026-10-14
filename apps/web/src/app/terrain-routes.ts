@@ -202,6 +202,8 @@ function scopedPageTitle(page: string): string | undefined {
       return 'Configuration opérationnelle'
     case 'settings':
       return 'Paramètres Analytics'
+    case 'brain':
+      return 'Spore Brain'
     default:
       return undefined
   }
@@ -212,7 +214,7 @@ function scopedHubConfig(page: ScopedTerrainPage): TerrainRouteConfig {
   return {
     topbarVariant: 'hub',
     pageTitle: scopedPageTitle(page),
-    showBottomNav: isDashboard,
+    showBottomNav: isDashboard || page === 'brain',
     // Match static hub chrome: no separator between topbar title and feed subheader.
     showTopbarBottomBorder: false,
     mainScroll:
@@ -220,7 +222,8 @@ function scopedHubConfig(page: ScopedTerrainPage): TerrainRouteConfig {
       page === 'general' ||
       page === 'operational-config' ||
       page === 'settings' ||
-      page === 'reporting'
+      page === 'reporting' ||
+      page === 'brain'
         ? 'auto'
         : 'hidden',
     ...(isDashboard
@@ -552,10 +555,11 @@ export function resolveTerrainTopbarShowBottomBorder(
 /** Stable key for terrain page transitions (AnimatePresence). Excludes viewMode and query state. */
 export function getTerrainContentKey(route: AppRoute): string {
   if (route.kind === 'scoped-terrain') {
+    const analysis = route.page === 'brain' && route.analysisId ? `-${route.analysisId}` : ''
     if (route.scope.type === 'cross') {
       return `scoped-cross-${route.page}`
     }
-    return `scoped-est-${route.scope.establishmentId}-${route.page}`
+    return `scoped-est-${route.scope.establishmentId}-${route.page}${analysis}`
   }
 
   if (route.kind === 'signal-detail') {

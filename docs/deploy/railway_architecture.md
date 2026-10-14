@@ -14,6 +14,7 @@ Railway Project (prod-test V1)
 ├── celery-ai-interactive [PRIVATE]  Observation pipeline worker (mandatory)
 ├── celery-operational    [PRIVATE]  Recovery, planning, push, email (mandatory)
 ├── celery-background     [PRIVATE]  Analytics classification and maintenance (mandatory)
+├── celery-brain          [PRIVATE]  Brain analysis queue only (staging service not created yet)
 ├── celery-beat      [PRIVATE]       Celery Beat scheduler (mandatory)
 ├── postgres         [PRIVATE]       Railway PostgreSQL
 ├── redis            [PRIVATE]       Railway Redis
@@ -23,7 +24,7 @@ Railway Project (prod-test V1)
 
 Local analogues:
 
-* Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery-ai-interactive`, `celery-operational`, `celery-background`, `celery-beat`, `postgres`, `redis`, `rabbitmq`, `private_media` volume).
+* Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery-ai-interactive`, `celery-operational`, `celery-background`, `celery-brain`, `celery-beat`, `postgres`, `redis`, `rabbitmq`, `private_media` volume).
 * Prod-test static + gateway (local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — nginx serves SPA + API same-origin on port 8080 (validates routing before Railway).
 
 ## Public routing (same-origin)
@@ -48,6 +49,7 @@ Web static cache: hashed `/assets/` are immutable; `index.html` is revalidated (
 | `celery-ai-interactive` | Private | [`infra/docker/api/Dockerfile`](../../infra/docker/api/Dockerfile); `celery -A config worker -Q ai_interactive --prefetch-multiplier=1` (**mandatory**) | Observation pipeline |
 | `celery-operational` | Private | Same image; `-Q operational` (**mandatory**) | Recovery sweeps, planning, push, invitation and account email |
 | `celery-background` | Private | Same image; `-Q ai_background,maintenance` (**mandatory**) | Pattern classification, purges, thumbnails, content-report email |
+| `celery-brain` | Private | Same image; `-Q brain_analysis --prefetch-multiplier=1` | Brain analysis. Not part of the field-workflow pools. Staging service still to create. |
 | `celery-beat` | Private | Same backend Dockerfile; `celery -A config beat` (**mandatory**, does not execute tasks) | Scheduled dispatch only |
 | `postgres` | Private | Railway PostgreSQL plugin | Business source of truth |
 | `redis` | Private | Railway Redis plugin | Channels, cache/throttle |
@@ -62,6 +64,7 @@ api-web                 → postgres, redis, S3 private media
 celery-ai-interactive   → postgres, redis, rabbitmq, S3 private media
 celery-operational      → postgres, redis, rabbitmq, S3 private media
 celery-background       → postgres, redis, rabbitmq, S3 private media
+celery-brain            → postgres, redis, rabbitmq, S3 private media
 celery-beat             → postgres, redis, rabbitmq, beat schedule volume
 ```
 
@@ -142,7 +145,7 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 
 ## Celery strategy
 
-* The three worker services and `celery-beat` are **mandatory** in prod-test. Beat stays a singleton and does not execute tasks. Initial concurrency stays inside the measured 4-process envelope: 2 on `celery-ai-interactive`, 1 on `celery-operational`, 1 on `celery-background`.
+* The three field-workflow worker services and `celery-beat` stay mandatory. `celery-brain` is a fourth pool for Brain only, concurrency 2, prefetch 1, not counted inside the original 4-process envelope. Beat stays a singleton and does not execute tasks. Initial field concurrency stays 2 on `celery-ai-interactive`, 1 on `celery-operational`, 1 on `celery-background`.
 * Beat schedules (from [`settings.py`](../../apps/api/config/settings.py)): action-plan horizon materialization, chat purge, upload TTL cleanup, stuck observation recovery.
 * **Worker down = blocking:** submitted observations stay queued; AI signal generation stops. Treat worker health as a prod-test gate.
 * Beat down = scheduled purges and horizon materialization stop (lazy read-path materialization remains a partial safety net for action plans).

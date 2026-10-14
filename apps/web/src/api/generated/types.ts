@@ -1374,6 +1374,278 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/brain/analyses/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_analyses_list"];
+        put?: never;
+        post: operations["v1_establishments_brain_analyses_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_analyses_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_analyses_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/messages/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_analyses_messages_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_analyses_sources_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/dossier-items/{item_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_dossier_items_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/mechanisms/{candidate_id}/representation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_mechanisms_representation_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/messages/{message_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_messages_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/objectives/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_objectives_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/objectives/{objective_id}/decisions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_objectives_decisions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/reportings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_reportings_list"];
+        put?: never;
+        post: operations["v1_establishments_brain_reportings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/reportings/{reporting_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_reportings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/reportings/{reporting_id}/period/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_reportings_period_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/reportings/{reporting_id}/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_reportings_preview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/suggestions/{suggestion_id}/convert/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_suggestions_convert_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/suggestions/{suggestion_id}/revisions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_brain_suggestions_revisions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/brain/work/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_brain_work_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/business-units/": {
         parameters: {
             query?: never;
@@ -2640,6 +2912,86 @@ export interface paths {
         get: operations["v1_organizations_owners_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/brain/knowledge/versions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_brain_knowledge_versions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/brain/knowledge/versions/{version_id}/activate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_platform_brain_knowledge_versions_activate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/brain/mechanisms/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_brain_mechanisms_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/brain/mechanisms/{candidate_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_brain_mechanisms_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/brain/mechanisms/{candidate_id}/decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_platform_brain_mechanisms_decision_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4008,6 +4360,8 @@ export interface components {
             /** Format: date-time */
             refresh_token_expires_at?: string;
         };
+        /** @enum {unknown} */
+        BlankEnum: "";
         BootstrapPermissionHints: {
             chat_available: boolean;
             can_create_action_plan: boolean;
@@ -4027,6 +4381,401 @@ export interface components {
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
             permission_hints: components["schemas"]["BootstrapPermissionHints"];
         };
+        BrainActiveWork: {
+            work: components["schemas"]["BrainWork"] | null;
+        };
+        BrainAnalysisDetail: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            failure_code: string;
+            failure_message: string;
+            author: components["schemas"]["BrainPerson"];
+            /** Format: date-time */
+            created_at: string;
+            reporting: components["schemas"]["BrainReportingRef"];
+            /** Format: date-time */
+            claimed_at: string | null;
+            result: unknown;
+            dossier: components["schemas"]["BrainDossierSummary"] | null;
+            searches: components["schemas"]["BrainSearch"][];
+            messages: components["schemas"]["BrainMessage"][];
+            older_message_count: number;
+            suggestions: components["schemas"]["BrainSuggestion"][];
+            evaluations: components["schemas"]["BrainEvaluation"][];
+            mechanisms: components["schemas"]["BrainMechanism"][];
+        };
+        BrainAnalysisList: {
+            results: components["schemas"]["BrainAnalysisSummary"][];
+            next_cursor: string | null;
+        };
+        BrainAnalysisSummary: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            failure_code: string;
+            failure_message: string;
+            author: components["schemas"]["BrainPerson"];
+            /** Format: date-time */
+            created_at: string;
+            reporting: components["schemas"]["BrainReportingRef"];
+        };
+        BrainBilan: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            analysis_id: string;
+            /** Format: uuid */
+            revision_id: string;
+            /** Format: date */
+            measured_period_start: string;
+            /** Format: date */
+            measured_period_end: string;
+            outcome: string;
+            reason: string;
+        };
+        BrainCancelResponse: {
+            status: string;
+        };
+        BrainDossierItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            analysis_id: string;
+            category: string;
+            role: string;
+            reason: string;
+            stable_key: string;
+            payload: unknown;
+        };
+        BrainDossierSummary: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            timezone: string;
+            /** Format: date-time */
+            capture_started_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        BrainEvaluation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            objective_id: string;
+            /** Format: uuid */
+            revision_id: string;
+            indicator: string;
+            outcome: string;
+            reason: string;
+            /** Format: date */
+            measured_period_start: string;
+            /** Format: date */
+            measured_period_end: string;
+            source_item_ids: string[];
+            is_current_bilan: boolean;
+        };
+        BrainExtractionSummary: {
+            coverage: string;
+            warnings: components["schemas"]["BrainNotice"][];
+            limits: components["schemas"]["BrainNotice"][];
+            measure_count: number;
+            qualitative_count: number;
+        };
+        BrainFollowUpRequest: {
+            request_id: string;
+            body: string;
+            purpose: components["schemas"]["PurposeEnum"];
+            cited_item_ids?: string[];
+        };
+        BrainFollowUpResponse: {
+            matched: components["schemas"]["MatchedEnum"];
+            work: components["schemas"]["BrainWork"];
+        };
+        BrainGlobalRepresentation: {
+            formulation: string;
+            conditions: string;
+            limits: string;
+            uncertainty: string;
+        };
+        BrainKnowledgeVersion: {
+            /** Format: uuid */
+            id: string;
+            formulation: string;
+            conditions: string;
+            limits: string;
+            uncertainty: string;
+            /** Format: date-time */
+            approved_at: string | null;
+            /** Format: date-time */
+            activated_at: string | null;
+            is_active: boolean;
+        };
+        BrainKnowledgeVersionList: {
+            results: components["schemas"]["BrainKnowledgeVersion"][];
+        };
+        BrainLaunchRequest: {
+            /** Format: uuid */
+            reporting_id: string;
+            idempotency_key: string;
+        };
+        BrainLaunchResponse: {
+            matched: components["schemas"]["MatchedEnum"];
+            work: components["schemas"]["BrainWork"];
+        };
+        BrainMechanism: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            formulation: string;
+            global_representation: components["schemas"]["BrainGlobalRepresentation"];
+            private_evidence_item_ids: string[];
+            /** Format: uuid */
+            knowledge_version_id: string | null;
+        };
+        BrainMechanismDecisionRequest: {
+            decision: components["schemas"]["BrainMechanismDecisionRequestDecisionEnum"];
+        };
+        /**
+         * @description * `approve` - approve
+         *     * `reject` - reject
+         * @enum {string}
+         */
+        BrainMechanismDecisionRequestDecisionEnum: "approve" | "reject";
+        BrainMechanismRevisionRequest: {
+            formulation: string;
+            /** @default  */
+            conditions: string;
+            /** @default  */
+            limits: string;
+            /** @default  */
+            uncertainty: string;
+        };
+        BrainMessage: {
+            /** Format: uuid */
+            id: string;
+            request_id: string;
+            sequence: number;
+            purpose: string;
+            body: string;
+            status: string;
+            failure_code: string;
+            failure_message: string;
+            author: components["schemas"]["BrainPerson"];
+            /** Format: date-time */
+            created_at: string;
+            declaration: unknown;
+            result: unknown;
+        };
+        BrainNotice: {
+            code: string;
+            message: string;
+        };
+        BrainObjective: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            current_revision_id: string;
+            indicator: string;
+            unit: string;
+            scope: string;
+            reference: string;
+            target: string;
+            /** Format: date */
+            due_on: string | null;
+            method: string;
+            decision: string;
+            current_bilan: components["schemas"]["BrainBilan"] | null;
+        };
+        BrainObjectiveDecisionRequest: {
+            /** Format: uuid */
+            expected_revision_id: string;
+            decision: components["schemas"]["BrainObjectiveDecisionRequestDecisionEnum"];
+            indicator?: string;
+            unit?: string;
+            scope?: string;
+            reference?: string;
+            target?: string;
+            success_condition?: components["schemas"]["SuccessConditionEnum"] | components["schemas"]["BlankEnum"];
+            /** Format: date */
+            due_on?: string | null;
+            /** Format: date */
+            measurement_period_start?: string | null;
+            /** Format: date */
+            measurement_period_end?: string | null;
+            method?: string;
+            /** @default  */
+            justification: string;
+        };
+        /**
+         * @description * `accepted` - accepted
+         *     * `modified` - modified
+         *     * `refused` - refused
+         * @enum {string}
+         */
+        BrainObjectiveDecisionRequestDecisionEnum: "accepted" | "modified" | "refused";
+        BrainObjectiveList: {
+            results: components["schemas"]["BrainObjective"][];
+            next_cursor: string | null;
+        };
+        BrainPeriodRequest: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+        };
+        BrainPerson: {
+            /** Format: uuid */
+            id: string | null;
+            name: string;
+        };
+        BrainPlatformMechanism: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            /** Format: uuid */
+            knowledge_version_id: string | null;
+            is_active: boolean;
+            representation: components["schemas"]["BrainPlatformRepresentation"];
+        };
+        BrainPlatformMechanismList: {
+            results: components["schemas"]["BrainPlatformMechanism"][];
+        };
+        BrainPlatformRepresentation: {
+            formulation: string;
+            conditions: string;
+            limits: string;
+            uncertainty: string;
+            withheld: {
+                [key: string]: unknown;
+            };
+        };
+        BrainReportingList: {
+            results: components["schemas"]["BrainReportingResponse"][];
+            next_cursor: string | null;
+        };
+        BrainReportingRef: {
+            /** Format: uuid */
+            id: string;
+            original_filename: string;
+            /** Format: date */
+            period_start: string | null;
+            /** Format: date */
+            period_end: string | null;
+        };
+        BrainReportingResponse: {
+            /** Format: uuid */
+            id: string;
+            original_filename: string;
+            source_format: string;
+            byte_size: number;
+            status: string;
+            rejection_code: string;
+            rejection_message: string;
+            /** Format: date */
+            period_start: string | null;
+            /** Format: date */
+            period_end: string | null;
+            period_confirmed: boolean;
+            author: components["schemas"]["BrainPerson"];
+            /** Format: date-time */
+            created_at: string;
+            extraction: components["schemas"]["BrainExtractionSummary"];
+            preview_url?: string;
+        };
+        BrainSearch: {
+            code: string;
+            examined_count: number;
+            retained_count: number;
+            criteria: {
+                [key: string]: unknown;
+            };
+        };
+        BrainSourcePage: {
+            results: {
+                [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+        };
+        BrainSuggestion: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            /** Format: uuid */
+            action_plan_id: string | null;
+            /** Format: uuid */
+            current_revision_id: string | null;
+            title: string;
+            description: string;
+            tasks: {
+                [key: string]: unknown;
+            }[];
+            /** Format: uuid */
+            pilot_business_unit_id: string | null;
+            assignees: {
+                [key: string]: unknown;
+            }[];
+            /** Format: date-time */
+            start_at: string | null;
+            /** Format: date-time */
+            end_at: string | null;
+            /** Format: date */
+            occurrence_date: string | null;
+            all_day: boolean;
+            requires_validation: boolean;
+        };
+        BrainSuggestionConvertRequest: {
+            /** Format: uuid */
+            expected_revision_id: string;
+        };
+        BrainSuggestionConvertResponse: {
+            /** Format: uuid */
+            action_plan_id: string;
+            created: boolean;
+            related_plan_ids: string[];
+        };
+        BrainSuggestionRevisionRequest: {
+            /** Format: uuid */
+            expected_revision_id: string;
+            title: string;
+            /** @default  */
+            description: string;
+            tasks?: {
+                [key: string]: unknown;
+            }[];
+            /** Format: uuid */
+            pilot_business_unit_id?: string | null;
+            assignees?: {
+                [key: string]: unknown;
+            }[];
+            /** Format: date-time */
+            start_at?: string | null;
+            /** Format: date-time */
+            end_at?: string | null;
+            /** Format: date */
+            occurrence_date?: string | null;
+            /** @default false */
+            all_day: boolean;
+            /** @default true */
+            requires_validation: boolean;
+        };
+        BrainWork: {
+            kind: components["schemas"]["BrainWorkKindEnum"];
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            analysis_id: string;
+            status: string;
+            /** Format: uuid */
+            reporting_id: string;
+        };
+        /**
+         * @description * `analysis` - analysis
+         *     * `follow_up` - follow_up
+         * @enum {string}
+         */
+        BrainWorkKindEnum: "analysis" | "follow_up";
         BusinessUnitGeneric: {
             key: string;
             label: string;
@@ -4787,6 +5536,12 @@ export interface components {
         MarkAllNotificationsReadResponse: {
             updated_count: number;
         };
+        /**
+         * @description * `request` - request
+         *     * `active` - active
+         * @enum {string}
+         */
+        MatchedEnum: "request" | "active";
         Membership: {
             /** Format: uuid */
             id: string;
@@ -5369,6 +6124,15 @@ export interface components {
          * @enum {string}
          */
         PriorityEnum: "info" | "action_required" | "urgent" | "system";
+        /**
+         * @description * `explain` - explain
+         *     * `hypothesis` - hypothesis
+         *     * `correction` - correction
+         *     * `new_fact` - new_fact
+         *     * `new_document` - new_document
+         * @enum {string}
+         */
+        PurposeEnum: "explain" | "hypothesis" | "correction" | "new_fact" | "new_document";
         PushDeviceResponse: {
             /** Format: uuid */
             id: string;
@@ -5776,6 +6540,17 @@ export interface components {
             reporter_display_name: string;
             media_count: number;
         };
+        /**
+         * @description * `` -
+         *     * `eq` - eq
+         *     * `gt` - gt
+         *     * `gte` - gte
+         *     * `lt` - lt
+         *     * `lte` - lte
+         *     * `qualitative` - qualitative
+         * @enum {string}
+         */
+        SuccessConditionEnum: "eq" | "gt" | "gte" | "lt" | "lte" | "qualitative";
         SwitchEstablishmentRequest: {
             /** Format: uuid */
             establishment_id: string;
@@ -10366,6 +11141,722 @@ export interface operations {
             };
         };
     };
+    v1_establishments_brain_analyses_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainAnalysisList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_analyses_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainLaunchRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainLaunchRequest"];
+                "multipart/form-data": components["schemas"]["BrainLaunchRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainLaunchResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_analyses_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainAnalysisDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_analyses_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainCancelResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_analyses_messages_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainFollowUpRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainFollowUpRequest"];
+                "multipart/form-data": components["schemas"]["BrainFollowUpRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainFollowUpResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_analyses_sources_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                analysis_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainSourcePage"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_dossier_items_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainDossierItem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_mechanisms_representation_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainMechanismRevisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainMechanismRevisionRequest"];
+                "multipart/form-data": components["schemas"]["BrainMechanismRevisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPlatformRepresentation"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_messages_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainCancelResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_objectives_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainObjectiveList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_objectives_decisions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                objective_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainObjectiveDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainObjectiveDecisionRequest"];
+                "multipart/form-data": components["schemas"]["BrainObjectiveDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainObjective"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_reportings_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainReportingList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_reportings_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** Format: date */
+                    period_start?: string;
+                    /** Format: date */
+                    period_end?: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainReportingResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_reportings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                reporting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainReportingResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_reportings_period_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                reporting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainPeriodRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainPeriodRequest"];
+                "multipart/form-data": components["schemas"]["BrainPeriodRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainReportingResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_reportings_preview_retrieve: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+                reporting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original reporting file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Redirect to a short-lived private storage GET. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_establishments_brain_suggestions_convert_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainSuggestionConvertRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainSuggestionConvertRequest"];
+                "multipart/form-data": components["schemas"]["BrainSuggestionConvertRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainSuggestionConvertResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_suggestions_revisions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainSuggestionRevisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainSuggestionRevisionRequest"];
+                "multipart/form-data": components["schemas"]["BrainSuggestionRevisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainSuggestion"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_brain_work_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainActiveWork"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_business_units_retrieve: {
         parameters: {
             query?: {
@@ -14700,6 +16191,177 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_brain_knowledge_versions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainKnowledgeVersionList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_brain_knowledge_versions_activate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainKnowledgeVersion"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_brain_mechanisms_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPlatformMechanismList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_brain_mechanisms_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPlatformMechanism"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_brain_mechanisms_decision_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainMechanismDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BrainMechanismDecisionRequest"];
+                "multipart/form-data": components["schemas"]["BrainMechanismDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPlatformMechanism"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };

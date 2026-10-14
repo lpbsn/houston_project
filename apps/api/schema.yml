@@ -4777,6 +4777,787 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/brain/analyses/:
+    get:
+      operationId: v1_establishments_brain_analyses_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainAnalysisList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    post:
+      operationId: v1_establishments_brain_analyses_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainLaunchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainLaunchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainLaunchRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainLaunchResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/:
+    get:
+      operationId: v1_establishments_brain_analyses_retrieve
+      parameters:
+      - in: path
+        name: analysis_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainAnalysisDetail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/cancel/:
+    post:
+      operationId: v1_establishments_brain_analyses_cancel_create
+      parameters:
+      - in: path
+        name: analysis_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainCancelResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/messages/:
+    post:
+      operationId: v1_establishments_brain_analyses_messages_create
+      parameters:
+      - in: path
+        name: analysis_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainFollowUpRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainFollowUpRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainFollowUpRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainFollowUpResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/analyses/{analysis_id}/sources/:
+    get:
+      operationId: v1_establishments_brain_analyses_sources_retrieve
+      parameters:
+      - in: path
+        name: analysis_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainSourcePage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/dossier-items/{item_id}/:
+    get:
+      operationId: v1_establishments_brain_dossier_items_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainDossierItem'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/mechanisms/{candidate_id}/representation/:
+    post:
+      operationId: v1_establishments_brain_mechanisms_representation_create
+      parameters:
+      - in: path
+        name: candidate_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainMechanismRevisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainMechanismRevisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainMechanismRevisionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainPlatformRepresentation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/messages/{message_id}/cancel/:
+    post:
+      operationId: v1_establishments_brain_messages_cancel_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainCancelResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/objectives/:
+    get:
+      operationId: v1_establishments_brain_objectives_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainObjectiveList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/objectives/{objective_id}/decisions/:
+    post:
+      operationId: v1_establishments_brain_objectives_decisions_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: objective_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainObjectiveDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainObjectiveDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainObjectiveDecisionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainObjective'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/reportings/:
+    get:
+      operationId: v1_establishments_brain_reportings_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainReportingList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    post:
+      operationId: v1_establishments_brain_reportings_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                period_start:
+                  type: string
+                  format: date
+                period_end:
+                  type: string
+                  format: date
+              required:
+              - file
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainReportingResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/reportings/{reporting_id}/:
+    get:
+      operationId: v1_establishments_brain_reportings_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: reporting_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainReportingResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/reportings/{reporting_id}/period/:
+    post:
+      operationId: v1_establishments_brain_reportings_period_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: reporting_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainPeriodRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainPeriodRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainPeriodRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainReportingResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/reportings/{reporting_id}/preview/:
+    get:
+      operationId: v1_establishments_brain_reportings_preview_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: reporting_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - brain
+      security:
+      - {}
+      responses:
+        '200':
+          description: Original reporting file.
+        '302':
+          description: Redirect to a short-lived private storage GET.
+        '404':
+          description: Not found.
+  /api/v1/establishments/{establishment_id}/brain/suggestions/{suggestion_id}/convert/:
+    post:
+      operationId: v1_establishments_brain_suggestions_convert_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: suggestion_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainSuggestionConvertRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainSuggestionConvertRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainSuggestionConvertRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainSuggestionConvertResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/suggestions/{suggestion_id}/revisions/:
+    post:
+      operationId: v1_establishments_brain_suggestions_revisions_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: suggestion_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainSuggestionRevisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainSuggestionRevisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainSuggestionRevisionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainSuggestion'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/brain/work/:
+    get:
+      operationId: v1_establishments_brain_work_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainActiveWork'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/business-units/:
     get:
       operationId: v1_establishments_business_units_retrieve
@@ -9127,6 +9908,157 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/platform/brain/knowledge/versions/:
+    get:
+      operationId: v1_platform_brain_knowledge_versions_retrieve
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainKnowledgeVersionList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/platform/brain/knowledge/versions/{version_id}/activate/:
+    post:
+      operationId: v1_platform_brain_knowledge_versions_activate_create
+      parameters:
+      - in: path
+        name: version_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainKnowledgeVersion'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/platform/brain/mechanisms/:
+    get:
+      operationId: v1_platform_brain_mechanisms_list
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainPlatformMechanismList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/platform/brain/mechanisms/{candidate_id}/:
+    get:
+      operationId: v1_platform_brain_mechanisms_retrieve
+      parameters:
+      - in: path
+        name: candidate_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainPlatformMechanism'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/platform/brain/mechanisms/{candidate_id}/decision/:
+    post:
+      operationId: v1_platform_brain_mechanisms_decision_create
+      parameters:
+      - in: path
+        name: candidate_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - brain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrainMechanismDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrainMechanismDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrainMechanismDecisionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrainPlatformMechanism'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/platform/establishments/:
     get:
       operationId: platform_establishments_list
@@ -12429,6 +13361,9 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
+    BlankEnum:
+      enum:
+      - ''
     BootstrapPermissionHints:
       type: object
       properties:
@@ -12488,6 +13423,958 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
+    BrainActiveWork:
+      type: object
+      properties:
+        work:
+          allOf:
+          - $ref: '#/components/schemas/BrainWork'
+          nullable: true
+      required:
+      - work
+    BrainAnalysisDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        failure_code:
+          type: string
+        failure_message:
+          type: string
+        author:
+          $ref: '#/components/schemas/BrainPerson'
+        created_at:
+          type: string
+          format: date-time
+        reporting:
+          $ref: '#/components/schemas/BrainReportingRef'
+        claimed_at:
+          type: string
+          format: date-time
+          nullable: true
+        result:
+          nullable: true
+        dossier:
+          allOf:
+          - $ref: '#/components/schemas/BrainDossierSummary'
+          nullable: true
+        searches:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainSearch'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainMessage'
+        older_message_count:
+          type: integer
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainSuggestion'
+        evaluations:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainEvaluation'
+        mechanisms:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainMechanism'
+      required:
+      - author
+      - claimed_at
+      - created_at
+      - dossier
+      - evaluations
+      - failure_code
+      - failure_message
+      - id
+      - mechanisms
+      - messages
+      - older_message_count
+      - reporting
+      - result
+      - searches
+      - status
+      - suggestions
+    BrainAnalysisList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainAnalysisSummary'
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - next_cursor
+      - results
+    BrainAnalysisSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        failure_code:
+          type: string
+        failure_message:
+          type: string
+        author:
+          $ref: '#/components/schemas/BrainPerson'
+        created_at:
+          type: string
+          format: date-time
+        reporting:
+          $ref: '#/components/schemas/BrainReportingRef'
+      required:
+      - author
+      - created_at
+      - failure_code
+      - failure_message
+      - id
+      - reporting
+      - status
+    BrainBilan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        analysis_id:
+          type: string
+          format: uuid
+        revision_id:
+          type: string
+          format: uuid
+        measured_period_start:
+          type: string
+          format: date
+        measured_period_end:
+          type: string
+          format: date
+        outcome:
+          type: string
+        reason:
+          type: string
+      required:
+      - analysis_id
+      - id
+      - measured_period_end
+      - measured_period_start
+      - outcome
+      - reason
+      - revision_id
+    BrainCancelResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
+    BrainDossierItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        analysis_id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        role:
+          type: string
+        reason:
+          type: string
+        stable_key:
+          type: string
+        payload: {}
+      required:
+      - analysis_id
+      - category
+      - id
+      - payload
+      - reason
+      - role
+      - stable_key
+    BrainDossierSummary:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        timezone:
+          type: string
+        capture_started_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - capture_started_at
+      - closed_at
+      - period_end
+      - period_start
+      - timezone
+    BrainEvaluation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        objective_id:
+          type: string
+          format: uuid
+        revision_id:
+          type: string
+          format: uuid
+        indicator:
+          type: string
+        outcome:
+          type: string
+        reason:
+          type: string
+        measured_period_start:
+          type: string
+          format: date
+        measured_period_end:
+          type: string
+          format: date
+        source_item_ids:
+          type: array
+          items:
+            type: string
+        is_current_bilan:
+          type: boolean
+      required:
+      - id
+      - indicator
+      - is_current_bilan
+      - measured_period_end
+      - measured_period_start
+      - objective_id
+      - outcome
+      - reason
+      - revision_id
+      - source_item_ids
+    BrainExtractionSummary:
+      type: object
+      properties:
+        coverage:
+          type: string
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainNotice'
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainNotice'
+        measure_count:
+          type: integer
+        qualitative_count:
+          type: integer
+      required:
+      - coverage
+      - limits
+      - measure_count
+      - qualitative_count
+      - warnings
+    BrainFollowUpRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+          maxLength: 128
+        body:
+          type: string
+        purpose:
+          $ref: '#/components/schemas/PurposeEnum'
+        cited_item_ids:
+          type: array
+          items:
+            type: string
+      required:
+      - body
+      - purpose
+      - request_id
+    BrainFollowUpResponse:
+      type: object
+      properties:
+        matched:
+          $ref: '#/components/schemas/MatchedEnum'
+        work:
+          $ref: '#/components/schemas/BrainWork'
+      required:
+      - matched
+      - work
+    BrainGlobalRepresentation:
+      type: object
+      properties:
+        formulation:
+          type: string
+        conditions:
+          type: string
+        limits:
+          type: string
+        uncertainty:
+          type: string
+      required:
+      - conditions
+      - formulation
+      - limits
+      - uncertainty
+    BrainKnowledgeVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        formulation:
+          type: string
+        conditions:
+          type: string
+        limits:
+          type: string
+        uncertainty:
+          type: string
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        activated_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - activated_at
+      - approved_at
+      - conditions
+      - formulation
+      - id
+      - is_active
+      - limits
+      - uncertainty
+    BrainKnowledgeVersionList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainKnowledgeVersion'
+      required:
+      - results
+    BrainLaunchRequest:
+      type: object
+      properties:
+        reporting_id:
+          type: string
+          format: uuid
+        idempotency_key:
+          type: string
+          maxLength: 128
+      required:
+      - idempotency_key
+      - reporting_id
+    BrainLaunchResponse:
+      type: object
+      properties:
+        matched:
+          $ref: '#/components/schemas/MatchedEnum'
+        work:
+          $ref: '#/components/schemas/BrainWork'
+      required:
+      - matched
+      - work
+    BrainMechanism:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        formulation:
+          type: string
+        global_representation:
+          $ref: '#/components/schemas/BrainGlobalRepresentation'
+        private_evidence_item_ids:
+          type: array
+          items:
+            type: string
+        knowledge_version_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - formulation
+      - global_representation
+      - id
+      - knowledge_version_id
+      - private_evidence_item_ids
+      - status
+    BrainMechanismDecisionRequest:
+      type: object
+      properties:
+        decision:
+          $ref: '#/components/schemas/BrainMechanismDecisionRequestDecisionEnum'
+      required:
+      - decision
+    BrainMechanismDecisionRequestDecisionEnum:
+      enum:
+      - approve
+      - reject
+      type: string
+      description: |-
+        * `approve` - approve
+        * `reject` - reject
+    BrainMechanismRevisionRequest:
+      type: object
+      properties:
+        formulation:
+          type: string
+        conditions:
+          type: string
+          default: ''
+        limits:
+          type: string
+          default: ''
+        uncertainty:
+          type: string
+          default: ''
+      required:
+      - formulation
+    BrainMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+        sequence:
+          type: integer
+        purpose:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+        failure_code:
+          type: string
+        failure_message:
+          type: string
+        author:
+          $ref: '#/components/schemas/BrainPerson'
+        created_at:
+          type: string
+          format: date-time
+        declaration:
+          nullable: true
+        result:
+          nullable: true
+      required:
+      - author
+      - body
+      - created_at
+      - declaration
+      - failure_code
+      - failure_message
+      - id
+      - purpose
+      - request_id
+      - result
+      - sequence
+      - status
+    BrainNotice:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+    BrainObjective:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        current_revision_id:
+          type: string
+          format: uuid
+        indicator:
+          type: string
+        unit:
+          type: string
+        scope:
+          type: string
+        reference:
+          type: string
+        target:
+          type: string
+        due_on:
+          type: string
+          format: date
+          nullable: true
+        method:
+          type: string
+        decision:
+          type: string
+        current_bilan:
+          allOf:
+          - $ref: '#/components/schemas/BrainBilan'
+          nullable: true
+      required:
+      - current_bilan
+      - current_revision_id
+      - decision
+      - due_on
+      - id
+      - indicator
+      - method
+      - reference
+      - scope
+      - target
+      - unit
+    BrainObjectiveDecisionRequest:
+      type: object
+      properties:
+        expected_revision_id:
+          type: string
+          format: uuid
+        decision:
+          $ref: '#/components/schemas/BrainObjectiveDecisionRequestDecisionEnum'
+        indicator:
+          type: string
+        unit:
+          type: string
+        scope:
+          type: string
+        reference:
+          type: string
+        target:
+          type: string
+        success_condition:
+          oneOf:
+          - $ref: '#/components/schemas/SuccessConditionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        due_on:
+          type: string
+          format: date
+          nullable: true
+        measurement_period_start:
+          type: string
+          format: date
+          nullable: true
+        measurement_period_end:
+          type: string
+          format: date
+          nullable: true
+        method:
+          type: string
+        justification:
+          type: string
+          default: ''
+      required:
+      - decision
+      - expected_revision_id
+    BrainObjectiveDecisionRequestDecisionEnum:
+      enum:
+      - accepted
+      - modified
+      - refused
+      type: string
+      description: |-
+        * `accepted` - accepted
+        * `modified` - modified
+        * `refused` - refused
+    BrainObjectiveList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainObjective'
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - next_cursor
+      - results
+    BrainPeriodRequest:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+      required:
+      - period_end
+      - period_start
+    BrainPerson:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+      required:
+      - id
+      - name
+    BrainPlatformMechanism:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        knowledge_version_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_active:
+          type: boolean
+        representation:
+          $ref: '#/components/schemas/BrainPlatformRepresentation'
+      required:
+      - id
+      - is_active
+      - knowledge_version_id
+      - representation
+      - status
+    BrainPlatformMechanismList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainPlatformMechanism'
+      required:
+      - results
+    BrainPlatformRepresentation:
+      type: object
+      properties:
+        formulation:
+          type: string
+        conditions:
+          type: string
+        limits:
+          type: string
+        uncertainty:
+          type: string
+        withheld:
+          type: object
+          additionalProperties: {}
+      required:
+      - conditions
+      - formulation
+      - limits
+      - uncertainty
+      - withheld
+    BrainReportingList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrainReportingResponse'
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - next_cursor
+      - results
+    BrainReportingRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        original_filename:
+          type: string
+        period_start:
+          type: string
+          format: date
+          nullable: true
+        period_end:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - id
+      - original_filename
+      - period_end
+      - period_start
+    BrainReportingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        original_filename:
+          type: string
+        source_format:
+          type: string
+        byte_size:
+          type: integer
+        status:
+          type: string
+        rejection_code:
+          type: string
+        rejection_message:
+          type: string
+        period_start:
+          type: string
+          format: date
+          nullable: true
+        period_end:
+          type: string
+          format: date
+          nullable: true
+        period_confirmed:
+          type: boolean
+        author:
+          $ref: '#/components/schemas/BrainPerson'
+        created_at:
+          type: string
+          format: date-time
+        extraction:
+          $ref: '#/components/schemas/BrainExtractionSummary'
+        preview_url:
+          type: string
+      required:
+      - author
+      - byte_size
+      - created_at
+      - extraction
+      - id
+      - original_filename
+      - period_confirmed
+      - period_end
+      - period_start
+      - rejection_code
+      - rejection_message
+      - source_format
+      - status
+    BrainSearch:
+      type: object
+      properties:
+        code:
+          type: string
+        examined_count:
+          type: integer
+        retained_count:
+          type: integer
+        criteria:
+          type: object
+          additionalProperties: {}
+      required:
+      - code
+      - criteria
+      - examined_count
+      - retained_count
+    BrainSourcePage:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - next_cursor
+      - results
+    BrainSuggestion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        action_plan_id:
+          type: string
+          format: uuid
+          nullable: true
+        current_revision_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+        tasks:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        pilot_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        assignees:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+        all_day:
+          type: boolean
+        requires_validation:
+          type: boolean
+      required:
+      - action_plan_id
+      - all_day
+      - assignees
+      - current_revision_id
+      - description
+      - end_at
+      - id
+      - occurrence_date
+      - pilot_business_unit_id
+      - requires_validation
+      - start_at
+      - status
+      - tasks
+      - title
+    BrainSuggestionConvertRequest:
+      type: object
+      properties:
+        expected_revision_id:
+          type: string
+          format: uuid
+      required:
+      - expected_revision_id
+    BrainSuggestionConvertResponse:
+      type: object
+      properties:
+        action_plan_id:
+          type: string
+          format: uuid
+        created:
+          type: boolean
+        related_plan_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - action_plan_id
+      - created
+      - related_plan_ids
+    BrainSuggestionRevisionRequest:
+      type: object
+      properties:
+        expected_revision_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          default: ''
+        tasks:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        pilot_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        assignees:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+        all_day:
+          type: boolean
+          default: false
+        requires_validation:
+          type: boolean
+          default: true
+      required:
+      - expected_revision_id
+      - title
+    BrainWork:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/BrainWorkKindEnum'
+        id:
+          type: string
+          format: uuid
+        analysis_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        reporting_id:
+          type: string
+          format: uuid
+      required:
+      - analysis_id
+      - id
+      - kind
+      - reporting_id
+      - status
+    BrainWorkKindEnum:
+      enum:
+      - analysis
+      - follow_up
+      type: string
+      description: |-
+        * `analysis` - analysis
+        * `follow_up` - follow_up
     BusinessUnitGeneric:
       type: object
       properties:
@@ -14389,6 +16276,14 @@ components:
           type: integer
       required:
       - updated_count
+    MatchedEnum:
+      enum:
+      - request
+      - active
+      type: string
+      description: |-
+        * `request` - request
+        * `active` - active
     Membership:
       type: object
       properties:
@@ -15817,6 +17712,20 @@ components:
         * `action_required` - Action required
         * `urgent` - Urgent
         * `system` - System
+    PurposeEnum:
+      enum:
+      - explain
+      - hypothesis
+      - correction
+      - new_fact
+      - new_document
+      type: string
+      description: |-
+        * `explain` - explain
+        * `hypothesis` - hypothesis
+        * `correction` - correction
+        * `new_fact` - new_fact
+        * `new_document` - new_document
     PushDeviceResponse:
       type: object
       properties:
@@ -16816,6 +18725,17 @@ components:
       - media_count
       - reporter_display_name
       - submitted_at
+    SuccessConditionEnum:
+      enum:
+      - eq
+      - gt
+      - gte
+      - lt
+      - lte
+      - qualitative
+      type: string
+      description: "* `` - \n* `eq` - eq\n* `gt` - gt\n* `gte` - gte\n* `lt` - lt\n\
+        * `lte` - lte\n* `qualitative` - qualitative"
     SwitchEstablishmentRequest:
       type: object
       properties:

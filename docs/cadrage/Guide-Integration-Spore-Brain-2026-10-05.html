@@ -1,0 +1,290 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>Spore Brain — audit et intégration</title><style>body{max-width:1000px;margin:40px auto;padding:20px;font:16px/1.65 system-ui;color:#183b31}h1,h2,h3{line-height:1.2}table{border-collapse:collapse;font-size:14px}td,th{border:1px solid #bbcfc7;padding:10px;text-align:left}pre{overflow:auto;background:#f1f5f3;padding:18px}code{font-size:13px}a{color:#006c4e}</style><h1>Spore Brain — reprise autonome pour Léo</h1>
+<p>Dossier préparé le 5 octobre 2026. Lot Brain uniquement, sans connecteur Slack ni dépendance à Slack. Le dépôt distant et le Spore live n&#39;ont pas été modifiés.</p>
+<p><strong>Statut : candidat d’intégration préparé, validation complète encore requise. Aucun feu vert production.</strong> Le code est comparé au main publié de Léo, pas à ses éventuelles modifications non poussées. Les tests ciblés et contrôles disponibles passent ; la suite backend sur PostgreSQL et une véritable analyse IA ne peuvent pas être exécutées dans cet environnement. Les résultats des anciennes installations sur le Mac de Maxime ne valident pas ce nouveau lot.</p>
+<h2>1. Ce que le produit apporte</h2>
+<p>Le propriétaire et le directeur disposent d&#39;un espace commun par établissement. Ils importent un reporting, choisissent sa période et obtiennent une analyse confrontant les chiffres aux données opérationnelles Spore : observations, signaux, plans, étapes, commentaires, états et responsables. Ils peuvent poursuivre la conversation et consulter les analyses précédentes.</p>
+<p>La restitution suit les blocs <strong>Constat → Éclairage terrain → Proposition d&#39;action → Objectif daté</strong>. Les sources sont consultables séparément ; la rédaction doit utiliser des titres et des personnes, pas des identifiants techniques. Sans explication étayée, Brain doit dire ce qui manque et proposer une vérification auprès du responsable pertinent. Un brouillon de message n&#39;est jamais envoyé automatiquement.</p>
+<p>Une proposition de plan ouvre un formulaire prérempli, modifiable puis confirmé. La confirmation crée un vrai plan et une exécution dans Houston, via le service métier existant. Un objectif KPI peut être corrigé, validé ou refusé ; sa date de bilan est conservée et rappelée lors d&#39;une nouvelle analyse dont la période couvre cette date. La création du plan peut aussi confirmer l&#39;objectif affiché. Un plan terminé ne prouve pas que son objectif KPI est atteint.</p>
+<p>Le JSON de connaissances et le prompt métier sont privés, versionnés et activés explicitement. Les mécanismes suggérés restent dans une file de revue privée jusqu&#39;à validation humaine. Le contexte de l&#39;établissement est une troisième entrée, modifiable par son propriétaire ou son directeur.</p>
+<h2>2. Base de reprise et contenu</h2>
+<ul>
+<li>Dépôt : <code>lpbsn/houston_project</code>, branche de référence <code>main</code>.</li>
+<li>Base exacte : <code>6ae63a155c078bef924639a3a58b698fb0c40748</code>, commit « logo side bar desktop », 2 octobre 2026 ; tête revérifiée identique le 5 octobre.</li>
+<li>Livrables : patch Git complet et ce guide. Aucun prompt métier, JSON de connaissances ou corrigé privé inclus.</li>
+<li>Aucun ancien installateur macOS, fichier <code>/tmp</code>, archive exécutable, base de données, compte fictif, secret ou jeton n&#39;est nécessaire.</li>
+<li>Aucun connecteur Slack ni écran de connexion Slack ajouté au profil Général ; modèle canonique de plan inchangé. Les points d&#39;entrée Brain suivent la navigation actuelle de Houston.</li>
+<li>Seuls trois packages supplémentaires : <code>openpyxl==3.1.5</code>, <code>et-xmlfile==2.0.0</code>, <code>pypdf==6.19.0</code>. Les versions déjà verrouillées restent inchangées.</li>
+</ul>
+<p>Le JSON et le prompt métier sont exclus de cette livraison à la demande de Maxime. Préserver les versions en base si Brain existe déjà ; sur une base neuve, Maxime configurera lui-même la version privée avant la recette IA. Aucun référentiel ni prompt n’est activé par le patch.</p>
+<h2>3. Architecture et points d&#39;intégration</h2>
+<p>Brain est une application du monolithe Django existant, avec une feature React dans l&#39;arbre partagé. Aucun nouveau microservice, aucune base parallèle, aucun moteur de plans concurrent.</p>
+<table>
+<thead>
+<tr>
+<th>Responsabilité</th>
+<th>Code propriétaire</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Accès propriétaire/directeur et administration privée</td>
+<td><code>apps/api/houston/brain/permissions.py</code></td>
+</tr>
+<tr>
+<td>Conversations, versions du référentiel, orchestration durable</td>
+<td><code>brain/services.py</code>, <code>models.py</code></td>
+</tr>
+<tr>
+<td>Lecture du terrain et références consultables</td>
+<td><code>brain/selectors.py</code>, <code>references.py</code>, <code>evidence_services.py</code></td>
+</tr>
+<tr>
+<td>Extraction CSV/XLSX/PDF</td>
+<td><code>brain/extraction.py</code></td>
+</tr>
+<tr>
+<td>Historique borné, contexte conversationnel et mémoire du site</td>
+<td><code>brain/memory.py</code>, <code>report_history.py</code>, <code>conversation_context.py</code></td>
+</tr>
+<tr>
+<td>Appel IA et validation structurée</td>
+<td><code>brain/provider.py</code>, <code>response_format.py</code></td>
+</tr>
+<tr>
+<td>Conversion en plan Houston</td>
+<td><code>brain/action_services.py</code> → <code>houston.action_plans.services.create_action_plan_with_execution</code></td>
+</tr>
+<tr>
+<td>Décisions d&#39;objectifs et bilans</td>
+<td><code>brain/goal_services.py</code>, <code>goal_selectors.py</code></td>
+</tr>
+<tr>
+<td>API HTTP et contrats</td>
+<td><code>brain/api/</code>, <code>apps/api/schema.yml</code>, types frontend générés</td>
+</tr>
+<tr>
+<td>Interface et requêtes</td>
+<td><code>apps/web/src/features/brain/</code>, TanStack Query, <code>TerrainDialog</code> commun</td>
+</tr>
+<tr>
+<td>Navigation</td>
+<td><code>App.tsx</code>, routes terrain, chargement différé et navigation desktop existants</td>
+</tr>
+</tbody></table>
+<p>Le serveur enregistre la conversation et le message avant d&#39;envoyer la tâche Celery, après commit. Le worker <code>ai_interactive</code> recharge les objets et traite <code>houston.brain.tasks.analyze_message</code>. L&#39;appel IA utilise un schéma dérivé du même modèle Pydantic que la validation locale ; une correction au plus est tentée. Une réponse invalide n&#39;est ni complétée arbitrairement ni enregistrée comme analyse réussie.</p>
+<p>Les écritures restent dans les services métier ; les vues HTTP ne pilotent pas les transitions. Les lectures et mutations sont bornées à l&#39;établissement autorisé. La conversion verrouille la proposition pour éviter deux plans à partir du même clic. Les décisions d&#39;objectifs vérifient leur révision pour éviter d&#39;écraser une décision plus récente.</p>
+<p>Le schéma OpenAPI a été régénéré : huit routes Brain ajoutées, aucune route ni définition préexistante modifiée sémantiquement. Les types ne doivent pas être édités manuellement.</p>
+<h2>4. Installation dans ton environnement habituel, sans Docker local</h2>
+<h3>Étape A — Branche de revue</h3>
+<p>Partir d&#39;un checkout propre de la base indiquée, dans une branche dédiée, avec les sauvegardes habituelles. Le patch s&#39;applique depuis la racine du dépôt :</p>
+<pre><code class="language-bash">git apply --check /chemin/Spore-Brain-Integration-2026-10-05.patch
+git apply /chemin/Spore-Brain-Integration-2026-10-05.patch
+uv sync --frozen
+</code></pre>
+<p>Si main a avancé, comparer les changements et résoudre la fusion en branche ; ne pas forcer un patch rejeté ni remplacer tout le dossier Houston. Le patch décrit les fichiers livrés. Ne pas cumuler ce patch complet avec celui du 3 octobre ou les installateurs du prototype Mac.</p>
+<h3>Étape B — Services et configuration</h3>
+<p>Utiliser tes PostgreSQL, Redis, broker Celery, stockage privé et lanceurs de développement/staging habituels. Python suit <code>.python-version</code> (3.13.13) ; Node/npm suivent <code>apps/web/package.json</code>. Brain n&#39;ajoute aucun besoin de conteneur sur ton poste.</p>
+<p>Les commandes ci-dessous utilisent <code>uv --env-file</code> pour rendre explicite l&#39;environnement ciblé. Remplacer <code>/chemin/spore-test.env</code> par ton fichier de <strong>test</strong> ; si ton lanceur injecte déjà les variables, conserver sa méthode. Ne pas afficher ni joindre ce fichier.</p>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POSTGRES_HOST</code>, <code>POSTGRES_PORT</code>, <code>POSTGRES_DB</code>, <code>POSTGRES_USER</code>, <code>POSTGRES_PASSWORD</code></td>
+<td>Base de test. Hors réseau de conteneurs, utiliser l&#39;hôte réellement accessible, pas automatiquement <code>postgres</code>.</td>
+</tr>
+<tr>
+<td><code>REDIS_URL</code>, <code>CELERY_BROKER_URL</code></td>
+<td>Services existants ; API et worker doivent viser le même environnement.</td>
+</tr>
+<tr>
+<td><code>OPENAI_API_KEY</code></td>
+<td>Secret côté worker IA uniquement, jamais dans le frontend.</td>
+</tr>
+<tr>
+<td><code>HOUSTON_BRAIN_MODEL</code></td>
+<td>Défaut <code>gpt-4.1-mini</code>, modèle compatible avec le JSON strict utilisé.</td>
+</tr>
+<tr>
+<td><code>HOUSTON_BRAIN_INPUT_CHAR_BUDGET</code></td>
+<td>Défaut 300 000 caractères cumulés ; ce n&#39;est pas un budget en tokens.</td>
+</tr>
+<tr>
+<td>Origines API/web, cookies, stockage privé, consentements IA</td>
+<td>Conserver la configuration Houston de cet environnement. Aucun contournement de consentement ou de droits.</td>
+</tr>
+</tbody></table>
+<h3>Étape C — Migrations et démarrage</h3>
+<p>Sauvegarder la base et les médias de test, puis, depuis <code>apps/api</code> :</p>
+<pre><code class="language-bash">uv run --env-file /chemin/spore-test.env python manage.py check
+uv run --env-file /chemin/spore-test.env python manage.py migrate --plan
+uv run --env-file /chemin/spore-test.env python manage.py migrate
+</code></pre>
+<p>Le lot fournit Brain <code>0001</code> à <code>0007</code>. Django résout leurs dépendances à establishments, accounts et action_plans. Les migrations restent distinctes car plusieurs sont déjà appliquées dans le prototype local. Ne pas supprimer l&#39;historique ni utiliser <code>--fake</code> pour masquer un conflit. Aucune migration Slack n&#39;est incluse.</p>
+<p>Redémarrer l&#39;API et le worker IA via ton superviseur habituel avec les mêmes sources/dépendances. Si aucun worker IA n&#39;existe dans cet environnement, exemple natif depuis <code>apps/api</code> :</p>
+<pre><code class="language-bash">uv run --env-file /chemin/spore-test.env celery -A config.celery:app worker -Q ai_interactive --loglevel=INFO --concurrency=1
+</code></pre>
+<p>Un worker existant qui consomme déjà <code>ai_interactive</code> suffit. Il doit charger le nouveau module ; éviter un ancien worker encore actif avec des sources différentes. L&#39;API conserve son serveur ASGI et son lancement habituels.</p>
+<h3>Étape D — Frontend</h3>
+<p>Depuis <code>apps/web</code> :</p>
+<pre><code class="language-bash">npm ci
+npm run api:generate
+npm run typecheck
+npm run build
+</code></pre>
+<p>Pour le développement, <code>npm run dev</code> avec ta configuration API habituelle. Les fichiers <code>schema.yml</code> et <code>types.ts</code> sont déjà synchronisés dans le patch. Toute régénération différente doit être comprise, pas écrasée aveuglément.</p>
+<h3>Étape E — Administration et première analyse</h3>
+<ol>
+<li>Attribuer nominativement <code>brain.manage_brain</code> au compte chargé du JSON, du prompt et de la revue des mécanismes via ta procédure d&#39;administration. Cela ne nécessite pas superuser. La commande <code>brain_admin --email</code> du prototype est volontairement limitée à DEBUG, pas destinée à la production.</li>
+<li>Dans <strong>Spore Brain → Administration Brain</strong>, importer le JSON validé, renseigner le prompt privé choisi par Maxime après relecture, enregistrer une version puis l&#39;activer. Aucune version n&#39;est activée par l&#39;installation.</li>
+<li>Avec un propriétaire/directeur actif du site, compléter le contexte de l&#39;établissement, vérifier les consentements IA existants et importer un reporting de test avec une période connue.</li>
+<li>Vérifier le résultat via le parcours normal API → file → worker → sauvegarde → interface, puis la recette ci-dessous. Une exécution manuelle du fournisseur seule ne valide pas ce parcours.</li>
+</ol>
+<h2>5. Tests : circuit adapté à ton poste</h2>
+<p>Les règles du dépôt demandent de ne pas lancer les tests backend pytest directement sur l&#39;hôte. Pour éviter de t&#39;imposer Docker localement, utiliser la <strong>CI GitHub déjà présente</strong> dans <code>.github/workflows/ci.yml</code> lors de ta PR d&#39;intégration. Son job backend fournit PostgreSQL/Redis/RabbitMQ sur le runner, vérifie Django, migrations, Ruff et contrats, puis découvre aussi <code>houston/brain/tests</code>. Aucune nouvelle CI n&#39;est requise.</p>
+<p>Les commandes frontend peuvent tourner directement sur ton poste. Jeu ciblé :</p>
+<pre><code class="language-bash">npm test -- --maxWorkers=1 src/features/brain src/components/layout/desktop-terrain-sidebar.test.tsx src/app/terrain-routes.test.ts src/features/navigation/lib/scoped-desktop-navigation.test.ts src/components/layout/terrain-shell.test.tsx src/components/ui/terrain/terrain-dialog.test.tsx
+</code></pre>
+<p>Avant fusion, attendre les jobs backend/frontend de la CI et effectuer la recette réelle de staging. Le job native vérifie aussi l&#39;arbre partagé ; un build natif réussi n&#39;est pas une recette visuelle sur iPhone.</p>
+<table>
+<thead>
+<tr>
+<th>Contrôle de cette révision du 5 octobre</th>
+<th>Résultat</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Ruff Brain et format Python</td>
+<td>Réussis</td>
+</tr>
+<tr>
+<td>Tests unitaires purs : lots, mécanismes, index de sources</td>
+<td>22 tests réussis</td>
+</tr>
+<tr>
+<td>TypeScript et tests frontend ciblés</td>
+<td>114 tests dans 11 fichiers réussis</td>
+</tr>
+<tr>
+<td>Build web</td>
+<td>Réussi, avertissements de taille de bundle/import dynamique existants</td>
+</tr>
+<tr>
+<td>Django check et dérive modèles/migrations</td>
+<td>Réussis avec dépendances disponibles, Python 3.12 ; contrôle indicatif, pas le runtime cible 3.13</td>
+</tr>
+<tr>
+<td>Application du patch sur main de référence</td>
+<td>Vérifiée dans une copie vierge</td>
+</tr>
+<tr>
+<td>Tests backend complets PostgreSQL / application des migrations</td>
+<td>Non exécutés : services et runtime cible indisponibles ici ; CI requise</td>
+</tr>
+<tr>
+<td>Appels IA réels / amélioration de pertinence</td>
+<td>Non exécutés : pas de clé ni de connexion au Spore local de Maxime</td>
+</tr>
+</tbody></table>
+<h3>Nouveautés auditées</h3>
+<ul>
+<li>Catalogue envoyé à l’IA réduit à un index : suppression du doublon des textes ; détail des sources conservé côté serveur.</li>
+<li>Lecture préalable du reporting, puis sélection bornée des mécanismes ; les cas privés ne sont jamais utilisés comme preuves client.</li>
+<li>Gros volumes lus par lots avec extraits exacts vérifiés et contrôle de couverture des parties. La synthèse rattache les sujets extraits aux constats ; cela ne prouve pas que l’IA a identifié tous les enjeux métier.</li>
+<li>Reports courants inclus dans le catalogue de preuves et conservés lors de la relecture. Les faits terrain contenus dans un fichier ne sont plus effacés parce qu’ils ne sont pas des observations natives Spore. Provenance documentaire explicite, causalité non certifiée.</li>
+<li>Lecture initiale directe bornée à 60 secondes dans le budget global pour laisser du temps à la restitution.</li>
+<li>Un seul contexte partagé : modification dans les paramètres ; capture historique appliquée à chaque réponse affichée dans Brain. Libellés clarifiés, aucun doublon de réglage créé.</li>
+</ul>
+<p>Modules supplémentaires : <code>report_review.py</code> (lecture initiale), <code>knowledge.py</code> (sélection), <code>batch_analysis.py</code> (lots/extraits), <code>runtime_limits.py</code> (délais). Les garde-fous métiers restent dans les services, pas dans le prompt administrable.</p>
+<h3>Configuration et montée en charge</h3>
+<p>La branche directe garde un budget de 300 000 caractères avec réserve de sortie ; au-delà, elle passe aux lots. Les limites internes actuelles restent 6 millions de caractères d’entrée et 64 appels de lecture, avec 1 200 secondes pour l’analyse volumineuse (limites Celery 1 230/1 260 secondes). Ce sont des garde-fous, pas une promesse commerciale de capacité.</p>
+<p>Le worker consomme toujours <code>ai_interactive</code>. Dimensionner sa concurrence avant mise en production : un gros dossier peut monopoliser un processus longtemps. Les lots n’ont pas de points de reprise persistants ; une relance recommence la lecture. La capture et l’historique restent bornés : la lecture par lots ne restaure pas les données exclues en amont. Une synthèse trop volumineuse échoue explicitement au lieu d’être présentée comme complète.</p>
+<h2>6. Recette métier à signer</h2>
+<table>
+<thead>
+<tr>
+<th>Cas</th>
+<th>Résultat attendu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Propriétaire crée, directeur répond</td>
+<td>Même conversation et reporting, auteurs corrects. Staff/manager et utilisateur d&#39;un autre site refusés.</td>
+</tr>
+<tr>
+<td>Administration privée</td>
+<td>Un directeur sans permission privée n&#39;accède ni au JSON, ni au prompt métier, ni aux mécanismes en revue.</td>
+</tr>
+<tr>
+<td>Changement du contexte</td>
+<td>Nouvelle question/analyse utilise le contexte attendu ; la capture passée reste traçable.</td>
+</tr>
+<tr>
+<td>Rapport CSV/XLSX/PDF texte connu</td>
+<td>Période correcte, chiffres retrouvés ; lignes difficiles, formats invalides ou trop gros traités explicitement.</td>
+</tr>
+<tr>
+<td>Toutes les évolutions pertinentes</td>
+<td>Comparer à une liste d&#39;écarts attendus préparée avant l&#39;appel. Pas seulement quatre sujets arbitraires.</td>
+</tr>
+<tr>
+<td>Chiffre sans preuve terrain</td>
+<td>Absence d&#39;explication annoncée ; responsable réel ou « à désigner », proposition de vérification adaptée, aucun message envoyé automatiquement.</td>
+</tr>
+<tr>
+<td>Plan réalisé sans preuve d&#39;impact</td>
+<td>Ne pas affirmer qu&#39;il a causé la hausse du KPI. Tester le cas « signalétique et réservation » cité par Maxime.</td>
+</tr>
+<tr>
+<td>Lecture de l&#39;analyse</td>
+<td>Constat, terrain, action, objectif lisibles ; ton humain ; références hors prose, sources ouvrables au bon site.</td>
+</tr>
+<tr>
+<td>Plan proposé</td>
+<td>Titre orienté solution, étapes adaptées et recherche de causes pertinente ; formulaire modifiable ; confirmation crée un seul plan canonique.</td>
+</tr>
+<tr>
+<td>Objectif daté</td>
+<td>Modifier/refuser/valider ; date et révision persistées ; édition périmée refusée.</td>
+</tr>
+<tr>
+<td>Reporting futur couvrant la date</td>
+<td>Objectif validé rappelé ; bilan avec mesure comparable ou « non mesurable ». Ne pas assimiler réalisation du plan et atteinte du KPI.</td>
+</tr>
+<tr>
+<td>Mémoire commune</td>
+<td>Nouvelle analyse reprend les éléments sélectionnés du site ; pas de fuite d&#39;un autre établissement.</td>
+</tr>
+<tr>
+<td>Recherche de mécanismes</td>
+<td>Compte rendu visible même sans candidat ; validation humaine crée une nouvelle version, jamais de réécriture autonome du JSON actif.</td>
+</tr>
+<tr>
+<td>Échec IA / interruption / nouvelle tentative</td>
+<td>Statut compréhensible, aucune réponse incomplète présentée comme réussie ; reprise par le parcours normal.</td>
+</tr>
+<tr>
+<td>Redémarrage API/worker</td>
+<td>Conversations et décisions conservées ; vérification des tâches et absence de doublon de conversion.</td>
+</tr>
+</tbody></table>
+<h2>7. Limites à garder visibles</h2>
+<ul>
+<li><strong>Exhaustivité et causalité :</strong> le code contrôle la forme, les liens et le périmètre ; il ne prouve pas automatiquement que chaque variation du reporting est commentée ni qu&#39;une observation cause un écart. La recette métier reste nécessaire.</li>
+<li><strong>Bilans KPI :</strong> la mesure doit être retrouvée dans le reporting ; l&#39;interprétation « atteint/non atteint » reste celle de Brain, affichée comme telle. Aucun comparateur numérique universel n&#39;est livré.</li>
+<li><strong>Formats :</strong> CSV UTF-8, XLSX avec valeurs calculées enregistrées et PDF texte. Pas d&#39;OCR ni de recalcul Excel, pas de support de l&#39;ancien <code>.xls</code>.</li>
+<li><strong>Bornes :</strong> 1 à 5 documents, 8 Mio par fichier, 80 000 caractères extraits par fichier et 100 000 cumulés ; historique/mémoire limités et couverture explicite. Au plus cinq nouveaux plans prioritaires et vingt bilans d&#39;objectifs par réponse ; pas de plafond arbitraire de quatre constats. Un contexte trop grand passe aux lots ; au-delà des bornes de cette lecture, il est refusé explicitement.</li>
+<li><strong>Temporalité :</strong> états des observations/plans capturés au moment de l&#39;analyse, pas reconstitution automatique de tous leurs états passés.</li>
+<li><strong>Conservation :</strong> textes extraits et captures sont persistés. La purge après un mois n&#39;est pas implémentée pour ces données Brain ; définir et implémenter cette politique avant de la promettre. Ni chats privés ni photos brutes ne sont envoyés à Brain dans ce lot.</li>
+<li><strong>Charge et coûts :</strong> surveiller la durée, les échecs, volumes et coûts des appels ; le plafond de caractères ne constitue pas un engagement tarifaire.</li>
+</ul>
+<h2>8. Retour arrière et suite</h2>
+<p>Conserver une sauvegarde et un commit avant installation. En cas de régression sur staging, suspendre les nouveaux lancements Brain et laisser terminer/arrêter proprement le worker selon le superviseur, puis rétablir la version applicative précédente. Ne pas lancer <code>migrate brain zero</code> : cela supprimerait les données Brain. Conserver les tables jusqu&#39;à décision de reprise ; une restauration de base éventuelle doit être coordonnée avec les autres écritures de l&#39;environnement.</p>
+<p>Le lot Slack fera l&#39;objet d&#39;une livraison distincte, rebasée sur l&#39;état réellement retenu après Brain. Ne pas appliquer ensuite le précédent patch combiné Brain + Slack : il recouvrirait ce lot et pourrait réintroduire des versions anciennes.</p>
+<p><strong>Ordre de décision : revue → intégration en branche → CI → migrations et configuration sur staging → recette réelle → décision de mise en production par Léo.</strong></p>
+<h2>9. Critère de validation métier avant envoi comme version finalisée</h2>
+<p>Effectuer C01 via le parcours normal avec la version privée choisie par Maxime. Attendre : relier baisse boissons/desserts et attente, comparer l’organisation avant/après 13 h 30, citer les refus de dessert sans extrapoler leur fréquence, proposer un test du retour à deux personnes à midi et un bilan sur des ratios comparables. Ne pas inventer de responsable, de gain ni de causalité certaine. C01 est déjà connu du référentiel : c’est un test de régression, pas une preuve de généralisation.</p>
+<p>Comparer ensuite un cas inédit et un cas contradictoire, avec même modèle, mêmes données, même contexte et critères définis avant l’appel. Relever fidélité des chiffres, explications sourcées, contradictions, utilité des actions, objectifs mesurables, durée et coût. Tant que cette recette et la CI PostgreSQL ne sont pas terminées, ne pas présenter ce dossier comme une version entièrement validée.</p>
+</html>

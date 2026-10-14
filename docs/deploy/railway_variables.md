@@ -229,23 +229,24 @@ Transactional invitation emails for Staff, Manager, and Director roles. Disabled
 
 ---
 
-## Celery worker concurrency (three worker services)
+## Celery worker concurrency
 
-`CELERY_WORKER_CONCURRENCY` is **required** on `celery-ai-interactive`, `celery-operational`, and `celery-background`. The Railway `startCommand` validates it in shell **before** Celery starts; do not set it on `api-web` or `celery-beat`.
+`CELERY_WORKER_CONCURRENCY` is **required** on `celery-ai-interactive`, `celery-operational`, `celery-background`, and on `celery-brain` once that service exists. The Railway `startCommand` validates it in shell **before** Celery starts; do not set it on `api-web` or `celery-beat`.
 
-The only measured worker budget is the previous single worker at **4 prefork children** (4 Postgres connections held up to `CONN_MAX_AGE`, and at most 4 simultaneous provider calls). `max_connections` was not readable. The three pools share that envelope. Initial values:
+The only measured worker budget is the previous single worker at **4 prefork children** (4 Postgres connections held up to `CONN_MAX_AGE`, and at most 4 simultaneous provider calls). `max_connections` was not readable. The three field pools share that envelope. `celery-brain` is a fourth pool on top of it. Initial values:
 
 | Service | `CELERY_WORKER_CONCURRENCY` | Why |
 |---|---|---|
 | `celery-ai-interactive` | 2 | User-visible observation pipeline. Prefetch 1. Two slots stay available when background classification is busy. |
 | `celery-operational` | 1 | Recovery, planning, push, and transactional email stay alive while both AI pools are busy. |
 | `celery-background` | 1 | Pattern classification and maintenance. One provider slot. |
+| `celery-brain` | 2 | Brain analyses only (`-Q brain_analysis`, prefetch 1). Additional to the 2 / 1 / 1 envelope. Set this before the service is created on staging. The same shell validation applies. Recovery of this queue runs on `celery-operational`, not on this process. |
 
-Together: 4 children, at most 4 in-flight worker database connections while tasks run (`CONN_MAX_AGE=0` does not retain them afterward), and 3 simultaneous provider calls (interactive 2 + background 1).
+The three field pools stay at 4 children, at most 4 in-flight worker database connections while tasks run (`CONN_MAX_AGE=0` does not retain them afterward), and 3 simultaneous provider calls (interactive 2 + background 1). `celery-brain` adds 2 children and about two Postgres connections while its tasks run. It does not take slots from `ai_interactive`.
 
 | Variable | Service | Required | Notes |
 |---|---|---|---|
-| `CELERY_WORKER_CONCURRENCY` | each of the three workers | yes | Positive decimal integer (digits only, no leading zero). Passed to `celery worker --concurrency`. Initial values: 2, 1, and 1 as above. |
+| `CELERY_WORKER_CONCURRENCY` | each field worker, and `celery-brain` when created | yes | Positive decimal integer (digits only, no leading zero). Passed to `celery worker --concurrency`. Field values: 2, 1, and 1. Brain: 2. |
 
 ### Shell validation (start command)
 
