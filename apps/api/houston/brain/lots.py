@@ -16,7 +16,15 @@ from houston.brain.collection import (
     CATEGORY_TASK,
     document_stable_key,
 )
-from houston.brain.configuration import canonical_json, digest, estimate_tokens, useful_input_tokens
+from houston.brain.configuration import (
+    CALL_FRAMING_TOKENS,
+    _encode_len,
+    _fixed_call_tokens,
+    call_input_tokens,
+    canonical_json,
+    digest,
+    encoding_for_frozen,
+)
 from houston.brain.contract import ENGINE_RULES, SCHEMA_VERSION
 from houston.brain.errors import BrainWorkError
 
@@ -30,46 +38,40 @@ class PlannedLot:
     payload: dict
     input_hash: str
     reserved_input_tokens: int
+    planning_tokens: int = 0
+
+
+@dataclass
+class PlanningTrace:
+    """Encodings performed while packing. Merges only add integers."""
+
+    object_encodings: int = 0
+    request_encodings: int = 0
 
 
 @dataclass(frozen=True)
 class _PieceCost:
-    """UTF-8 length of the three variable JSON arrays in one reading envelope."""
+    """Token sums of the three variable JSON arrays. Counts drive the join margin."""
 
-    sections_bytes: int
+    sections_tokens: int
     section_count: int
-    items_bytes: int
+    items_tokens: int
     item_count: int
-    piece_bytes: int
+    piece_tokens: int
     piece_count: int
 
     def concat(self, other: _PieceCost) -> _PieceCost:
         return _PieceCost(
-            sections_bytes=_concat_array_bytes(
-                self.sections_bytes,
-                self.section_count,
-                other.sections_bytes,
-                other.section_count,
-            ),
+            sections_tokens=self.sections_tokens + other.sections_tokens,
             section_count=self.section_count + other.section_count,
-            items_bytes=_concat_array_bytes(
-                self.items_bytes,
-                self.item_count,
-                other.items_bytes,
-                other.item_count,
-            ),
+            items_tokens=self.items_tokens + other.items_tokens,
             item_count=self.item_count + other.item_count,
-            piece_bytes=_concat_array_bytes(
-                self.piece_bytes,
-                self.piece_count,
-                other.piece_bytes,
-                other.piece_count,
-            ),
+            piece_tokens=self.piece_tokens + other.piece_tokens,
             piece_count=self.piece_count + other.piece_count,
         )
 
 
-_EMPTY_COST = _PieceCost(2, 0, 2, 0, 2, 0)
+_EMPTY_COST = _PieceCost(0, 0, 0, 0, 0, 0)
 _ENVELOPE_KEYS = (
     "items",
     "knowledge",
@@ -82,46 +84,44 @@ _ENVELOPE_KEYS = (
 )
 
 
-def _canonical_bytes(value: object) -> int:
-    return len(canonical_json(value).encode("utf-8"))
-
-
-def _array_bytes(element_bytes: list[int]) -> int:
-    """Byte length of a canonical JSON array. An empty array is `[]`."""
-    count = len(element_bytes)
-    if count == 0:
-        return 2
-    return 2 + sum(element_bytes) + count - 1
-
-
-def _concat_array_bytes(left: int, left_count: int, right: int, right_count: int) -> int:
-    """Length of a JSON array formed by appending two canonical arrays.
-
-    Both sides are `[]` (2 bytes) when empty. Joining two non-empty arrays drops one
-    bracket pair and adds the comma between them, which is one byte less than the sum.
-    """
-    if left_count == 0:
-        return right
-    if right_count == 0:
-        return left
-    return left + right - 1
-
-
 class _ReadingMeter:
-    """Token count of a reading envelope, identical to estimate_tokens(reading_envelope(...)).
+    """Additive token bound of one reading call.
 
-    Stable objects are serialized once. Section and item objects are serialized once.
-    Merging groups adds those byte lengths and the JSON commas; it does not dump again.
+    Each section, item, and piece id is encoded once. A merge adds those integers
+    and one token per join comma. It does not encode the envelope again.
     """
 
-    def __init__(self, knowledge: dict | None, searches: list[str]):
-        self._knowledge_bytes = None if knowledge is None else _canonical_bytes(knowledge)
-        self._searches_bytes = _canonical_bytes(list(searches))
-        self._rules_bytes = _canonical_bytes(list(ENGINE_RULES))
-        self._role_bytes = _canonical_bytes("analysis")
-        self._schema_bytes = _canonical_bytes(SCHEMA_VERSION)
-        self._key_bytes = {key: _canonical_bytes(key) for key in _ENVELOPE_KEYS}
+    def __init__(
+        self,
+        knowledge: dict | None,
+        searches: list[str],
+        *,
+        provider: str,
+        model: str,
+        trace: PlanningTrace,
+    ):
+        self.provider = provider
+        self.model = model
+        self.trace = trace
+        encoding = encoding_for_frozen(provider=provider, model=model)
+        self._encoding = encoding
+        prompt_tokens, schema_tokens = _fixed_call_tokens(encoding)
+        self._call_overhead = prompt_tokens + schema_tokens + CALL_FRAMING_TOKENS
+        self._knowledge_tokens = (
+            None if knowledge is None else self._count(canonical_json(knowledge))
+        )
+        self._searches_tokens = self._count(canonical_json(list(searches)))
+        self._rules_tokens = self._count(canonical_json(list(ENGINE_RULES)))
+        self._role_tokens = self._count(canonical_json("analysis"))
+        self._schema_tokens = self._count(canonical_json(SCHEMA_VERSION))
+        self._key_tokens = {key: self._count(canonical_json(key)) for key in _ENVELOPE_KEYS}
+        self._empty_array_tokens = self._count("[]")
+        self._open_bracket = self._count("[")
+        self._close_bracket = self._count("]")
+        self._open_brace = self._count("{")
+        self._close_brace = self._count("}")
         self._objects: dict[int, int] = {}
+        self._strings: dict[str, int] = {}
 
     def section_group(self, section: dict) -> _Group:
         piece_ids = [str(section["piece_id"])] if section.get("piece_id") else []
@@ -129,11 +129,11 @@ class _ReadingMeter:
             [section],
             [],
             _PieceCost(
-                sections_bytes=_array_bytes([self._object_bytes(section)]),
+                sections_tokens=self._object_tokens(section),
                 section_count=1,
-                items_bytes=2,
+                items_tokens=0,
                 item_count=0,
-                piece_bytes=_array_bytes([_canonical_bytes(piece_id) for piece_id in piece_ids]),
+                piece_tokens=sum(self._string_tokens(piece_id) for piece_id in piece_ids),
                 piece_count=len(piece_ids),
             ),
         )
@@ -143,44 +143,57 @@ class _ReadingMeter:
             [],
             list(items),
             _PieceCost(
-                sections_bytes=2,
+                sections_tokens=0,
                 section_count=0,
-                items_bytes=_array_bytes([self._object_bytes(item) for item in items]),
+                items_tokens=sum(self._object_tokens(item) for item in items),
                 item_count=len(items),
-                piece_bytes=2,
+                piece_tokens=0,
                 piece_count=0,
             ),
         )
 
-    def payload_bytes(self, cost: _PieceCost) -> int:
+    def tokens(self, cost: _PieceCost) -> int:
+        """Upper bound of call_input_tokens for this group. No envelope encoding."""
         values = {
-            "required_piece_ids": cost.piece_bytes,
-            "role": self._role_bytes,
-            "rules": self._rules_bytes,
-            "schema_version": self._schema_bytes,
-            "searches": self._searches_bytes,
-            "sections": cost.sections_bytes,
+            "required_piece_ids": self._array_tokens(cost.piece_tokens, cost.piece_count),
+            "role": self._role_tokens,
+            "rules": self._rules_tokens,
+            "schema_version": self._schema_tokens,
+            "searches": self._searches_tokens,
+            "sections": self._array_tokens(cost.sections_tokens, cost.section_count),
         }
         if cost.item_count:
-            values["items"] = cost.items_bytes
-        if self._knowledge_bytes is not None:
-            values["knowledge"] = self._knowledge_bytes
-        total = 2
-        for index, key in enumerate(sorted(values)):
-            if index:
-                total += 1
-            total += self._key_bytes[key] + 1 + values[key]
-        return total
+            values["items"] = self._array_tokens(cost.items_tokens, cost.item_count)
+        if self._knowledge_tokens is not None:
+            values["knowledge"] = self._knowledge_tokens
+        count = len(values)
+        body = sum(self._key_tokens[key] + values[key] for key in values)
+        user = self._open_brace + self._close_brace + body + count + max(0, count - 1)
+        return self._call_overhead + user
 
-    def tokens(self, cost: _PieceCost) -> int:
-        return max(1, (self.payload_bytes(cost) + 3) // 4)
+    def _array_tokens(self, element_tokens: int, count: int) -> int:
+        if count == 0:
+            return self._empty_array_tokens
+        return self._open_bracket + self._close_bracket + element_tokens + (count - 1)
 
-    def _object_bytes(self, value: dict) -> int:
+    def _count(self, text: str) -> int:
+        return _encode_len(self._encoding, text)
+
+    def _object_tokens(self, value: dict) -> int:
         key = id(value)
         cached = self._objects.get(key)
         if cached is None:
-            cached = _canonical_bytes(value)
+            cached = self._count(canonical_json(value))
             self._objects[key] = cached
+            self.trace.object_encodings += 1
+        return cached
+
+    def _string_tokens(self, value: str) -> int:
+        cached = self._strings.get(value)
+        if cached is None:
+            cached = self._count(canonical_json(value))
+            self._strings[value] = cached
+            self.trace.object_encodings += 1
         return cached
 
 
@@ -204,17 +217,13 @@ def plan_lots(
     knowledge: dict | None = None,
     searches: list[str] | None = None,
     items=None,
+    provider: str = "fake",
+    model: str = "fake",
 ) -> list[PlannedLot]:
     if per_call_input_tokens <= 0 or total_input_tokens <= 0 or max_calls <= 0:
         raise BrainWorkError(
             code="configuration_unusable",
             message="La configuration figée de l'analyse est inutilisable.",
-        )
-    useful = useful_input_tokens(per_call_input_tokens)
-    if useful <= 0:
-        raise BrainWorkError(
-            code="budget_exceeded",
-            message="La réservation des lots dépasse le budget de l'analyse.",
         )
     if not sections:
         raise BrainWorkError(
@@ -229,15 +238,24 @@ def plan_lots(
     if items is not None:
         _bind_document_items(numbered, items)
     codes = list(searches or [])
-    meter = _ReadingMeter(knowledge, codes)
+    trace = PlanningTrace()
+    plan_lots.last_trace = trace
+    meter = _ReadingMeter(
+        knowledge,
+        codes,
+        provider=provider,
+        model=model,
+        trace=trace,
+    )
     groups: list[_Group] = []
     for section in numbered:
-        groups.extend(_section_groups(section, useful, meter))
+        groups.extend(_section_groups(section, per_call_input_tokens, meter))
     if items is not None:
-        groups.extend(_item_groups(items, useful, meter))
-    packed = _pack(groups, useful, meter)
+        groups.extend(_item_groups(items, per_call_input_tokens, meter))
+    packed = _pack(groups, per_call_input_tokens, meter)
     planned = [
-        _lot(index, group, knowledge, codes) for index, group in enumerate(packed, start=1)
+        _lot(index, group, knowledge, codes, meter, per_call_input_tokens)
+        for index, group in enumerate(packed, start=1)
     ]
     _require_unique_pieces(planned)
     if items is not None:
@@ -249,6 +267,9 @@ def plan_lots(
             message="La réservation des lots dépasse le budget de l'analyse.",
         )
     return planned
+
+
+plan_lots.last_trace = PlanningTrace()
 
 
 def sections_from_payload(payload: dict) -> list[dict]:
@@ -353,18 +374,34 @@ def reading_envelope(
     return payload
 
 
-def _lot(index: int, group: _Group, knowledge: dict | None, searches: list[str]) -> PlannedLot:
+def _lot(
+    index: int,
+    group: _Group,
+    knowledge: dict | None,
+    searches: list[str],
+    meter: _ReadingMeter,
+    per_call_input_tokens: int,
+) -> PlannedLot:
     envelope = reading_envelope(
         group.sections,
         knowledge,
         searches=searches,
         items=group.items,
     )
+    incremental = meter.tokens(group.cost)
+    exact = call_input_tokens(envelope, provider=meter.provider, model=meter.model)
+    meter.trace.request_encodings += 1
+    if incremental < exact or exact > per_call_input_tokens:
+        raise BrainWorkError(
+            code="budget_exceeded",
+            message="La réservation des lots dépasse le budget de l'analyse.",
+        )
     return PlannedLot(
         stable_key=f"lot-{index:04d}",
         payload=envelope,
         input_hash=digest(envelope),
-        reserved_input_tokens=estimate_tokens(envelope),
+        reserved_input_tokens=exact,
+        planning_tokens=incremental,
     )
 
 

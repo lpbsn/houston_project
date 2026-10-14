@@ -7,7 +7,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from houston.brain.configuration import canonical_json, estimate_tokens
+from houston.brain.configuration import (
+    CALL_FRAMING_TOKENS,
+    call_input_tokens,
+    canonical_json,
+    json_token_count,
+)
 from houston.brain.contract import (
     SCHEMA_VERSION,
     BrainAnalysisV1,
@@ -97,7 +102,8 @@ def test_mocked_openai_sends_the_fixture_payload_and_not_a_stored_file(monkeypat
     assert kwargs["max_completion_tokens"] == 32
     content = kwargs["messages"][1]["content"]
     assert content == canonical_json(payload)
-    assert estimate_tokens(payload) == max(1, (len(content.encode()) + 3) // 4)
+    assert json_token_count(payload) > 0
+    assert call_input_tokens(payload) >= json_token_count(payload) + CALL_FRAMING_TOKENS
     blob = json.dumps(kwargs["messages"], ensure_ascii=False)
     assert "FIXTURE_ONLY" in blob
     assert "storage_key" not in blob
@@ -178,12 +184,12 @@ def test_refused_provider_does_not_open_a_client_or_capture(
 
 def test_frozen_openai_uses_the_frozen_model_without_storing_the_key(monkeypatch, settings):
     settings.HOUSTON_BRAIN_PROVIDER = "openai"
-    settings.HOUSTON_BRAIN_MODEL = "gpt-frozen"
+    settings.HOUSTON_BRAIN_MODEL = "gpt-5-mini"
     settings.OPENAI_API_KEY = "sk-lot4-secret"
     _allow_publish(monkeypatch)
     analysis = _prepare(settings, ["Service lent en salle."])
     assert analysis.configuration["provider"] == "openai"
-    assert analysis.configuration["model"] == "gpt-frozen"
+    assert analysis.configuration["model"] == "gpt-5-mini"
     assert "sk-lot4-secret" not in json.dumps(analysis.configuration)
     settings.HOUSTON_BRAIN_PROVIDER = "fake"
     settings.HOUSTON_BRAIN_MODEL = "gpt-live"
@@ -204,7 +210,7 @@ def test_frozen_openai_uses_the_frozen_model_without_storing_the_key(monkeypatch
     assert constructed.call_args.kwargs["api_key"] == "sk-lot4-secret"
     assert constructed.call_args.kwargs["max_retries"] == 0
     kwargs = client.chat.completions.create.call_args.kwargs
-    assert kwargs["model"] == "gpt-frozen"
+    assert kwargs["model"] == "gpt-5-mini"
     assert kwargs["response_format"] == openai_strict_response_format()
     assert (
         kwargs["max_completion_tokens"]

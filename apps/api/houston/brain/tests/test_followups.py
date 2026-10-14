@@ -670,3 +670,54 @@ def test_follow_up_transport_loss_does_not_change_the_completed_analysis(monkeyp
     assert message.transient_retries_used == 0
     assert not BrainSlot.objects.filter(message=message).exists()
     assert _snapshot(analysis) == before
+
+
+def test_follow_up_text_that_fits_is_not_sent_when_the_request_does_not():
+    from houston.brain.configuration import call_input_tokens, follow_up_ceilings, json_token_count
+    from houston.brain.followups import _context_payload
+
+    _establishment, owner, analysis, item = _completed()
+    phrase = "Le service du petit-déjeuner reste trop lent malgré le renfort annoncé. "
+    message = _ask(owner, analysis, "exact", cited=[str(item.id)])
+    ceilings = follow_up_ceilings(analysis.configuration)
+    wide = dict(ceilings)
+    wide["per_call_input_tokens"] = 2_000_000
+    wide["follow_up_total_input_tokens"] = 2_000_000
+    chosen = ""
+    low, high = 1, 8
+    while True:
+        item.payload = {"text": (phrase * high).strip()}
+        item.save(update_fields=["payload", "updated_at"])
+        payload = _context_payload(message, analysis, {str(item.id): item}, [str(item.id)], wide)
+        if call_input_tokens(payload) > 80_000 and json_token_count(payload) > 80_000:
+            break
+        high *= 2
+        if high > 8192:
+            break
+    while low <= high:
+        mid = (low + high) // 2
+        text = (phrase * mid).strip()
+        item.payload = {"text": text}
+        item.save(update_fields=["payload", "updated_at"])
+        payload = _context_payload(message, analysis, {str(item.id): item}, [str(item.id)], wide)
+        user_tokens = json_token_count(payload)
+        exact = call_input_tokens(payload)
+        if user_tokens <= 80_000 < exact:
+            chosen = text
+            break
+        if exact <= 80_000:
+            low = mid + 1
+        else:
+            high = mid - 1
+    assert chosen
+    item.payload = {"text": chosen}
+    item.save(update_fields=["payload", "updated_at"])
+    provider = RecordingProvider()
+    _run(message, provider)
+    message.refresh_from_db()
+    assert provider.calls == []
+    assert message.status == BrainMessage.Status.FAILED
+    assert message.failure_code == "budget_exceeded"
+    assert message.result["reanalysis"]["launched"] is False
+    assert message.provider_calls_used == 0
+    assert BrainDossierItem.objects.get(id=item.id).payload["text"] == chosen

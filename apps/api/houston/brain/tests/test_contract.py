@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from houston.brain.configuration import (
-    empty_knowledge,
-    estimate_tokens,
-    provider_fixed_input_tokens,
-)
+from houston.brain.configuration import empty_knowledge
 from houston.brain.contract import CORRECTION_KEY, SCHEMA_VERSION, minimal_analysis
-from houston.brain.lots import plan_lots, reading_envelope, sections_from_payload
+from houston.brain.lots import plan_lots, sections_from_payload
 from houston.brain.models import BrainAnalysis, BrainLot, BrainSearchRun
 from houston.brain.provider import ProviderCallResult
 from houston.brain.runtime import run_brain_analysis
@@ -395,17 +391,30 @@ def _numeric_table(settings, *, raw_repeat: int):
         "qualitative": [],
     }
     parent = sections_from_payload(payload)[0]
-    child = {
+    one_row = {
         "kind": "table",
         "header": parent["header"],
         "unit": parent["unit"],
         "locator": parent["locator"],
         "rows": parent["rows"][:1],
-        "piece_id": f"{parent['piece_id']}-p0000",
-        "item_ids": [parent["rows"][0]["stable_key"]],
     }
-    per_call = estimate_tokens(reading_envelope([child], empty_knowledge()))
-    call_ceiling = per_call + provider_fixed_input_tokens()
+    two_rows = dict(one_row)
+    two_rows["rows"] = parent["rows"][:2]
+    one_plan = plan_lots(
+        [one_row],
+        per_call_input_tokens=2_000_000,
+        total_input_tokens=2_000_000,
+        max_calls=2,
+        knowledge=empty_knowledge(),
+    )
+    two_plan = plan_lots(
+        [two_rows],
+        per_call_input_tokens=2_000_000,
+        total_input_tokens=2_000_000,
+        max_calls=2,
+        knowledge=empty_knowledge(),
+    )
+    call_ceiling = max(one_plan[0].planning_tokens, two_plan[0].planning_tokens - 1)
     settings.HOUSTON_BRAIN_PER_CALL_INPUT_TOKENS = call_ceiling
     settings.HOUSTON_BRAIN_TOTAL_INPUT_TOKENS = call_ceiling * 20
     settings.HOUSTON_BRAIN_MAX_CALLS = 8
@@ -429,7 +438,7 @@ def _subdivided(settings):
     from houston.brain.configuration import frozen_knowledge
     from houston.brain.runtime import _dossier_context
 
-    repeats = 30_000
+    repeats = 50_000
     analysis = _prepare(
         settings,
         [("alpha " * repeats) + " INTERMEDIATE_SYNTHESIS 4188", "bravo " * repeats],
