@@ -22,13 +22,19 @@ describe('landing contact endpoint', () => {
   it.each(['https://other.example', 'null', ''])('rejects another origin: %s', async origin => {
     expect((await onRequest({ request: request(data, origin), env })).status).toBe(403)
   })
-  it.each([{ ...data, email: 'invalid' }, { ...data, message: ' ' }, { ...data, website: 'spam' }, { ...data, token: '' }, { ...data, message: 'x'.repeat(4001) }])('rejects invalid input', async payload => {
+  it.each([{ ...data, email: 'invalid' }, { ...data, message: ' ' }, { ...data, website: 'spam' }, { ...data, token: '' }, { ...data, requestId: 'not-a-uuid' }, { ...data, message: 'x'.repeat(4001) }])('rejects invalid input', async payload => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
     expect((await onRequest({ request: request(payload), env })).status).toBe(400)
     expect(fetcher).not.toHaveBeenCalled()
   })
   it('bounds streamed input size', async () => {
     expect((await onRequest({ request: request({ ...data, message: 'x'.repeat(40000) }), env })).status).toBe(413)
+  })
+  it('does not send when the challenge endpoint rejects the token', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ success: false }, { status: 400 }))
+    vi.stubGlobal('fetch', fetcher)
+    expect((await onRequest({ request: request(), env })).status).toBe(503)
+    expect(fetcher).toHaveBeenCalledTimes(1)
   })
   it.each([{ ...challenge, success: false }, { ...challenge, hostname: 'evil.example' }, { ...challenge, action: 'login' }])('requires challenge, hostname and action', async result => {
     const fetcher = vi.fn().mockResolvedValue(Response.json(result)); vi.stubGlobal('fetch', fetcher)

@@ -79,6 +79,10 @@ dépôt. La confirmer avec les contrats des prestataires avant activation.
 - Clé d'idempotence Resend stable lors d'un réessai du même message ; un contenu
   modifié est une nouvelle demande. Nouvelle vérification anti-robot après tentative.
 - Aucun abonnement marketing automatique ni accusé automatique envoyé au prospect.
+- Aucune limitation de débit dans la Function. Turnstile empêche l'envoi sans défi,
+  mais pas une série de demandes distinctes. Avant activation, appliquer une règle
+  de débit déjà disponible sur le compte Cloudflare et surveiller le quota Resend.
+  Cette livraison n'ajoute pas cette infrastructure.
 
 Références :
 - https://developers.cloudflare.com/pages/functions/get-started/
