@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { LandingPage } from './landing-page'
@@ -11,11 +11,12 @@ afterEach(() => {
 })
 
 describe('LandingPage', () => {
-  it('links login to the app domain', () => {
+  it('links login to the app domain from the header', () => {
     render(<LandingPage />)
 
-    const login = screen.getByRole('link', { name: 'Se connecter' })
+    const login = within(screen.getByRole('banner')).getByRole('link', { name: 'Se connecter' })
     expect(login.getAttribute('href')).toBe(APP_LOGIN_URL)
+    expect(within(screen.getByRole('contentinfo')).queryByRole('link', { name: 'Se connecter' })).toBeNull()
   })
 
   it('links to the legal page path', () => {
@@ -25,11 +26,10 @@ describe('LandingPage', () => {
     expect(legal.getAttribute('href')).toBe('/mentions-legales/')
   })
 
-  it('links to the account deletion page path', () => {
+  it('does not promote account deletion on the landing page', () => {
     render(<LandingPage />)
 
-    const deletion = screen.getByRole('link', { name: 'Supprimer un compte' })
-    expect(deletion.getAttribute('href')).toBe('/supprimer-compte/')
+    expect(screen.queryByRole('link', { name: 'Supprimer un compte' })).toBeNull()
   })
 
   it('links to privacy policy, terms, and support paths', () => {
