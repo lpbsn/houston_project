@@ -7,13 +7,21 @@ import io
 import pytest
 
 from houston.brain.configuration import (
+    canonical_json,
+    digest,
     estimate_tokens,
     provider_fixed_input_tokens,
     useful_input_tokens,
 )
 from houston.brain.errors import BrainWorkError
 from houston.brain.extract import extract_document
-from houston.brain.lots import plan_lots, reading_envelope, sections_from_payload
+from houston.brain.lots import (
+    _merge,
+    _ReadingMeter,
+    plan_lots,
+    reading_envelope,
+    sections_from_payload,
+)
 
 
 def _paragraph(text: str) -> dict:
@@ -255,3 +263,193 @@ def test_synthesis_majorant_names_the_last_accepted_lot_count():
     accepted = max(lot_count for lot_count in range(0, 13) if bound(lot_count) <= useful)
     assert bound(accepted) <= useful
     assert bound(accepted + 1) > useful
+
+
+def test_document_keys_keep_source_indexes_in_capture_and_lots():
+    from houston.brain.collection import _document_rows
+
+    payload = {
+        "qualitative": [
+            {"text": "  "},
+            {"text": "Café — déjà"},
+            "ignore",
+            {"text": "Suite"},
+        ],
+        "measures": [
+            "ignore",
+            {
+                "label": "CA",
+                "value": "1",
+                "unit": "EUR",
+                "raw": "1",
+                "locator": {"sheet": "Suivi"},
+            },
+        ],
+    }
+    row_keys = [row.stable_key for row in _document_rows(payload)]
+    section_keys = []
+    for section in sections_from_payload(payload):
+        section_keys.extend(section["item_ids"])
+    assert row_keys == [
+        "document:qualitative:0001",
+        "document:qualitative:0003",
+        "document:measure:0000",
+    ]
+    assert section_keys == row_keys
+
+
+def test_incremental_envelope_bytes_match_canonical_json():
+    knowledge = {
+        "formulation": 'déjà "vu" — 日本語 \\ chemin',
+        "limits": "ligne\nsuivante\t\u0001",
+        "uncertainty": "",
+    }
+    searches = ["unité", 'code "spécial"', ""]
+    sections = [
+        {
+            "kind": "paragraph",
+            "text": "",
+            "locator": {},
+            "item_ids": [],
+            "piece_id": 's"0000"',
+        },
+        {
+            "kind": "table",
+            "header": "Mois",
+            "unit": None,
+            "locator": {"sheet": "Suivi / été"},
+            "rows": [
+                {
+                    "text": "Café ☕",
+                    "locator": {"row": 2},
+                    "stable_key": "document:measure:0000",
+                }
+            ],
+            "item_ids": ["document:measure:0000"],
+            "piece_id": "s0001-p0000",
+        },
+        {
+            "kind": "paragraph",
+            "text": "sans piece",
+            "locator": {"block": 1},
+        },
+    ]
+    items = [
+        {
+            "item_id": "signal-1",
+            "stable_key": "signal:1",
+            "category": "signal",
+            "role": "copie",
+            "payload": {"text": "preuve — \u2603", "tags": [], "note": None},
+        },
+        {
+            "item_id": "plan-1",
+            "stable_key": "plan:1",
+            "category": "plan",
+            "role": "copie",
+            "payload": {"execution_ids": ["ex-1"], "label": "Plan \\ déjà"},
+        },
+    ]
+    meter = _ReadingMeter(knowledge, searches)
+    merged = meter.section_group(sections[0])
+    for section in sections[1:]:
+        merged = _merge(merged, meter.section_group(section))
+    merged = _merge(merged, meter.item_group(items[:1]))
+    merged = _merge(merged, meter.item_group(items[1:]))
+    envelope = reading_envelope(
+        merged.sections,
+        knowledge,
+        searches=searches,
+        items=merged.items,
+    )
+    raw = canonical_json(envelope).encode("utf-8")
+    assert meter.payload_bytes(merged.cost) == len(raw)
+    assert meter.tokens(merged.cost) == estimate_tokens(envelope)
+
+    bare = _ReadingMeter(None, [])
+    one = bare.section_group({"kind": "paragraph", "text": "seul", "piece_id": "s0000"})
+    alone = reading_envelope(one.sections, None, searches=[], items=[])
+    assert bare.payload_bytes(one.cost) == len(canonical_json(alone).encode("utf-8"))
+    assert "items" not in alone
+    assert bare.tokens(one.cost) == estimate_tokens(alone)
+
+
+def test_packed_lot_boundaries_and_hashes_match_the_full_envelope():
+    knowledge = {"formulation": "Knowledge été — 中文", "limits": "aucune"}
+    searches = ["chevauchement_signals", "unité"]
+    sections = [
+        _paragraph(f"Café {index} — ligne déjà vue " + ("漢" * (index % 7)) + ' "suite"')
+        for index in range(48)
+    ]
+    longest = max(sections, key=lambda section: len(section["text"]))
+    alone = plan_lots(
+        [longest],
+        per_call_input_tokens=80_000,
+        total_input_tokens=400_000,
+        max_calls=2,
+        knowledge=knowledge,
+        searches=searches,
+    )
+    per_call = alone[0].reserved_input_tokens + provider_fixed_input_tokens()
+    useful = useful_input_tokens(per_call)
+    planned = plan_lots(
+        sections,
+        per_call_input_tokens=per_call,
+        total_input_tokens=per_call * len(sections),
+        max_calls=len(sections),
+        knowledge=knowledge,
+        searches=searches,
+    )
+    assert len(planned) > 1
+    _assert_lot_boundaries(planned, knowledge, searches, useful)
+
+    row_texts = [f"CA été {index} — {index},00 €" for index in range(120)]
+    one_row = plan_lots(
+        [_table([max(row_texts, key=len)])],
+        per_call_input_tokens=80_000,
+        total_input_tokens=400_000,
+        max_calls=2,
+        knowledge=knowledge,
+        searches=searches,
+    )
+    # A subdivided row carries a longer piece id than the unsplit one-row table.
+    table_call = max(
+        per_call,
+        one_row[0].reserved_input_tokens + provider_fixed_input_tokens() + 16,
+    )
+    table = _table(row_texts)
+    table_plan = plan_lots(
+        [table],
+        per_call_input_tokens=table_call,
+        total_input_tokens=table_call * 120,
+        max_calls=120,
+        knowledge=knowledge,
+        searches=searches,
+    )
+    assert len(table_plan) > 1
+    _assert_lot_boundaries(table_plan, knowledge, searches, useful_input_tokens(table_call))
+
+
+def _assert_lot_boundaries(planned, knowledge, searches, useful: int) -> None:
+    for lot in planned:
+        assert lot.input_hash == digest(lot.payload)
+        assert lot.reserved_input_tokens == estimate_tokens(lot.payload)
+        assert lot.reserved_input_tokens <= useful
+    for left, right in zip(planned, planned[1:]):
+        right_sections = right.payload["sections"]
+        if right_sections:
+            merged = reading_envelope(
+                [*left.payload["sections"], right_sections[0]],
+                knowledge,
+                searches=searches,
+                items=left.payload.get("items") or None,
+            )
+        else:
+            right_items = right.payload.get("items") or []
+            merged = reading_envelope(
+                left.payload["sections"],
+                knowledge,
+                searches=searches,
+                items=[*(left.payload.get("items") or []), right_items[0]],
+            )
+        assert estimate_tokens(merged) > useful

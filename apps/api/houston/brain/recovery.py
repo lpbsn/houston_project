@@ -10,7 +10,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from houston.brain.models import BrainAnalysis, BrainMessage, BrainSlot, BrainWorkerBeat
-from houston.brain.runtime import publish_brain_analysis, publish_brain_follow_up, requeue_message
+from houston.brain.runtime import (
+    _retarget_slot,
+    _rotate_queued_attempt,
+    publish_brain_analysis,
+    publish_brain_follow_up,
+    requeue_message,
+)
 
 _QUEUED = BrainAnalysis.Status.QUEUED
 _RUNNING = BrainAnalysis.Status.RUNNING
@@ -219,38 +225,8 @@ def _requeue_attempt(analysis_id, token) -> bool:
         )
         if row is None:
             return False
-        row.attempt_token = new_token
-        row.status = _QUEUED
-        row.claimed_at = None
-        row.lease_expires_at = None
-        row.published_at = None
-        row.transport_stall_since = None
-        row.transient_retries_used = 1
-        row.save(
-            update_fields=[
-                "attempt_token",
-                "status",
-                "claimed_at",
-                "lease_expires_at",
-                "published_at",
-                "transport_stall_since",
-                "transient_retries_used",
-                "updated_at",
-            ]
-        )
-        slot = BrainSlot.objects.select_for_update().filter(analysis_id=row.id).first()
-        if slot is None:
-            BrainSlot.objects.create(
-                establishment_id=row.establishment_id,
-                analysis=row,
-                kind=BrainSlot.Kind.ANALYSIS,
-                status=_QUEUED,
-                token=new_token,
-            )
-        else:
-            slot.token = new_token
-            slot.status = _QUEUED
-            slot.save(update_fields=["token", "status", "updated_at"])
+        _rotate_queued_attempt(row, new_token)
+        _retarget_slot(row, new_token)
     publish_brain_analysis(analysis_id, new_token)
     return True
 

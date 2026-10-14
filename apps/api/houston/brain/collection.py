@@ -1122,6 +1122,11 @@ def _establishment_context(run, establishment) -> DossierRow:
     )
 
 
+def document_stable_key(kind: str, index: int) -> str:
+    """Source-list index shared by capture and lot binding. Skipped rows keep their index."""
+    return f"document:{kind}:{index:04d}"
+
+
 def _document_rows(payload: dict) -> list[DossierRow]:
     """Current reporting, copied from the extraction already loaded for this capture."""
     if not isinstance(payload, dict):
@@ -1137,7 +1142,7 @@ def _document_rows(payload: dict) -> list[DossierRow]:
         rows.append(
             DossierRow(
                 CATEGORY_DOCUMENT,
-                f"document:qualitative:{index:04d}",
+                document_stable_key("qualitative", index),
                 ROLE_CURRENT_QUALITATIVE,
                 {
                     "kind": str(block.get("kind") or "paragraph"),
@@ -1151,7 +1156,7 @@ def _document_rows(payload: dict) -> list[DossierRow]:
         rows.append(
             DossierRow(
                 CATEGORY_DOCUMENT,
-                f"document:measure:{index:04d}",
+                document_stable_key("measure", index),
                 ROLE_CURRENT_MEASURE,
                 measure,
                 "reporting_courant",

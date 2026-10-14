@@ -156,8 +156,7 @@ class RecordingProvider(FakeBrainProvider):
         )
 
 
-def test_explanation_and_hypothesis_use_the_frozen_dossier(settings):
-    settings.HOUSTON_BRAIN_KNOWLEDGE_VERSION = "k-vivant"
+def test_explanation_and_hypothesis_use_the_frozen_dossier():
     establishment, owner, analysis, item = _completed()
     extraction = analysis.reporting.extractions.get()
     extraction.payload = {"measures": [], "qualitative": [{"text": "FORBIDDEN_LIVE"}]}
@@ -582,7 +581,6 @@ def test_correction_fact_and_document_do_not_launch_or_edit_the_dossier():
 
 
 def test_unusable_configuration_proposes_reanalysis_without_replacing_it(settings):
-    settings.HOUSTON_BRAIN_KNOWLEDGE_VERSION = "k-remplace"
     settings.HOUSTON_BRAIN_FOLLOW_UP_MAX_CALLS = 4
     _establishment, owner, analysis, _item = _completed()
     configuration = dict(analysis.configuration)

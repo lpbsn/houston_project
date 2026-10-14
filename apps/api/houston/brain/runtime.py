@@ -336,25 +336,7 @@ def requeue_message(message_id, token) -> bool:
             "establishment_id",
             flat=True,
         ).first()
-        row.attempt_token = new_token
-        row.status = _QUEUED
-        row.claimed_at = None
-        row.lease_expires_at = None
-        row.published_at = None
-        row.transport_stall_since = None
-        row.transient_retries_used = 1
-        row.save(
-            update_fields=[
-                "attempt_token",
-                "status",
-                "claimed_at",
-                "lease_expires_at",
-                "published_at",
-                "transport_stall_since",
-                "transient_retries_used",
-                "updated_at",
-            ]
-        )
+        _rotate_queued_attempt(row, new_token)
         slot = BrainSlot.objects.select_for_update().filter(message_id=row.id).first()
         if slot is None:
             BrainSlot.objects.create(
@@ -1407,27 +1389,32 @@ def _handoff_transient(analysis_id, token) -> None:
         if row.transient_retries_used >= 1:
             _fail_locked(row, "transient_exhausted")
             return
-        row.attempt_token = new_token
-        row.status = _QUEUED
-        row.claimed_at = None
-        row.lease_expires_at = None
-        row.published_at = None
-        row.transport_stall_since = None
-        row.transient_retries_used = 1
-        row.save(
-            update_fields=[
-                "attempt_token",
-                "status",
-                "claimed_at",
-                "lease_expires_at",
-                "published_at",
-                "transport_stall_since",
-                "transient_retries_used",
-                "updated_at",
-            ]
-        )
+        _rotate_queued_attempt(row, new_token)
         _retarget_slot(row, new_token)
     publish_brain_analysis(analysis_id, new_token)
+
+
+def _rotate_queued_attempt(row, new_token) -> None:
+    """Requeue one locked running row under a new token. The caller keeps its own guards."""
+    row.attempt_token = new_token
+    row.status = _QUEUED
+    row.claimed_at = None
+    row.lease_expires_at = None
+    row.published_at = None
+    row.transport_stall_since = None
+    row.transient_retries_used = 1
+    row.save(
+        update_fields=[
+            "attempt_token",
+            "status",
+            "claimed_at",
+            "lease_expires_at",
+            "published_at",
+            "transport_stall_since",
+            "transient_retries_used",
+            "updated_at",
+        ]
+    )
 
 
 def _retarget_slot(row: BrainAnalysis, new_token) -> None:

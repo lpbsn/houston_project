@@ -6,7 +6,7 @@ the analysis. Nothing is truncated.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from houston.brain.collection import (
     CATEGORY_DOCUMENT,
@@ -14,8 +14,9 @@ from houston.brain.collection import (
     CATEGORY_PLAN,
     CATEGORY_SIGNAL,
     CATEGORY_TASK,
+    document_stable_key,
 )
-from houston.brain.configuration import digest, estimate_tokens, useful_input_tokens
+from houston.brain.configuration import canonical_json, digest, estimate_tokens, useful_input_tokens
 from houston.brain.contract import ENGINE_RULES, SCHEMA_VERSION
 from houston.brain.errors import BrainWorkError
 
@@ -31,10 +32,167 @@ class PlannedLot:
     reserved_input_tokens: int
 
 
+@dataclass(frozen=True)
+class _PieceCost:
+    """UTF-8 length of the three variable JSON arrays in one reading envelope."""
+
+    sections_bytes: int
+    section_count: int
+    items_bytes: int
+    item_count: int
+    piece_bytes: int
+    piece_count: int
+
+    def concat(self, other: _PieceCost) -> _PieceCost:
+        return _PieceCost(
+            sections_bytes=_concat_array_bytes(
+                self.sections_bytes,
+                self.section_count,
+                other.sections_bytes,
+                other.section_count,
+            ),
+            section_count=self.section_count + other.section_count,
+            items_bytes=_concat_array_bytes(
+                self.items_bytes,
+                self.item_count,
+                other.items_bytes,
+                other.item_count,
+            ),
+            item_count=self.item_count + other.item_count,
+            piece_bytes=_concat_array_bytes(
+                self.piece_bytes,
+                self.piece_count,
+                other.piece_bytes,
+                other.piece_count,
+            ),
+            piece_count=self.piece_count + other.piece_count,
+        )
+
+
+_EMPTY_COST = _PieceCost(2, 0, 2, 0, 2, 0)
+_ENVELOPE_KEYS = (
+    "items",
+    "knowledge",
+    "required_piece_ids",
+    "role",
+    "rules",
+    "schema_version",
+    "searches",
+    "sections",
+)
+
+
+def _canonical_bytes(value: object) -> int:
+    return len(canonical_json(value).encode("utf-8"))
+
+
+def _array_bytes(element_bytes: list[int]) -> int:
+    """Byte length of a canonical JSON array. An empty array is `[]`."""
+    count = len(element_bytes)
+    if count == 0:
+        return 2
+    return 2 + sum(element_bytes) + count - 1
+
+
+def _concat_array_bytes(left: int, left_count: int, right: int, right_count: int) -> int:
+    """Length of a JSON array formed by appending two canonical arrays.
+
+    Both sides are `[]` (2 bytes) when empty. Joining two non-empty arrays drops one
+    bracket pair and adds the comma between them, which is one byte less than the sum.
+    """
+    if left_count == 0:
+        return right
+    if right_count == 0:
+        return left
+    return left + right - 1
+
+
+class _ReadingMeter:
+    """Token count of a reading envelope, identical to estimate_tokens(reading_envelope(...)).
+
+    Stable objects are serialized once. Section and item objects are serialized once.
+    Merging groups adds those byte lengths and the JSON commas; it does not dump again.
+    """
+
+    def __init__(self, knowledge: dict | None, searches: list[str]):
+        self._knowledge_bytes = None if knowledge is None else _canonical_bytes(knowledge)
+        self._searches_bytes = _canonical_bytes(list(searches))
+        self._rules_bytes = _canonical_bytes(list(ENGINE_RULES))
+        self._role_bytes = _canonical_bytes("analysis")
+        self._schema_bytes = _canonical_bytes(SCHEMA_VERSION)
+        self._key_bytes = {key: _canonical_bytes(key) for key in _ENVELOPE_KEYS}
+        self._objects: dict[int, int] = {}
+
+    def section_group(self, section: dict) -> _Group:
+        piece_ids = [str(section["piece_id"])] if section.get("piece_id") else []
+        return _Group(
+            [section],
+            [],
+            _PieceCost(
+                sections_bytes=_array_bytes([self._object_bytes(section)]),
+                section_count=1,
+                items_bytes=2,
+                item_count=0,
+                piece_bytes=_array_bytes([_canonical_bytes(piece_id) for piece_id in piece_ids]),
+                piece_count=len(piece_ids),
+            ),
+        )
+
+    def item_group(self, items: list[dict]) -> _Group:
+        return _Group(
+            [],
+            list(items),
+            _PieceCost(
+                sections_bytes=2,
+                section_count=0,
+                items_bytes=_array_bytes([self._object_bytes(item) for item in items]),
+                item_count=len(items),
+                piece_bytes=2,
+                piece_count=0,
+            ),
+        )
+
+    def payload_bytes(self, cost: _PieceCost) -> int:
+        values = {
+            "required_piece_ids": cost.piece_bytes,
+            "role": self._role_bytes,
+            "rules": self._rules_bytes,
+            "schema_version": self._schema_bytes,
+            "searches": self._searches_bytes,
+            "sections": cost.sections_bytes,
+        }
+        if cost.item_count:
+            values["items"] = cost.items_bytes
+        if self._knowledge_bytes is not None:
+            values["knowledge"] = self._knowledge_bytes
+        total = 2
+        for index, key in enumerate(sorted(values)):
+            if index:
+                total += 1
+            total += self._key_bytes[key] + 1 + values[key]
+        return total
+
+    def tokens(self, cost: _PieceCost) -> int:
+        return max(1, (self.payload_bytes(cost) + 3) // 4)
+
+    def _object_bytes(self, value: dict) -> int:
+        key = id(value)
+        cached = self._objects.get(key)
+        if cached is None:
+            cached = _canonical_bytes(value)
+            self._objects[key] = cached
+        return cached
+
+
 @dataclass
 class _Group:
-    sections: list[dict] = field(default_factory=list)
-    items: list[dict] = field(default_factory=list)
+    sections: list[dict]
+    items: list[dict]
+    cost: _PieceCost
+
+
+def _empty_group() -> _Group:
+    return _Group([], [], _EMPTY_COST)
 
 
 def plan_lots(
@@ -71,12 +229,13 @@ def plan_lots(
     if items is not None:
         _bind_document_items(numbered, items)
     codes = list(searches or [])
+    meter = _ReadingMeter(knowledge, codes)
     groups: list[_Group] = []
     for section in numbered:
-        groups.extend(_section_groups(section, useful, knowledge, codes))
+        groups.extend(_section_groups(section, useful, meter))
     if items is not None:
-        groups.extend(_item_groups(items, useful, knowledge, codes))
-    packed = _pack(groups, useful, knowledge, codes)
+        groups.extend(_item_groups(items, useful, meter))
+    packed = _pack(groups, useful, meter)
     planned = [
         _lot(index, group, knowledge, codes) for index, group in enumerate(packed, start=1)
     ]
@@ -106,7 +265,7 @@ def sections_from_payload(payload: dict) -> list[dict]:
                 "kind": "paragraph",
                 "text": text,
                 "locator": block.get("locator") if isinstance(block.get("locator"), dict) else {},
-                "item_ids": [f"document:qualitative:{index:04d}"],
+                "item_ids": [document_stable_key("qualitative", index)],
             }
         )
     groups: list[dict] = []
@@ -114,7 +273,7 @@ def sections_from_payload(payload: dict) -> list[dict]:
     for measure in payload.get("measures") or []:
         if not isinstance(measure, dict):
             continue
-        item_key = f"document:measure:{measure_index:04d}"
+        item_key = document_stable_key("measure", measure_index)
         measure_index += 1
         locator = measure.get("locator") if isinstance(measure.get("locator"), dict) else {}
         header = locator.get("header")
@@ -209,44 +368,40 @@ def _lot(index: int, group: _Group, knowledge: dict | None, searches: list[str])
     )
 
 
-def _section_groups(section: dict, budget: int, knowledge, searches: list[str]) -> list[_Group]:
+def _section_groups(section: dict, budget: int, meter: _ReadingMeter) -> list[_Group]:
     piece = _section_payload(section)
-    whole = _Group([piece], [])
-    if _fits(_Group(), whole, budget, knowledge, searches):
+    whole = meter.section_group(piece)
+    if _fits(_empty_group(), whole, budget, meter):
         return [whole]
-    return [_Group([part], []) for part in _subdivide(section, budget, knowledge, searches)]
+    return [meter.section_group(part) for part in _subdivide(section, budget, meter)]
 
 
-def _fits(current: _Group, incoming: _Group, budget: int, knowledge, searches: list[str]) -> bool:
+def _fits(current: _Group, incoming: _Group, budget: int, meter: _ReadingMeter) -> bool:
     merged = _merge(current, incoming)
     if not merged.sections and not merged.items:
         return True
-    return (
-        estimate_tokens(
-            reading_envelope(merged.sections, knowledge, searches=searches, items=merged.items)
-        )
-        <= budget
-    )
+    return meter.tokens(merged.cost) <= budget
 
 
 def _merge(current: _Group, incoming: _Group) -> _Group:
     return _Group(
         sections=[*current.sections, *incoming.sections],
         items=[*current.items, *incoming.items],
+        cost=current.cost.concat(incoming.cost),
     )
 
 
-def _pack(groups: list[_Group], budget: int, knowledge, searches: list[str]) -> list[_Group]:
+def _pack(groups: list[_Group], budget: int, meter: _ReadingMeter) -> list[_Group]:
     packed: list[_Group] = []
-    current = _Group()
+    current = _empty_group()
     for group in groups:
         if current.sections or current.items:
-            if _fits(current, group, budget, knowledge, searches):
+            if _fits(current, group, budget, meter):
                 current = _merge(current, group)
                 continue
             packed.append(current)
-            current = _Group()
-        if not _fits(current, group, budget, knowledge, searches):
+            current = _empty_group()
+        if not _fits(current, group, budget, meter):
             raise _unsplittable()
         current = group
     if current.sections or current.items:
@@ -254,9 +409,9 @@ def _pack(groups: list[_Group], budget: int, knowledge, searches: list[str]) -> 
     return packed
 
 
-def _subdivide(section: dict, budget: int, knowledge, searches: list[str]) -> list[dict]:
+def _subdivide(section: dict, budget: int, meter: _ReadingMeter) -> list[dict]:
     if section.get("kind") == "table":
-        return _table_rows(section, budget, knowledge, searches)
+        return _table_rows(section, budget, meter)
     paragraphs = [part for part in str(section.get("text") or "").split("\n\n") if part.strip()]
     if len(paragraphs) <= 1:
         raise _unsplittable()
@@ -265,13 +420,13 @@ def _subdivide(section: dict, budget: int, knowledge, searches: list[str]) -> li
     for index, paragraph in enumerate(paragraphs):
         child = _paragraph_from_parent(section, paragraph, keep_item=index == 0)
         child["piece_id"] = f"{parent}-p{index:04d}"
-        if not _fits(_Group(), _Group([child], []), budget, knowledge, searches):
+        if not _fits(_empty_group(), meter.section_group(child), budget, meter):
             raise _unsplittable()
         pieces.append(child)
     return pieces
 
 
-def _table_rows(section: dict, budget: int, knowledge, searches: list[str]) -> list[dict]:
+def _table_rows(section: dict, budget: int, meter: _ReadingMeter) -> list[dict]:
     rows = section.get("rows") or []
     if not rows:
         raise _unsplittable()
@@ -283,7 +438,7 @@ def _table_rows(section: dict, budget: int, knowledge, searches: list[str]) -> l
         child["rows"] = [row]
         child["item_ids"] = [str(row.get("stable_key") or row.get("item_id"))]
         piece = _table_payload(child, [row])
-        if not _fits(_Group(), _Group([piece], []), budget, knowledge, searches):
+        if not _fits(_empty_group(), meter.section_group(piece), budget, meter):
             raise _unsplittable()
         pieces.append(piece)
     return pieces
@@ -385,15 +540,16 @@ def _bind_document_items(sections: list[dict], items) -> None:
             section["item_id"] = str(by_key[keys[0]].id)
 
 
-def _item_groups(items, budget: int, knowledge, searches: list[str]) -> list[_Group]:
+def _item_groups(items, budget: int, meter: _ReadingMeter) -> list[_Group]:
     groups = []
     for cluster in _clusters(items):
-        if _fits(_Group(), _Group([], cluster), budget, knowledge, searches):
-            groups.append(_Group([], cluster))
+        whole = meter.item_group(cluster)
+        if _fits(_empty_group(), whole, budget, meter):
+            groups.append(whole)
             continue
         for bundle in _split_cluster(cluster):
-            group = _Group([], bundle)
-            if not _fits(_Group(), group, budget, knowledge, searches):
+            group = meter.item_group(bundle)
+            if not _fits(_empty_group(), group, budget, meter):
                 raise _unsplittable()
             groups.append(group)
     return groups

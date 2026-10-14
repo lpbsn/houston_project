@@ -251,7 +251,7 @@ def test_empty_extraction_does_not_complete(monkeypatch):
     assert provider.calls == []
 
 
-def test_validated_lot_is_reused_after_a_knowledge_setting_change(monkeypatch, settings):
+def test_validated_lot_is_reused_and_frozen_knowledge_stays_empty(monkeypatch, settings):
     _allow_publish(monkeypatch)
     analysis = _prepare(settings, ["alpha " * 30_000, "bravo " * 30_000])
     from houston.brain.provider import BrainProviderUnavailable
@@ -263,7 +263,6 @@ def test_validated_lot_is_reused_after_a_knowledge_setting_change(monkeypatch, s
     assert analysis.transient_retries_used == 1
     first_lot = BrainLot.objects.get(analysis=analysis)
     writer = first_lot.attempt_token
-    settings.HOUSTON_BRAIN_KNOWLEDGE_VERSION = "knowledge-activated"
     analysis.refresh_from_db()
     assert analysis.configuration["knowledge"]["selection"] == "none"
     assert analysis.configuration["knowledge"]["formulation"] == ""
