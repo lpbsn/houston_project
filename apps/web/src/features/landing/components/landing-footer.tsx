@@ -13,6 +13,7 @@ export function LandingFooter() {
         <a href={footerContent.legalHref}>{footerContent.legalLabel}</a>
         <a href={footerContent.privacyHref}>{footerContent.privacyLabel}</a>
         <a href={footerContent.termsHref}>{footerContent.termsLabel}</a>
+        <a href={footerContent.accountDeletionHref}>{footerContent.accountDeletionLabel}</a>
         <a href={footerContent.supportHref}>{footerContent.supportLabel}</a>
       </nav>
     </footer>

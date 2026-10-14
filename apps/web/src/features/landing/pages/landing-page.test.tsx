@@ -26,10 +26,11 @@ describe('LandingPage', () => {
     expect(legal.getAttribute('href')).toBe('/mentions-legales/')
   })
 
-  it('does not promote account deletion on the landing page', () => {
+  it('links to the account deletion page path', () => {
     render(<LandingPage />)
 
-    expect(screen.queryByRole('link', { name: 'Supprimer un compte' })).toBeNull()
+    const deletion = screen.getByRole('link', { name: 'Supprimer un compte' })
+    expect(deletion.getAttribute('href')).toBe('/supprimer-compte/')
   })
 
   it('links to privacy policy, terms, and support paths', () => {
