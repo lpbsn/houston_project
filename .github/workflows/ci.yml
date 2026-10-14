@@ -300,3 +300,83 @@ jobs:
         run: python scripts/docs_check.py
       - name: Agent config check
         run: python scripts/agent_config_check.py
+
+  # Required merge check. Add every future job in this workflow to needs.
+  # Job and step both use always(): a conditional skip is a successful required
+  # check, and !cancelled() would skip this job when the run is cancelled.
+  ci-gate:
+    needs: [changes, backend-tests, frontend-tests, docs-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless classified jobs succeeded
+        if: always()
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          BACKEND_OUTPUT: ${{ needs.changes.outputs.backend }}
+          FRONTEND_OUTPUT: ${{ needs.changes.outputs.frontend }}
+          DOCS_OUTPUT: ${{ needs.changes.outputs.docs }}
+          BACKEND_RESULT: ${{ needs.backend-tests.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-tests.result }}
+          DOCS_RESULT: ${{ needs.docs-check.result }}
+        run: |
+          set -euo pipefail
+
+          CHANGES_RESULT="${CHANGES_RESULT-}"
+          BACKEND_OUTPUT="${BACKEND_OUTPUT-}"
+          FRONTEND_OUTPUT="${FRONTEND_OUTPUT-}"
+          DOCS_OUTPUT="${DOCS_OUTPUT-}"
+          BACKEND_RESULT="${BACKEND_RESULT-}"
+          FRONTEND_RESULT="${FRONTEND_RESULT-}"
+          DOCS_RESULT="${DOCS_RESULT-}"
+
+          status=0
+          fail() {
+            printf '%s\n' "$1" >&2
+            status=1
+          }
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            fail "changes result is '${CHANGES_RESULT}' (required: success)"
+          fi
+
+          check_output() {
+            local name="$1"
+            local value="$2"
+            case "$value" in
+              true|false) ;;
+              *) fail "${name} output is '${value}' (required: true or false)" ;;
+            esac
+          }
+
+          check_job() {
+            local name="$1"
+            local output="$2"
+            local result="$3"
+            case "$output" in
+              true)
+                if [ "$result" != "success" ]; then
+                  fail "${name} is required but result is '${result}'"
+                fi
+                ;;
+              false)
+                case "$result" in
+                  success|skipped) ;;
+                  *) fail "${name} is not required but result is '${result}'" ;;
+                esac
+                ;;
+            esac
+          }
+
+          check_output backend "$BACKEND_OUTPUT"
+          check_output frontend "$FRONTEND_OUTPUT"
+          check_output docs "$DOCS_OUTPUT"
+          check_job backend-tests "$BACKEND_OUTPUT" "$BACKEND_RESULT"
+          check_job frontend-tests "$FRONTEND_OUTPUT" "$FRONTEND_RESULT"
+          check_job docs-check "$DOCS_OUTPUT" "$DOCS_RESULT"
+
+          if [ "$status" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "ci-gate: classification and required jobs succeeded"
