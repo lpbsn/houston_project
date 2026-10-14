@@ -365,7 +365,9 @@ def _measure_text(measure: dict) -> str:
 
 def _bind_document_items(sections: list[dict], items) -> None:
     by_key = {
-        item.stable_key: item for item in items if getattr(item, "category", None) == CATEGORY_DOCUMENT
+        item.stable_key: item
+        for item in items
+        if getattr(item, "category", None) == CATEGORY_DOCUMENT
     }
     for section in sections:
         rows = section.get("rows") or []

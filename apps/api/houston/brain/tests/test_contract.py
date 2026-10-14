@@ -249,7 +249,11 @@ def test_a_subdivided_numeric_table_reaches_synthesis(monkeypatch, settings):
     assert "sources" not in synthesis["payload"]
     assert "4188" not in _blob(synthesis["payload"])
     assert synthesis["payload"]["intermediates"]
-    assert any("4188" in _blob(call["payload"]) for call in provider.calls if call["lot_key"] != "synthesis")
+    assert any(
+        "4188" in _blob(call["payload"])
+        for call in provider.calls
+        if call["lot_key"] != "synthesis"
+    )
     stored = [entry["piece_id"] for entry in analysis.result["coverage"]]
     union = []
     for lot in BrainLot.objects.filter(analysis=analysis).order_by("stable_key"):

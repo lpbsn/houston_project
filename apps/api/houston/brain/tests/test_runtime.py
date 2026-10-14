@@ -662,7 +662,9 @@ def test_multi_lot_synthesis_counts_frozen_knowledge_in_its_budget(monkeypatch, 
     )
     lot_reserved = sum(billed_input_tokens(lot.reserved_input_tokens) for lot in bound)
     assert analysis.reserved_input_tokens == (
-        lot_reserved + billed_input_tokens(synthesis_tokens) + billed_input_tokens(correction_tokens)
+        lot_reserved
+        + billed_input_tokens(synthesis_tokens)
+        + billed_input_tokens(correction_tokens)
     )
     reading_calls = [call for call in provider.calls if call["lot_key"] != SYNTHESIS_KEY]
     assert [call["payload"] for call in reading_calls] == [lot.payload for lot in bound]
@@ -1264,7 +1266,11 @@ def test_a_reading_lot_is_judged_before_it_is_stored(monkeypatch, settings):
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.COMPLETED
     for stable_key in ("lot-0001", "lot-0002"):
-        created = next(index for index, event in enumerate(events) if event == ("create", stable_key))
+        created = next(
+            index
+            for index, event in enumerate(events)
+            if event == ("create", stable_key)
+        )
         assert any(kind == "assess" for kind, _pieces in events[:created])
 
 

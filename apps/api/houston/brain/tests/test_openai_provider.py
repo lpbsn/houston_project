@@ -206,7 +206,10 @@ def test_frozen_openai_uses_the_frozen_model_without_storing_the_key(monkeypatch
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs["model"] == "gpt-frozen"
     assert kwargs["response_format"] == openai_strict_response_format()
-    assert kwargs["max_completion_tokens"] == analysis.configuration["ceilings"]["per_call_output_tokens"]
+    assert (
+        kwargs["max_completion_tokens"]
+        == analysis.configuration["ceilings"]["per_call_output_tokens"]
+    )
     content = kwargs["messages"][1]["content"]
     assert content == canonical_json(json.loads(content))
     blob = json.dumps(kwargs["messages"], ensure_ascii=False)
