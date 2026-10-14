@@ -15,6 +15,7 @@ from houston.ai.models import AIUsageLog
 from houston.brain.admission import admit_brain_work
 from houston.brain.capture import capture_dossier
 from houston.brain.configuration import (
+    billed_input_tokens,
     digest,
     estimate_tokens,
     frozen_knowledge,
@@ -150,7 +151,9 @@ def test_a_fitting_dossier_completes_and_records_usage(monkeypatch):
         key_slots=MAX_SUBJECTS,
         knowledge=frozen_knowledge(analysis.configuration),
     )
-    assert analysis.reserved_input_tokens == estimate_tokens(sent) + correction
+    assert analysis.reserved_input_tokens == (
+        billed_input_tokens(estimate_tokens(sent)) + billed_input_tokens(correction)
+    )
     assert [call["lot_key"] for call in provider.calls] == [bound[0].stable_key]
     stored_lot = BrainLot.objects.get(analysis=analysis)
     assert stored_lot.input_hash == digest(sent)
@@ -172,7 +175,9 @@ def test_absent_provider_usage_counts_as_the_reserved_call(monkeypatch):
     run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
     analysis.refresh_from_db()
     lot = BrainLot.objects.get(analysis=analysis)
-    assert analysis.consumed_input_tokens == estimate_tokens(provider.calls[0]["payload"])
+    assert analysis.consumed_input_tokens == billed_input_tokens(
+        estimate_tokens(provider.calls[0]["payload"])
+    )
     assert analysis.consumed_input_tokens >= lot.reserved_input_tokens
 
 
@@ -379,19 +384,22 @@ def test_lost_rights_cancel_before_the_provider_call(monkeypatch):
     assert not BrainSlot.objects.filter(analysis=analysis).exists()
 
 
-def test_a_non_fake_provider_is_not_called(monkeypatch):
+def test_an_unknown_provider_is_refused_before_capture(monkeypatch, settings):
     _allow_publish(monkeypatch)
-    analysis = _prepare(pytest_settings(), ["Pas de réseau."])
+    settings.OPENAI_API_KEY = "sk-lot4-secret"
+    analysis = _prepare(settings, ["Pas de réseau."])
     configuration = dict(analysis.configuration)
-    configuration["provider"] = "openai"
+    configuration["provider"] = "anthropic"
     analysis.configuration = configuration
     analysis.save(update_fields=["configuration", "updated_at"])
-    provider = ScriptedProvider([_ok()])
     run_brain_analysis(analysis.id, analysis.attempt_token, provider=None)
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.FAILED
     assert analysis.failure_code == "provider_not_allowed"
-    assert provider.calls == []
+    assert analysis.reserved_input_tokens == 0
+    assert analysis.consumed_input_tokens == 0
+    assert analysis.transient_retries_used == 0
+    assert not BrainDossier.objects.filter(analysis=analysis).exists()
 
 
 def test_admission_publishes_only_a_new_analysis(monkeypatch):
@@ -652,8 +660,10 @@ def test_multi_lot_synthesis_counts_frozen_knowledge_in_its_budget(monkeypatch, 
         knowledge=snapshot,
         per_call_output_tokens=ceilings["per_call_output_tokens"],
     )
-    lot_reserved = sum(lot.reserved_input_tokens for lot in bound)
-    assert analysis.reserved_input_tokens == lot_reserved + synthesis_tokens + correction_tokens
+    lot_reserved = sum(billed_input_tokens(lot.reserved_input_tokens) for lot in bound)
+    assert analysis.reserved_input_tokens == (
+        lot_reserved + billed_input_tokens(synthesis_tokens) + billed_input_tokens(correction_tokens)
+    )
     reading_calls = [call for call in provider.calls if call["lot_key"] != SYNTHESIS_KEY]
     assert [call["payload"] for call in reading_calls] == [lot.payload for lot in bound]
     from houston.brain.contract import intermediate_result
@@ -1120,3 +1130,170 @@ def test_a_changed_reading_lot_hash_does_not_reuse_synthesis(monkeypatch):
     assert analysis.consumed_input_tokens == 0
     stored = BrainLot.objects.get(analysis=analysis, stable_key=SYNTHESIS_KEY)
     assert stored.output == synthesis_output
+
+
+def test_fixed_call_cost_counts_toward_the_total_before_any_call(monkeypatch):
+    _allow_publish(monkeypatch)
+    analysis = _prepare(pytest_settings(), ["Service lent en salle."])
+    bound = _budgeted_envelopes(analysis)
+    context = _dossier_context(analysis.id)
+    assert context is not None
+    _dossier, items, _runs = context
+    correction = analysis_correction_majorant(
+        piece_ids_of(bound),
+        items,
+        key_slots=MAX_SUBJECTS,
+        knowledge=frozen_knowledge(analysis.configuration),
+    )
+    fixed = provider_fixed_input_tokens()
+    payload_sum = bound[0].reserved_input_tokens + correction
+    configuration = dict(analysis.configuration)
+    ceilings = dict(configuration["ceilings"])
+    ceilings["total_input_tokens"] = payload_sum + fixed
+    configuration["ceilings"] = ceilings
+    analysis.configuration = configuration
+    analysis.save(update_fields=["configuration", "updated_at"])
+    provider = ScriptedProvider([_ok()])
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert provider.calls == []
+    assert analysis.status == BrainAnalysis.Status.FAILED
+    assert analysis.failure_code == "budget_exceeded"
+    assert analysis.reserved_input_tokens == 0
+    assert analysis.consumed_input_tokens == 0
+    assert analysis.provider_calls_used == 0
+
+
+def test_a_refused_later_reading_lot_keeps_the_charge_and_the_accepted_lot(
+    monkeypatch, settings
+):
+    _allow_publish(monkeypatch)
+    analysis = _prepare(settings, ["alpha " * 30_000, "bravo " * 30_000])
+
+    class _RefuseSecond:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, *, analysis_id, lot_key, payload, timeout_seconds):
+            del analysis_id, timeout_seconds
+            self.calls.append(lot_key)
+            if len(self.calls) == 1:
+                return _reading_then(payload, output=_keyed_lot(payload))
+            refused = minimal_analysis([])
+            refused["subjects"][0]["key"] = "manque"
+            return ProviderCallResult(
+                output=refused,
+                truncated=False,
+                input_tokens=7,
+                output_tokens=1,
+            )
+
+    provider = _RefuseSecond()
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert provider.calls == ["lot-0001", "lot-0002"]
+    assert analysis.status == BrainAnalysis.Status.FAILED
+    assert analysis.failure_code == "insufficient_coverage"
+    assert analysis.provider_calls_used == 2
+    assert analysis.consumed_input_tokens == 8
+    assert list(
+        BrainLot.objects.filter(analysis=analysis).values_list("stable_key", flat=True)
+    ) == ["lot-0001"]
+    assert not BrainLot.objects.filter(analysis=analysis, stable_key=SYNTHESIS_KEY).exists()
+
+
+def test_a_stored_reading_lot_that_fails_its_contract_is_not_sent_to_synthesis(
+    monkeypatch, settings
+):
+    _allow_publish(monkeypatch)
+    analysis = _prepare(settings, ["alpha " * 30_000, "bravo " * 30_000])
+    bound = _budgeted_envelopes(analysis)
+    assert [lot.stable_key for lot in bound] == ["lot-0001", "lot-0002"]
+    pieces = list(bound[0].payload["required_piece_ids"])
+    refused = minimal_analysis(pieces)
+    refused["subjects"][0]["gaps"] = []
+    refused["subjects"][0]["evidence"] = [
+        {
+            "item_id": "00000000-0000-0000-0000-000000000099",
+            "locator": {"source_id": "dehors"},
+        }
+    ]
+    BrainLot.objects.create(
+        analysis=analysis,
+        stable_key=bound[0].stable_key,
+        input_hash=bound[0].input_hash,
+        configuration_hash=digest(analysis.configuration),
+        status=BrainLot.Status.VALIDATED,
+        output=refused,
+        attempt_token=uuid.uuid4(),
+        reserved_input_tokens=bound[0].reserved_input_tokens,
+    )
+    provider = _MultiLot()
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert provider.calls == []
+    assert analysis.status == BrainAnalysis.Status.FAILED
+    assert analysis.failure_code == "invalid_reference"
+    assert analysis.consumed_input_tokens == 0
+    assert analysis.provider_calls_used == 0
+    assert not BrainLot.objects.filter(analysis=analysis, stable_key=SYNTHESIS_KEY).exists()
+    assert BrainLot.objects.filter(analysis=analysis, stable_key="lot-0001").exists()
+
+
+def test_a_reading_lot_is_judged_before_it_is_stored(monkeypatch, settings):
+    _allow_publish(monkeypatch)
+    import houston.brain.runtime as brain_runtime
+
+    events = []
+    real_assess = brain_runtime.assess
+    real_create = BrainLot.objects.create
+
+    def assess_spy(output, **kwargs):
+        events.append(("assess", tuple(kwargs.get("pieces") or ())))
+        return real_assess(output, **kwargs)
+
+    def create_spy(**kwargs):
+        events.append(("create", kwargs.get("stable_key")))
+        return real_create(**kwargs)
+
+    monkeypatch.setattr(brain_runtime, "assess", assess_spy)
+    monkeypatch.setattr(BrainLot.objects, "create", create_spy)
+    analysis = _prepare(settings, ["alpha " * 30_000, "bravo " * 30_000])
+    provider = _MultiLot()
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.COMPLETED
+    for stable_key in ("lot-0001", "lot-0002"):
+        created = next(index for index, event in enumerate(events) if event == ("create", stable_key))
+        assert any(kind == "assess" for kind, _pieces in events[:created])
+
+
+def test_a_crash_before_the_reading_lot_commits_does_not_keep_the_charge(monkeypatch, settings):
+    _allow_publish(monkeypatch)
+    analysis = _prepare(settings, ["alpha " * 30_000, "bravo " * 30_000])
+    real_create = BrainLot.objects.create
+    gate = {"open": True}
+
+    def create_spy(**kwargs):
+        if gate["open"] and kwargs.get("stable_key") == "lot-0001":
+            gate["open"] = False
+            raise RuntimeError("lost before commit")
+        return real_create(**kwargs)
+
+    monkeypatch.setattr(BrainLot.objects, "create", create_spy)
+    provider = _MultiLot()
+    with pytest.raises(RuntimeError, match="lost before commit"):
+        run_brain_analysis(analysis.id, analysis.attempt_token, provider=provider)
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.RUNNING
+    assert analysis.consumed_input_tokens == 0
+    assert analysis.provider_calls_used == 0
+    assert BrainLot.objects.filter(analysis=analysis).count() == 0
+    assert [call["lot_key"] for call in provider.calls] == ["lot-0001"]
+    _requeue_expired(monkeypatch, analysis)
+    follow = _MultiLot()
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=follow)
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.COMPLETED
+    assert [call["lot_key"] for call in follow.calls] == ["lot-0001", "lot-0002", SYNTHESIS_KEY]
+    assert BrainLot.objects.filter(analysis=analysis, stable_key="lot-0001").exists()

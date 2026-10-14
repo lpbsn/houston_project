@@ -110,14 +110,18 @@ def _knowledge_snapshot(version: BrainKnowledgeVersion) -> dict:
     }
 
 
+def canonical_json(value: object) -> str:
+    """JSON shared by the hash, the local estimate, and the provider user message."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
 def digest(value: object) -> str:
-    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
 def estimate_tokens(value: object) -> int:
     """Local size estimate used to place sections. It is not a provider tokenizer."""
-    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    raw = canonical_json(value).encode("utf-8")
     return max(1, (len(raw) + 3) // 4)
 
 
@@ -127,6 +131,11 @@ def provider_fixed_input_tokens() -> int:
     from houston.brain.openai_provider import system_prompt
 
     return estimate_tokens(system_prompt()) + estimate_tokens(openai_strict_response_format())
+
+
+def billed_input_tokens(payload_tokens: int) -> int:
+    """One call on the analysis total: the user envelope plus the prompt and schema."""
+    return payload_tokens + provider_fixed_input_tokens()
 
 
 def useful_input_tokens(per_call_input_tokens: int) -> int:

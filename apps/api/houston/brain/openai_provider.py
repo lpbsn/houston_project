@@ -1,12 +1,14 @@
 """OpenAI adapter for brain_analysis_v1.
 
-The analysis worker does not select this adapter. A client reporting is not sent.
+The analysis worker selects this adapter when the frozen provider is openai.
+A client reporting is not sent. The API key is not part of the call payload.
 """
 
 from __future__ import annotations
 
 import json
 
+from houston.brain.configuration import canonical_json
 from houston.brain.contract import SCHEMA_VERSION, openai_strict_response_format
 from houston.brain.errors import BrainWorkError
 from houston.brain.provider import BrainProviderUnavailable, ProviderCallResult
@@ -35,10 +37,18 @@ class OpenAIBrainProvider:
 
     provider = "openai"
 
-    def __init__(self, *, api_key: str, model: str, timeout_seconds: int):
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        timeout_seconds: int,
+        max_output_tokens: int,
+    ):
         self.api_key = api_key
         self.model = model
         self.timeout_seconds = timeout_seconds
+        self.max_output_tokens = max_output_tokens
         self._client = None
 
     def complete(
@@ -65,9 +75,10 @@ class OpenAIBrainProvider:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt()},
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                    {"role": "user", "content": canonical_json(payload)},
                 ],
                 response_format=openai_strict_response_format(),
+                max_completion_tokens=self.max_output_tokens,
                 timeout=timeout,
             )
         except (APITimeoutError, APIConnectionError) as exc:

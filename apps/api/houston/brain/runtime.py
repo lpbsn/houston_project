@@ -19,6 +19,7 @@ from houston.ai.models import AIUsageLog
 from houston.brain.capture import capture_dossier
 from houston.brain.collection import REQUIRED_SEARCHES
 from houston.brain.configuration import (
+    billed_input_tokens,
     digest,
     estimate_tokens,
     follow_up_ceilings,
@@ -56,6 +57,7 @@ from houston.brain.models import (
     BrainMessage,
     BrainSlot,
 )
+from houston.brain.openai_provider import OpenAIBrainProvider
 from houston.brain.provider import (
     BrainProvider,
     BrainProviderUnavailable,
@@ -504,10 +506,14 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         _fail(analysis_id, token, exc.code)
         return
     if provider is None:
-        if analysis.configuration.get("provider") != "fake":
+        provider = _provider_from_configuration(
+            analysis.configuration,
+            timeout_seconds=ceilings["provider_timeout_seconds"],
+            max_output_tokens=ceilings["per_call_output_tokens"],
+        )
+        if provider is None:
             _fail(analysis_id, token, "provider_not_allowed")
             return
-        provider = FakeBrainProvider()
     if not _capture_if_open(analysis_id, token):
         return
     analysis = _running(analysis_id, token)
@@ -575,8 +581,12 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         tail_calls = 1
     envelopes_fit = all(lot.reserved_input_tokens <= useful for lot in planned)
     tails_fit = synthesis_tokens <= useful and correction_tokens <= useful
-    reserved = sum(lot.reserved_input_tokens for lot in planned) + synthesis_tokens
-    reserved += correction_tokens
+    # Each call bills its user envelope plus the prompt and schema sent with it.
+    components = [lot.reserved_input_tokens for lot in planned]
+    components.append(correction_tokens)
+    if len(planned) > 1:
+        components.append(synthesis_tokens)
+    reserved = sum(billed_input_tokens(tokens) for tokens in components)
     calls = len(planned) + tail_calls
     if (
         not envelopes_fit
@@ -608,6 +618,10 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             same_input = existing.input_hash == lot.input_hash
             same_configuration = existing.configuration_hash == config_hash
             if same_input and same_configuration:
+                if len(planned) > 1 and _stored_reading_rejected(
+                    analysis_id, token, existing.output, lot, items
+                ):
+                    return
                 continue
             _fail(analysis_id, token, "configuration_unusable")
             return
@@ -633,12 +647,11 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             ceilings=ceilings,
             configuration=analysis.configuration,
             sent_tokens=lot.reserved_input_tokens,
+            # One reading lot can fail and still be stored: settlement rechecks it
+            # and may correct it. Several lots are stored only when the contract passes.
+            reading_items=items if len(planned) > 1 else None,
         )
         if outcome not in {"written", "reused"}:
-            return
-        if len(planned) > 1 and not _lot_output_accepted(
-            analysis_id, token, result.output, lot, items
-        ):
             return
     validated_keys = set(
         BrainLot.objects.filter(
@@ -662,6 +675,38 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
         started=started,
         synthesis_tokens=synthesis_tokens,
         correction_tokens=correction_tokens,
+    )
+
+
+def _provider_from_configuration(
+    configuration: object,
+    *,
+    timeout_seconds: int,
+    max_output_tokens: int,
+) -> BrainProvider | None:
+    """Adapter for the frozen provider. A missing key or unknown name selects nothing.
+
+    The API key is read from process settings at call time. It is not copied onto the
+    analysis and it is not placed in the provider payload.
+    """
+    if not isinstance(configuration, dict):
+        return None
+    name = str(configuration.get("provider") or "").strip().lower()
+    if name == "fake":
+        return FakeBrainProvider()
+    if name != "openai":
+        return None
+    from django.conf import settings
+
+    api_key = str(settings.OPENAI_API_KEY or "").strip()
+    model = str(configuration.get("model") or "").strip()
+    if not api_key or not model:
+        return None
+    return OpenAIBrainProvider(
+        api_key=api_key,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        max_output_tokens=max_output_tokens,
     )
 
 
@@ -692,10 +737,15 @@ def _accept_call(
     ceilings: dict[str, int],
     configuration: dict,
     sent_tokens: int = 0,
+    reading_items=None,
 ) -> str:
     acceptable = _output_acceptable(result, ceilings["per_call_output_tokens"])
-    reserved = max(lot.reserved_input_tokens, sent_tokens)
-    charged = result.input_tokens if result.input_tokens is not None else reserved
+    payload_tokens = max(lot.reserved_input_tokens, sent_tokens)
+    charged = (
+        result.input_tokens
+        if result.input_tokens is not None
+        else billed_input_tokens(payload_tokens)
+    )
     now = timezone.now()
     with transaction.atomic():
         row = (
@@ -728,12 +778,27 @@ def _accept_call(
             if not same:
                 _fail_locked(row, "configuration_unusable")
                 return "stopped"
+            if reading_items is not None:
+                stored_failure = _reading_refusal(existing.output, lot, reading_items)
+                if stored_failure is not None:
+                    _fail_locked(row, stored_failure)
+                    return "stopped"
             return "reused"
+        # A multi-lot reading output is judged before the lot row exists. A refusal
+        # is charged here and leaves no validated lot for a later attempt to reuse.
+        contract_failure = None
+        if reading_items is not None and acceptable:
+            contract_failure = _reading_refusal(result.output, lot, reading_items)
         row.provider_calls_used = calls
         row.consumed_input_tokens = consumed
         row.lease_expires_at = now + timedelta(seconds=ceilings["lease_seconds"])
-        if not acceptable or over_budget:
-            code = "provider_output_rejected" if not acceptable else "budget_exceeded"
+        if not acceptable or over_budget or contract_failure is not None:
+            if not acceptable:
+                code = "provider_output_rejected"
+            elif over_budget:
+                code = "budget_exceeded"
+            else:
+                code = contract_failure or "response_invalid"
             row.status = BrainAnalysis.Status.FAILED
             row.failure_code = code
             row.lease_expires_at = None
@@ -784,14 +849,21 @@ def _accept_call(
         return "written"
 
 
-def _lot_output_accepted(analysis_id, token, output, lot, items) -> bool:
-    """A reading lot covers only its own piece ids. Failure does not open a correction."""
+def _reading_refusal(output, lot, items) -> str | None:
+    """Contract code for one reading output, or None when that output is acceptable."""
     assessment = assess(output, pieces=_reading_piece_ids(lot), items=items)
     if assessment.ok:
-        return True
-    code = assessment.issues[0].code if assessment.issues else "response_invalid"
+        return None
+    return assessment.issues[0].code if assessment.issues else "response_invalid"
+
+
+def _stored_reading_rejected(analysis_id, token, output, lot, items) -> bool:
+    """A reused multi-lot reading output is not trusted without its contract."""
+    code = _reading_refusal(output, lot, items)
+    if code is None:
+        return False
     _fail(analysis_id, token, code)
-    return False
+    return True
 
 
 def _reading_piece_ids(lot) -> list[str]:
@@ -1152,7 +1224,10 @@ def _within_call_budget(analysis: BrainAnalysis, reserved: int, ceilings: dict[s
         return False
     if analysis.provider_calls_used + 1 > ceilings["max_calls"]:
         return False
-    return analysis.consumed_input_tokens + reserved <= ceilings["total_input_tokens"]
+    return (
+        analysis.consumed_input_tokens + billed_input_tokens(reserved)
+        <= ceilings["total_input_tokens"]
+    )
 
 
 def _searches_executed(runs) -> bool:

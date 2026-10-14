@@ -65,6 +65,9 @@ def test_a_forgotten_subdivided_piece_fails_without_a_correction(monkeypatch, se
     assert all(call["lot_key"] != "synthesis" for call in provider.calls)
     assert all(call["lot_key"] != "correction" for call in provider.calls)
     assert len(provider.calls) == 1
+    assert analysis.provider_calls_used == 1
+    assert analysis.consumed_input_tokens == 1
+    assert BrainLot.objects.filter(analysis=analysis).count() == 0
 
 
 def test_a_citation_outside_the_dossier_is_corrected_once(monkeypatch):
