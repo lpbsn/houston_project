@@ -19,18 +19,17 @@ from houston.ai.models import AIUsageLog
 from houston.brain.capture import capture_dossier
 from houston.brain.collection import REQUIRED_SEARCHES
 from houston.brain.configuration import (
-    billed_input_tokens,
+    call_input_tokens,
     digest,
-    estimate_tokens,
     follow_up_ceilings,
+    frozen_counter,
     frozen_extraction,
     frozen_knowledge,
+    json_token_count,
     runtime_ceilings,
-    useful_input_tokens,
 )
 from houston.brain.contract import (
     CORRECTION_KEY,
-    ENGINE_RULES,
     MAX_SUBJECTS,
     SCHEMA_VERSION,
     SYNTHESIS_KEY,
@@ -510,11 +509,8 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
     if not _searches_executed(runs):
         _fail(analysis_id, token, "insufficient_coverage")
         return
-    useful = useful_input_tokens(ceilings["per_call_input_tokens"])
-    if useful < estimate_tokens(list(ENGINE_RULES)):
-        _fail(analysis_id, token, "budget_exceeded")
-        return
     searches = sorted({run.code for run in runs})
+    provider_name, model_name = frozen_counter(analysis.configuration)
     try:
         planned = plan_lots(
             sections_from_payload(extraction.payload),
@@ -524,13 +520,19 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             knowledge=knowledge,
             searches=searches,
             items=items,
+            provider=provider_name,
+            model=model_name,
         )
     except BrainWorkError as exc:
         _fail(analysis_id, token, exc.code)
         return
     pieces = piece_ids_of(planned)
     if any(
-        estimate_tokens(minimal_call_output(_reading_piece_ids(lot)))
+        json_token_count(
+            minimal_call_output(_reading_piece_ids(lot)),
+            provider=provider_name,
+            model=model_name,
+        )
         > ceilings["per_call_output_tokens"]
         for lot in planned
     ):
@@ -544,11 +546,15 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             knowledge=knowledge,
             per_call_output_tokens=ceilings["per_call_output_tokens"],
             lot_count=len(planned),
+            provider=provider_name,
+            model=model_name,
         )
         correction_tokens = correction_input_majorant(
             key_slots=MAX_SUBJECTS,
             knowledge=knowledge,
             per_call_output_tokens=ceilings["per_call_output_tokens"],
+            provider=provider_name,
+            model=model_name,
         )
         tail_calls = 2
     else:
@@ -559,19 +565,20 @@ def _execute(analysis_id, token, *, provider: BrainProvider | None, started: flo
             items,
             key_slots=MAX_SUBJECTS,
             knowledge=knowledge,
+            per_call_output_tokens=ceilings["per_call_output_tokens"],
+            provider=provider_name,
+            model=model_name,
         )
         tail_calls = 1
-    envelopes_fit = all(lot.reserved_input_tokens <= useful for lot in planned)
-    tails_fit = synthesis_tokens <= useful and correction_tokens <= useful
-    # Each call bills its user envelope plus the prompt and schema sent with it.
-    components = [lot.reserved_input_tokens for lot in planned]
-    components.append(correction_tokens)
+    per_call = ceilings["per_call_input_tokens"]
+    readings_fit = all(lot.reserved_input_tokens <= per_call for lot in planned)
+    tails_fit = synthesis_tokens <= per_call and correction_tokens <= per_call
+    reserved = sum(lot.reserved_input_tokens for lot in planned) + correction_tokens
     if len(planned) > 1:
-        components.append(synthesis_tokens)
-    reserved = sum(billed_input_tokens(tokens) for tokens in components)
+        reserved += synthesis_tokens
     calls = len(planned) + tail_calls
     if (
-        not envelopes_fit
+        not readings_fit
         or not tails_fit
         or reserved > ceilings["total_input_tokens"]
         or calls > ceilings["max_calls"]
@@ -722,11 +729,13 @@ def _accept_call(
     reading_items=None,
 ) -> str:
     acceptable = _output_acceptable(result, ceilings["per_call_output_tokens"])
-    payload_tokens = max(lot.reserved_input_tokens, sent_tokens)
-    charged = (
-        result.input_tokens
-        if result.input_tokens is not None
-        else billed_input_tokens(payload_tokens)
+    estimated = sent_tokens or lot.reserved_input_tokens
+    charged = result.input_tokens if result.input_tokens is not None else estimated
+    gap = _input_gap_context(
+        estimated=estimated,
+        provider_tokens=result.input_tokens,
+        per_call=ceilings["per_call_input_tokens"],
+        lot_key=lot.stable_key,
     )
     now = timezone.now()
     with transaction.atomic():
@@ -801,6 +810,7 @@ def _accept_call(
                 result=result,
                 error_code=code,
                 status=AIUsageLog.Status.FAILED,
+                error_context=gap,
             )
             return "failed"
         BrainLot.objects.create(
@@ -827,6 +837,7 @@ def _accept_call(
             result=result,
             error_code="",
             status=AIUsageLog.Status.SUCCEEDED,
+            error_context=gap,
         )
         return "written"
 
@@ -1108,13 +1119,12 @@ def _contract_call(
             return existing.output
         _fail(analysis_id, token, "configuration_unusable")
         return None
-    actual = estimate_tokens(payload)
-    reserved = actual if reserved_tokens is None else reserved_tokens
-    useful = useful_input_tokens(ceilings["per_call_input_tokens"])
+    provider_name, model_name = frozen_counter(configuration)
+    actual = call_input_tokens(payload, provider=provider_name, model=model_name)
     if (
-        actual > useful
+        actual > ceilings["per_call_input_tokens"]
         or (reserved_tokens is not None and actual > reserved_tokens)
-        or not _within_call_budget(analysis, reserved, ceilings)
+        or not _within_call_budget(analysis, actual, ceilings)
     ):
         _fail(analysis_id, token, "budget_exceeded")
         return None
@@ -1132,7 +1142,7 @@ def _contract_call(
         stable_key=lot_key,
         payload=payload,
         input_hash=envelope_hash,
-        reserved_input_tokens=reserved,
+        reserved_input_tokens=actual,
     )
     outcome = _accept_call(
         analysis_id=analysis_id,
@@ -1142,7 +1152,7 @@ def _contract_call(
         result=result,
         ceilings=ceilings,
         configuration=configuration,
-        sent_tokens=reserved,
+        sent_tokens=actual,
     )
     if outcome == "reused":
         stored = _validated_lot(analysis_id, lot_key)
@@ -1202,14 +1212,31 @@ def _finish(analysis_id, token, parsed, items) -> None:
 
 
 def _within_call_budget(analysis: BrainAnalysis, reserved: int, ceilings: dict[str, int]) -> bool:
-    if reserved > useful_input_tokens(ceilings["per_call_input_tokens"]):
+    if reserved > ceilings["per_call_input_tokens"]:
         return False
     if analysis.provider_calls_used + 1 > ceilings["max_calls"]:
         return False
-    return (
-        analysis.consumed_input_tokens + billed_input_tokens(reserved)
-        <= ceilings["total_input_tokens"]
-    )
+    return analysis.consumed_input_tokens + reserved <= ceilings["total_input_tokens"]
+
+
+def _input_gap_context(
+    *,
+    estimated: int,
+    provider_tokens: int | None,
+    per_call: int,
+    lot_key: str,
+) -> dict:
+    """Provider overrun of the exact reservation or a product ceiling. No dossier text."""
+    if provider_tokens is None:
+        return {}
+    if provider_tokens > estimated or provider_tokens > per_call:
+        return {
+            "estimated_input_tokens": estimated,
+            "provider_input_tokens": provider_tokens,
+            "per_call_input_tokens": per_call,
+            "lot_key": lot_key,
+        }
+    return {}
 
 
 def _searches_executed(runs) -> bool:
@@ -1481,6 +1508,7 @@ def _usage(
     result: ProviderCallResult,
     error_code: str,
     status: str,
+    error_context: dict | None = None,
 ) -> None:
     input_tokens = result.input_tokens
     output_tokens = result.output_tokens
@@ -1498,7 +1526,7 @@ def _usage(
         output_tokens=output_tokens,
         total_tokens=total,
         error_code=error_code,
-        error_context={},
+        error_context=error_context or {},
         correlation_id=analysis.id,
         establishment_id=analysis.establishment_id,
     )

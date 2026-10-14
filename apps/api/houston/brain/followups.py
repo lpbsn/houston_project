@@ -19,9 +19,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.brain.configuration import (
+    call_input_tokens,
     digest,
-    estimate_tokens,
     follow_up_ceilings,
+    frozen_counter,
     frozen_knowledge,
 )
 from houston.brain.errors import BrainWorkError
@@ -40,6 +41,7 @@ from houston.brain.provider import (
     ProviderCallResult,
 )
 from houston.brain.runtime import (
+    _input_gap_context,
     _output_acceptable,
     _token,
     claim_message,
@@ -226,6 +228,14 @@ def _execute(message_id, token, *, provider: BrainProvider | None, started: floa
     try:
         payload = _context_payload(message, analysis, by_id, required_ids, ceilings)
     except BrainWorkError as exc:
+        if exc.code == "configuration_unusable":
+            _fail(
+                message_id,
+                token,
+                exc.code,
+                result=configuration_proposal(analysis),
+            )
+            return
         if exc.code != "budget_exceeded":
             _fail(message_id, token, exc.code)
             return
@@ -269,7 +279,9 @@ def _execute(message_id, token, *, provider: BrainProvider | None, started: floa
             return
         output = existing.output
     else:
-        if not touch_message(message_id, token, reserved_input_tokens=estimate_tokens(payload)):
+        provider_name, model_name = frozen_counter(analysis.configuration)
+        reserved_exact = call_input_tokens(payload, provider=provider_name, model=model_name)
+        if not touch_message(message_id, token, reserved_input_tokens=reserved_exact):
             return
         result = provider.complete(
             analysis_id=str(analysis.id),
@@ -382,6 +394,7 @@ def _context_payload(message, analysis, by_id, required_ids, ceilings) -> dict:
         "declarations": declarations,
     }
     budget = min(ceilings["per_call_input_tokens"], ceilings["follow_up_total_input_tokens"])
+    provider_name, model_name = frozen_counter(analysis.configuration)
     views = [_message_view(earlier) for earlier in prior]
     kept = list(views)
     omitted: list[dict] = []
@@ -389,7 +402,7 @@ def _context_payload(message, analysis, by_id, required_ids, ceilings) -> dict:
     while True:
         summary = _summary(omitted)
         payload = _envelope(message, required, required_ids, kept, summary)
-        if estimate_tokens(payload) <= budget:
+        if call_input_tokens(payload, provider=provider_name, model=model_name) <= budget:
             return payload
         if not kept:
             raise BrainWorkError(
@@ -486,8 +499,15 @@ def _accept_provider_call(
     dossier_ids: set[str],
 ) -> str:
     acceptable = _output_acceptable(result, ceilings["per_call_output_tokens"])
-    reserved = estimate_tokens(payload)
+    provider_name, model_name = frozen_counter(configuration)
+    reserved = call_input_tokens(payload, provider=provider_name, model=model_name)
     charged = result.input_tokens if result.input_tokens is not None else reserved
+    gap = _input_gap_context(
+        estimated=reserved,
+        provider_tokens=result.input_tokens,
+        per_call=ceilings["per_call_input_tokens"],
+        lot_key=lot_key,
+    )
     parsed = _validated_output(result.output, dossier_ids) if acceptable else None
     now = timezone.now()
     with transaction.atomic():
@@ -553,6 +573,7 @@ def _accept_provider_call(
                 result=result,
                 error_code=code,
                 status=AIUsageLog.Status.FAILED,
+                error_context=gap,
             )
             return "failed"
         existing = BrainLot.objects.filter(
@@ -604,6 +625,7 @@ def _accept_provider_call(
             result=result,
             error_code="",
             status=AIUsageLog.Status.SUCCEEDED,
+            error_context=gap,
         )
         return "written"
 
@@ -796,7 +818,15 @@ def _cancel_if_requested(message_id, token) -> None:
         )
 
 
-def _usage(message, *, configuration, result, error_code: str, status: str) -> None:
+def _usage(
+    message,
+    *,
+    configuration,
+    result,
+    error_code: str,
+    status: str,
+    error_context: dict | None = None,
+) -> None:
     input_tokens = result.input_tokens
     output_tokens = result.output_tokens
     total = None
@@ -813,7 +843,7 @@ def _usage(message, *, configuration, result, error_code: str, status: str) -> N
         output_tokens=output_tokens,
         total_tokens=total,
         error_code=error_code,
-        error_context={},
+        error_context=error_context or {},
         correlation_id=message.id,
         establishment_id=message.analysis.establishment_id,
     )

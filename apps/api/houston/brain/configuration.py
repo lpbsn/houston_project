@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import threading
+from pathlib import Path
 
 from django.conf import settings
 
@@ -111,7 +114,7 @@ def _knowledge_snapshot(version: BrainKnowledgeVersion) -> dict:
 
 
 def canonical_json(value: object) -> str:
-    """JSON shared by the hash, the local estimate, and the provider user message."""
+    """JSON shared by the hash, the local count, and the provider user message."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
@@ -119,28 +122,125 @@ def digest(value: object) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
-def estimate_tokens(value: object) -> int:
-    """Local size estimate used to place sections. It is not a provider tokenizer."""
-    raw = canonical_json(value).encode("utf-8")
-    return max(1, (len(raw) + 3) // 4)
+# Published o200k chat framing is a handful of tokens. The strict schema is already
+# counted as text. This margin covers the provider's unpublished schema injection.
+CALL_FRAMING_TOKENS = 1024
+_O200K_HASH = "446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d"
+_O200K_PATH = Path(__file__).resolve().parent / "tokenizers" / "o200k_base.tiktoken"
+_O200K_FALLBACK = re.compile(
+    r"^(?:gpt-5-mini(?:-\d{4}-\d{2}-\d{2})?|gpt-4o(?:-.+)?|gpt-4\.1(?:-.+)?)$"
+)
+_encoding_lock = threading.Lock()
+_o200k_encoding = None
+_prompt_tokens: dict[str, int] = {}
+_schema_tokens: dict[str, int] = {}
 
 
-def provider_fixed_input_tokens() -> int:
-    """Local estimate of the system prompt and strict schema the adapter sends."""
+def _encode_len(encoding, text: str) -> int:
+    return len(encoding.encode(text, disallowed_special=()))
+
+
+def _redirect_o200k_bpe(blobpath: str, expected_hash: str | None = None):
+    """Read the vendored o200k ranks. A remote encoding URL is not fetched."""
+    from tiktoken.load import load_tiktoken_bpe
+
+    if blobpath.endswith("/o200k_base.tiktoken") or blobpath.endswith("o200k_base.tiktoken"):
+        return load_tiktoken_bpe(str(_O200K_PATH), expected_hash=expected_hash or _O200K_HASH)
+    raise configuration_unusable()
+
+
+def _o200k():
+    """One o200k encoding per process, built from the vendored rank file."""
+    global _o200k_encoding
+    if _o200k_encoding is not None:
+        return _o200k_encoding
+    with _encoding_lock:
+        if _o200k_encoding is not None:
+            return _o200k_encoding
+        import tiktoken
+        from tiktoken_ext import openai_public
+
+        original = openai_public.load_tiktoken_bpe
+        openai_public.load_tiktoken_bpe = _redirect_o200k_bpe
+        try:
+            blob = openai_public.o200k_base()
+            encoding = tiktoken.Encoding(**blob)
+        except (OSError, ValueError) as exc:
+            raise configuration_unusable() from exc
+        finally:
+            openai_public.load_tiktoken_bpe = original
+        _o200k_encoding = encoding
+        return _o200k_encoding
+
+
+def encoding_for_frozen(*, provider: str, model: str):
+    """Tokenizer for one frozen provider and model.
+
+    Only the vendored o200k ranks are loaded. Other encodings are not fetched.
+    """
+    provider_name = (provider or "").strip().lower()
+    model_name = (model or "").strip()
+    if provider_name in {"", "fake"} or model_name == "fake":
+        return _o200k()
+    if provider_name != "openai":
+        raise configuration_unusable()
+    try:
+        import tiktoken
+
+        name = tiktoken.encoding_name_for_model(model_name)
+    except KeyError:
+        name = ""
+    if name == "o200k_base" or (not name and _O200K_FALLBACK.fullmatch(model_name)):
+        return _o200k()
+    raise configuration_unusable()
+
+
+def _fixed_call_tokens(encoding) -> tuple[int, int]:
+    """Prompt and strict schema, encoded once per encoding name."""
+    key = encoding.name
+    prompt = _prompt_tokens.get(key)
+    schema = _schema_tokens.get(key)
+    if prompt is not None and schema is not None:
+        return prompt, schema
     from houston.brain.contract import openai_strict_response_format
     from houston.brain.openai_provider import system_prompt
 
-    return estimate_tokens(system_prompt()) + estimate_tokens(openai_strict_response_format())
+    with _encoding_lock:
+        prompt = _prompt_tokens.get(key)
+        schema = _schema_tokens.get(key)
+        if prompt is None or schema is None:
+            prompt = _encode_len(encoding, system_prompt())
+            schema = _encode_len(encoding, canonical_json(openai_strict_response_format()))
+            _prompt_tokens[key] = prompt
+            _schema_tokens[key] = schema
+        return prompt, schema
 
 
-def billed_input_tokens(payload_tokens: int) -> int:
-    """One call on the analysis total: the user envelope plus the prompt and schema."""
-    return payload_tokens + provider_fixed_input_tokens()
+def frozen_counter(configuration: object) -> tuple[str, str]:
+    """Provider and model copied on the analysis. Missing values count as the fake encoding."""
+    if not isinstance(configuration, dict):
+        return "fake", "fake"
+    return (
+        str(configuration.get("provider") or "fake"),
+        str(configuration.get("model") or "fake"),
+    )
 
 
-def useful_input_tokens(per_call_input_tokens: int) -> int:
-    """Payload room left in one call after the prompt and the strict schema."""
-    return per_call_input_tokens - provider_fixed_input_tokens()
+def json_token_count(value: object, *, provider: str = "fake", model: str = "fake") -> int:
+    """o200k (or the frozen model's encoding) of one canonical JSON value."""
+    encoding = encoding_for_frozen(provider=provider, model=model)
+    return _encode_len(encoding, canonical_json(value))
+
+
+def call_input_tokens(payload: object, *, provider: str = "fake", model: str = "fake") -> int:
+    """Exact local cost of one closed Chat Completions request.
+
+    Prompt, user JSON, and strict schema are encoded. The framing margin is constant.
+    """
+    encoding = encoding_for_frozen(provider=provider, model=model)
+    prompt_tokens, schema_tokens = _fixed_call_tokens(encoding)
+    user_tokens = _encode_len(encoding, canonical_json(payload))
+    return prompt_tokens + user_tokens + schema_tokens + CALL_FRAMING_TOKENS
 
 
 def configuration_unusable() -> BrainWorkError:

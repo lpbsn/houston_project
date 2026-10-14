@@ -326,12 +326,16 @@ def synthesis_input_majorant(
     knowledge,
     per_call_output_tokens: int,
     lot_count: int,
+    provider: str = "fake",
+    model: str = "fake",
 ) -> int:
-    """Shell plus one full output ceiling per reading lot."""
-    from houston.brain.configuration import estimate_tokens
+    """Exact call cost of the shell, plus one output ceiling per reading lot."""
+    from houston.brain.configuration import call_input_tokens
 
-    return estimate_tokens(
-        synthesis_shell(pieces, key_slots=key_slots, knowledge=knowledge)
+    return call_input_tokens(
+        synthesis_shell(pieces, key_slots=key_slots, knowledge=knowledge),
+        provider=provider,
+        model=model,
     ) + (lot_count * per_call_output_tokens)
 
 
@@ -348,12 +352,254 @@ def correction_shell(*, key_slots: int, knowledge) -> dict:
     }
 
 
-def correction_input_majorant(*, key_slots: int, knowledge, per_call_output_tokens: int) -> int:
-    """Shell plus one output ceiling for the rejected synthesis candidate."""
-    from houston.brain.configuration import estimate_tokens
+# A 4-byte code point. Repeated, o200k keeps one token per byte.
+_WIDE_KEY_CHAR = "\U00010000"
+_issue_cache: dict[tuple[int, str, str], tuple[list[dict], list[dict], list[str]]] = {}
 
+
+def _field_max(model, name: str) -> int:
+    for constraint in model.model_fields[name].metadata:
+        limit = getattr(constraint, "max_length", None)
+        if isinstance(limit, int):
+            return limit
+    raise RuntimeError(name)
+
+
+def _widest_subject_keys(count: int) -> list[str]:
+    """Distinct subject keys of the contract's maximum length."""
+    if count <= 0:
+        return []
+    width = _field_max(Subject, "key")
+    head = _WIDE_KEY_CHAR * (width - 2)
+    return [
+        head + chr(0x10000 + index) + chr(0x10100 + index)
+        for index in range(count)
+    ]
+
+
+def _citation() -> dict:
+    return {"item_id": "x", "locator": {}}
+
+
+def _minimal_subject(index: int) -> dict:
+    return {
+        "key": f"s{index}",
+        "statement": "x",
+        "evidence": [],
+        "interpretation": "x",
+        "contradictions": [],
+        "gaps": ["x"],
+        "orientation": "NO_ACTION",
+        "calculations": [],
+        "reported_facts": [],
+        "limits": [],
+    }
+
+
+def _doc_fits(doc: dict, ceiling: int, *, provider: str, model: str) -> bool:
+    from houston.brain.configuration import json_token_count
+
+    return json_token_count(doc, provider=provider, model=model) <= ceiling
+
+
+def _append_while_fits(
+    doc: dict,
+    target: list,
+    item,
+    ceiling: int,
+    *,
+    provider: str,
+    model: str,
+    limit: int,
+) -> None:
+    while len(target) < limit:
+        target.append(item() if callable(item) else item)
+        if not _doc_fits(doc, ceiling, provider=provider, model=model):
+            target.pop()
+            return
+
+
+def _packed_correction_candidate(ceiling: int, *, provider: str, model: str) -> dict | None:
+    """Largest valid candidate, filled from the checks that emit the most issues."""
+    doc = {
+        "schema_version": SCHEMA_VERSION,
+        "subjects": [_minimal_subject(0)],
+        "coverage": [],
+        "limits": [],
+        "proposals": {"suggestions": [], "mechanisms": []},
+    }
+    if not _doc_fits(doc, ceiling, provider=provider, model=model):
+        return None
+    mechanisms = doc["proposals"]["mechanisms"]
+    mechanism_limit = _field_max(Proposals, "mechanisms")
+    evidence_id_limit = _field_max(MechanismProposal, "evidence_item_ids")
+    while len(mechanisms) < mechanism_limit:
+        mechanisms.append(
+            {
+                "key": "m",
+                "formulation": "f",
+                "global_formulation": "",
+                "conditions": "",
+                "limits": "",
+                "uncertainty": "",
+                "evidence_item_ids": [],
+            }
+        )
+        if not _doc_fits(doc, ceiling, provider=provider, model=model):
+            mechanisms.pop()
+            break
+        _append_while_fits(
+            doc,
+            mechanisms[-1]["evidence_item_ids"],
+            "x",
+            ceiling,
+            provider=provider,
+            model=model,
+            limit=evidence_id_limit,
+        )
+    evidence_limit = _field_max(Subject, "evidence")
+    fact_limit = _field_max(Subject, "reported_facts")
+    calculation_limit = _field_max(Subject, "calculations")
+
+    def fill_subject(subject: dict) -> None:
+        _append_while_fits(
+            doc,
+            subject["evidence"],
+            _citation,
+            ceiling,
+            provider=provider,
+            model=model,
+            limit=evidence_limit,
+        )
+        _append_while_fits(
+            doc,
+            subject["reported_facts"],
+            lambda: {"citation": _citation(), "declared_as": "reported"},
+            ceiling,
+            provider=provider,
+            model=model,
+            limit=fact_limit,
+        )
+        _append_while_fits(
+            doc,
+            subject["calculations"],
+            lambda: {
+                "operation": "difference",
+                "operands": [_citation(), _citation()],
+                "published_value": "1",
+                "unit": None,
+            },
+            ceiling,
+            provider=provider,
+            model=model,
+            limit=calculation_limit,
+        )
+
+    fill_subject(doc["subjects"][0])
+    while len(doc["subjects"]) < MAX_SUBJECTS:
+        doc["subjects"].append(_minimal_subject(len(doc["subjects"])))
+        if not _doc_fits(doc, ceiling, provider=provider, model=model):
+            doc["subjects"].pop()
+            break
+        fill_subject(doc["subjects"][-1])
+    return doc
+
+
+def _validation_issues() -> list[dict]:
+    """At most 20 issues. An output that fails validation returns before reference checks."""
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "subjects": [
+            {
+                "key": "k",
+                "statement": "x",
+                "interpretation": "x",
+                "orientation": "NO_ACTION",
+                "evidence": [{"item_id": None, "locator": {"sheet": None}}],
+                "gaps": [],
+            }
+            for _ in range(20)
+        ],
+        "coverage": [],
+    }
+    try:
+        BrainAnalysisV1.model_validate(payload)
+    except ValidationError as exc:
+        return [
+            {"code": "response_invalid", "path": list(error["loc"])}
+            for error in exc.errors()[:20]
+        ]
+    return [{"code": "response_invalid", "path": []}]
+
+
+def _issue_dicts(issues) -> list[dict]:
+    return [{"code": issue.code, "path": list(issue.path)} for issue in issues]
+
+
+def _correction_shapes(
+    ceiling: int, *, provider: str, model: str
+) -> tuple[list[dict], list[dict], list[str]]:
+    """Validation issues, parsed-output issues, and that output's subject keys.
+
+    A validation failure returns at most 20 issues and no subject keys. A parsed
+    output can return one issue per rejected reference, with that output's keys.
+    """
+    cached = _issue_cache.get((ceiling, provider, model))
+    if cached is not None:
+        return cached
+    validation = _validation_issues()
+    packed: list[dict] = []
+    keys: list[str] = []
+    doc = _packed_correction_candidate(ceiling, provider=provider, model=model)
+    if doc is not None:
+        assessed = assess(
+            doc,
+            pieces=["s0000"],
+            items=[],
+            required_subject_keys=["missing"],
+        )
+        packed = _issue_dicts(assessed.issues)
+        keys = [str(subject["key"]) for subject in doc["subjects"]]
+    stored = (validation, packed, keys)
+    _issue_cache[(ceiling, provider, model)] = stored
+    return stored
+
+
+def _admissible_correction_issues(ceiling: int, *, provider: str, model: str) -> list[dict]:
+    """Issues one accepted output can add beside its own text."""
+    from houston.brain.configuration import json_token_count
+
+    validation, packed, _keys = _correction_shapes(ceiling, provider=provider, model=model)
+    if packed and json_token_count(packed, provider=provider, model=model) > json_token_count(
+        validation, provider=provider, model=model
+    ):
+        return packed
+    return validation
+
+
+def correction_input_majorant(
+    *,
+    key_slots: int,
+    knowledge,
+    per_call_output_tokens: int,
+    provider: str = "fake",
+    model: str = "fake",
+) -> int:
+    """One admissible correction: issue list, widest keys, and one output ceiling.
+
+    The empty candidate stays in the shell, so its few tokens are reserved twice.
+    """
+    from houston.brain.configuration import call_input_tokens
+
+    payload = correction_shell(key_slots=key_slots, knowledge=knowledge)
+    payload["issues"] = _admissible_correction_issues(
+        per_call_output_tokens,
+        provider=provider,
+        model=model,
+    )
+    payload["required_subject_keys"] = _widest_subject_keys(key_slots)
     return (
-        estimate_tokens(correction_shell(key_slots=key_slots, knowledge=knowledge))
+        call_input_tokens(payload, provider=provider, model=model)
         + per_call_output_tokens
     )
 
@@ -371,22 +617,39 @@ def synthesis_envelope(pieces, *, intermediates, required_subject_keys, knowledg
     }
 
 
-def analysis_correction_majorant(pieces, items, *, key_slots: int, knowledge) -> int:
-    """Shell of the correction one analysis call may send.
+def analysis_correction_majorant(
+    pieces,
+    items,
+    *,
+    key_slots: int,
+    knowledge,
+    per_call_output_tokens: int,
+    provider: str = "fake",
+    model: str = "fake",
+) -> int:
+    """Exact call cost of the correction one analysis call may send.
 
-    Pieces, public sources, key slots, and Knowledge are known before the call.
-    Issues are empty here; the reserved key slots dominate a short issue list.
+    Pieces, public sources, and Knowledge are known before the call. The issue
+    list and subject keys are those of the heaviest output that fits the ceiling.
     """
-    from houston.brain.configuration import estimate_tokens
+    from houston.brain.configuration import call_input_tokens
 
-    payload = correction_envelope(
-        (),
-        pieces,
-        items,
-        [f"k{index:04d}" for index in range(key_slots)],
+    validation, packed, keys = _correction_shapes(
+        per_call_output_tokens,
+        provider=provider,
+        model=model,
     )
-    payload["knowledge"] = knowledge
-    return estimate_tokens(payload)
+
+    def cost(issues: list[dict], subject_keys: list[str]) -> int:
+        payload = correction_envelope((), pieces, items, subject_keys)
+        payload["issues"] = issues
+        payload["knowledge"] = knowledge
+        return call_input_tokens(payload, provider=provider, model=model)
+
+    reserved = cost(validation, [])
+    if packed:
+        reserved = max(reserved, cost(packed, keys[:key_slots]))
+    return reserved
 
 
 def correction_envelope(
