@@ -1,5 +1,6 @@
 import { ChevronRight, Layers2 } from 'lucide-react'
 
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
@@ -44,9 +45,9 @@ export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalog
         ) : null}
         <div className="mt-auto flex items-center gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={cn(catalogBadgeClassName, 'bg-black font-medium text-white')}>
+            <BusinessUnitBadge colorIndex={item.pilot_business_unit.color_index}>
               {item.pilot_business_unit.specific_name}
-            </span>
+            </BusinessUnitBadge>
             <span
               className={cn(
                 catalogBadgeClassName,

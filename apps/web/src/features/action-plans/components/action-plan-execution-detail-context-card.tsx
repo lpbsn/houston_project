@@ -2,6 +2,7 @@ import { TerrainCard } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { cn } from '@/lib/utils'
 
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { flattenActionPlanAssignees } from '../lib/action-plan-display'
 import type { ActionPlanExecutionDetail } from '../types'
 import { ActionPlanExecutionDetailLabel } from './action-plan-execution-detail-label'
@@ -45,7 +46,7 @@ export function ActionPlanExecutionDetailContextCard({
           <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7D7B75]">
             Pôle pilote
           </p>
-          <p className="text-[13px] leading-relaxed text-[#1a1a1a]">{poleLabel}</p>
+          <BusinessUnitBadge colorIndex={execution.pilot_business_unit.color_index}>{poleLabel}</BusinessUnitBadge>
         </div>
       ) : null}
       {creatorName ? (

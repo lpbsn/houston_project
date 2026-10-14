@@ -59,6 +59,7 @@ Several instances of one catalog generic, dedicated or transversal, in the same 
 ### BusinessUnit instances
 
 - `specific_name` is the sole public display name for the instance.
+- `color_index` is the stable presentation slot of a pole. The creation service assigns it once, under the establishment lock; inactive poles keep a slot, and rename or reactivation does not change it. The column stays nullable with `nulls_distinct`: a row inserted outside that service has no slot and does not collide with another missing slot. Non-null slots are unique per establishment. Migration `0040` assigns existing poles in creation order. Public BU refs expose this slot; flattened Signal refs expose `affected_business_unit_color_index` / `responsible_business_unit_color_index`. The frontend owns the pastel/dark-text palette; status colors are independent. A missing slot renders neutrally. The nine initial colors extend to generated hues rather than wrapping; many poles can have perceptually similar shades, so labels remain visible.
 - `routing_key` is generated once (`build_business_unit_routing_key`), immutable on rename, unique per establishment, **never** in public API responses.
 - Dedicated and transversal: multiple active instances of the same catalog generic are allowed. Instances stay distinct by `specific_name` (normalized uniqueness per establishment, active and inactive), UUID, and `routing_key`.
 - Creation never implicitly reactivates an inactive instance; reactivation is an explicit service/endpoint.

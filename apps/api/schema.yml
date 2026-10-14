@@ -10748,6 +10748,10 @@ components:
         id:
           type: string
           format: uuid
+        color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         specific_name:
           type: string
         instance_description:
@@ -12136,6 +12140,10 @@ components:
         affected_business_unit_label:
           type: string
           nullable: true
+        affected_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         responsible_business_unit_id:
           type: string
           format: uuid
@@ -12145,6 +12153,10 @@ components:
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        responsible_business_unit_color_index:
+          type: integer
+          minimum: 0
           nullable: true
         activity_subject_id:
           type: string
@@ -14397,6 +14409,10 @@ components:
         id:
           type: string
           format: uuid
+        color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         specific_name:
           type: string
         instance_description:
@@ -16561,10 +16577,18 @@ components:
           type: string
         affected_business_unit_label:
           type: string
+        affected_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         responsible_business_unit_key:
           type: string
         responsible_business_unit_label:
           type: string
+        responsible_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         activity_subject_key:
           type: string
         activity_subject_label:
@@ -17913,6 +17937,10 @@ components:
         affected_business_unit_key:
           type: string
           nullable: true
+        affected_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
@@ -17922,6 +17950,10 @@ components:
           nullable: true
         responsible_business_unit_key:
           type: string
+          nullable: true
+        responsible_business_unit_color_index:
+          type: integer
+          minimum: 0
           nullable: true
         responsible_business_unit_label:
           type: string
@@ -18124,6 +18156,10 @@ components:
         affected_business_unit_key:
           type: string
           nullable: true
+        affected_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
@@ -18133,6 +18169,10 @@ components:
           nullable: true
         responsible_business_unit_key:
           type: string
+          nullable: true
+        responsible_business_unit_color_index:
+          type: integer
+          minimum: 0
           nullable: true
         responsible_business_unit_label:
           type: string
@@ -18282,12 +18322,20 @@ components:
           type: string
           format: uuid
           nullable: true
+        affected_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
         responsible_business_unit_id:
           type: string
           format: uuid
+          nullable: true
+        responsible_business_unit_color_index:
+          type: integer
+          minimum: 0
           nullable: true
         responsible_business_unit_label:
           type: string
@@ -18475,6 +18523,10 @@ components:
         affected_business_unit_key:
           type: string
           nullable: true
+        affected_business_unit_color_index:
+          type: integer
+          minimum: 0
+          nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
@@ -18484,6 +18536,10 @@ components:
           nullable: true
         responsible_business_unit_key:
           type: string
+          nullable: true
+        responsible_business_unit_color_index:
+          type: integer
+          minimum: 0
           nullable: true
         responsible_business_unit_label:
           type: string

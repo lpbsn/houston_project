@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from houston.establishments.business_unit_domain_service import _create_business_unit_core
 from houston.establishments.business_unit_identity import (
-    build_business_unit_routing_key,
     build_free_activity_subject_routing_key,
     normalize_business_unit_specific_name,
 )
@@ -65,21 +65,14 @@ def create_business_unit(
     ).first()
     if existing is not None:
         return existing
-    business_unit_id = uuid.uuid4()
-    return BusinessUnit.objects.create(
-        id=business_unit_id,
+    # Fixture rows are real poles for API contracts. Insert them through the
+    # domain owner so they receive the same color slot as product creation.
+    return _create_business_unit_core(
         establishment=establishment,
         catalog_business_unit=catalog,
         specific_name=label_value,
-        normalized_specific_name=normalized,
-        routing_key=build_business_unit_routing_key(
-            business_unit_id=business_unit_id,
-            catalog_key=catalog.key,
-            specific_name=label_value,
-        ),
         instance_description=description,
         source=BusinessUnit.Source.MANUAL,
-        active=True,
     )
 
 

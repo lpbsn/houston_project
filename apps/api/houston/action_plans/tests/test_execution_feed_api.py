@@ -1225,14 +1225,18 @@ def test_action_plan_execution_feed_pins_are_fully_hydrated_without_n_plus_one(
         assert payload["establishment_name"] == owner_membership.establishment.name
         assert payload["is_pinned"] is True
         source_signal = source_signals_by_execution_id[payload["id"]]
+        assert isinstance(taxonomy.restaurant.color_index, int)
+        assert isinstance(taxonomy.maintenance.color_index, int)
         assert payload["signal_summary"] == {
             "id": str(source_signal.id),
             "title": source_signal.title,
             "status": Signal.Status.OPEN,
             "affected_business_unit_id": str(taxonomy.restaurant.id),
+            "affected_business_unit_color_index": taxonomy.restaurant.color_index,
             "affected_business_unit_key": taxonomy.restaurant.normalized_specific_name,
             "affected_business_unit_label": taxonomy.restaurant.specific_name,
             "responsible_business_unit_id": str(taxonomy.maintenance.id),
+            "responsible_business_unit_color_index": taxonomy.maintenance.color_index,
             "responsible_business_unit_key": taxonomy.maintenance.normalized_specific_name,
             "responsible_business_unit_label": taxonomy.maintenance.specific_name,
             "activity_subject_id": str(taxonomy.lighting_subject.id),

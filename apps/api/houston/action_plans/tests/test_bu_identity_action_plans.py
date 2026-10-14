@@ -40,6 +40,7 @@ def _assert_lot5_business_unit_shape(payload: dict) -> None:
     assert set(payload.keys()) == {
         "id",
         "specific_name",
+        "color_index",
         "instance_description",
         "active",
         "generic",
@@ -550,15 +551,27 @@ def test_business_unit_tree_query_count_flat_across_business_units():
     assert three_tree is not None
     assert len(one_tree["business_units"]) == 1
     assert len(three_tree["business_units"]) == 3
+    assert isinstance(one_tree["business_units"][0]["color_index"], int)
     for unit in three_tree["business_units"]:
+        assert isinstance(unit["color_index"], int)
         _assert_lot5_business_unit_shape(
             {
                 "id": unit["id"],
                 "specific_name": unit["specific_name"],
+                "color_index": unit["color_index"],
                 "instance_description": unit["instance_description"],
                 "active": unit["active"],
                 "generic": unit["generic"],
             }
         )
         assert "routing_key" not in unit
+    stored_colors = {
+        row.id: row.color_index
+        for row in BusinessUnit.objects.filter(establishment=three_bu_establishment)
+    }
+    serialized_colors = {
+        unit["id"]: unit["color_index"] for unit in three_tree["business_units"]
+    }
+    assert len(set(serialized_colors.values())) == 3
+    assert serialized_colors == stored_colors
     assert len(one_bu_context.captured_queries) == len(three_bu_context.captured_queries)

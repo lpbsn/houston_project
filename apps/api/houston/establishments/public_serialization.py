@@ -112,6 +112,7 @@ def serialize_business_unit_public(
     payload: dict = {
         "id": business_unit.id,
         "specific_name": business_unit.specific_name,
+        "color_index": business_unit.color_index,
         "instance_description": business_unit.instance_description or "",
         "active": business_unit.active,
         "generic": {
