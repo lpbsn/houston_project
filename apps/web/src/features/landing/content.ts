@@ -48,8 +48,9 @@ export const legalContent = {
     {
       title: 'Données personnelles et cookies',
       paragraphs: [
-        'La landing publique MVP ne collecte aucune donnée personnelle.',
+        'Le formulaire de contact recueille votre nom et prénom, votre e-mail professionnel, votre établissement ou groupe, votre téléphone si vous le renseignez, et votre message afin de répondre à votre demande.',
         'Aucun outil d’analytics et aucun cookie non essentiel ne sont utilisés sur cette surface.',
+        'Le formulaire utilise Cloudflare Pages et Turnstile pour son fonctionnement et sa protection contre les abus, ainsi que Resend pour transmettre les demandes par e-mail. Il ne vous inscrit pas automatiquement à une newsletter.',
         'La politique de confidentialité de l’application Spore est publiée à l’adresse https://spore-os.com/politique-de-confidentialite/.',
       ],
     },
@@ -125,7 +126,7 @@ export const privacyPolicyContent = {
   backLabel: 'Retour à l’accueil',
   backHref: '/',
   intro:
-    'Cette politique décrit les traitements réellement mis en œuvre par Spore au 2 septembre 2026, d’après le code du produit et l’inventaire des données. Elle n’est pas un avis juridique.',
+    'Cette politique décrit les traitements réellement mis en œuvre par Spore au 14 octobre 2026, d’après le code du produit et l’inventaire des données. Elle n’est pas un avis juridique.',
   sections: [
     {
       title: 'Éditeur et contact',
@@ -148,6 +149,7 @@ export const privacyPolicyContent = {
         'Session : jetons d’accès et de rafraîchissement sous forme de condensats, agent utilisateur, adresse IP (métadonnées de session), établissement sélectionné. Sur le web, le rafraîchissement utilise un cookie HttpOnly et un jeton CSRF. Sur Native, le rafraîchissement est stocké dans le stockage sécurisé Capacitor. Le jeton d’accès reste en mémoire.',
         'Contenu opérationnel : texte d’observation, photos privées, commentaires et mentions, messages de chat, signaux, plans d’action, notifications in-app, éventuel historique de gamification.',
         'Appareil : microphone pour la transcription (audio traité le temps de la requête, puis supprimé ; seul le texte est conservé). Photos via le sélecteur de fichiers. Jeton de notification push (FCM) si vous activez les notifications Native.',
+        'Formulaire de contact de la landing : nom et prénom, e-mail professionnel, établissement ou groupe, téléphone s’il est renseigné, et message.',
         'Spore ne collecte pas de géolocalisation, carnet de contacts, biométrie, identifiant publicitaire, ni d’analytics produit via un SDK dédié.',
       ],
     },
@@ -157,6 +159,7 @@ export const privacyPolicyContent = {
         'Fournir le compte, authentifier, isoler les établissements et appliquer les droits d’accès.',
         'Transformer une observation en signal et suivre les plans d’action.',
         'Permettre le chat d’équipe, les commentaires et les notifications.',
+        'Répondre aux demandes du formulaire de contact de la landing. Ce formulaire n’inscrit pas automatiquement à une newsletter.',
         'Assurer la sécurité des sessions et la suppression de compte.',
       ],
     },
@@ -172,7 +175,8 @@ export const privacyPolicyContent = {
       title: 'Sous-traitants et hébergement',
       paragraphs: [
         'Hébergement applicatif : Railway Corporation (entité légale aux États-Unis). Région d’exécution actuellement indiquée : EU West — Amsterdam. Cette région technique ne remplace pas l’identité légale de l’hébergeur.',
-        'Base PostgreSQL et Redis sur cette infrastructure. E-mails d’invitation : Resend, lorsqu’une clé est configurée.',
+        'Base PostgreSQL et Redis sur cette infrastructure. E-mails d’invitation et transmission des demandes du formulaire de contact : Resend, lorsqu’une clé est configurée.',
+        'Le formulaire de contact de la landing utilise Cloudflare Pages et Cloudflare Turnstile pour son fonctionnement et sa protection contre les abus.',
         'Notifications Native : Firebase Cloud Messaging et, sur iOS, Apple Push Notification service. Le binaire Native lie Firebase Messaging (pas Firebase Analytics dans le projet actuel).',
         'Aucun Sentry, aucun outil marketing, aucun Web Push navigateur.',
       ],
@@ -183,6 +187,7 @@ export const privacyPolicyContent = {
         'Messages de chat : suppression automatique des lignes de message après 30 jours.',
         'Fichiers temporaires orphelins : 24 heures. Audio de transcription : fin de requête.',
         'Médias d’observation : retirés lorsque le dernier signal actif créé à partir de l’observation disparaît.',
+        'Demandes du formulaire de contact : non conservées par la landing, transmises par e-mail. La durée de conservation dans la boîte de réception et chez Resend n’est pas fixée dans ce dépôt.',
         'La conservation des journaux d’infrastructure Railway n’est pas spécifiée dans le dépôt.',
       ],
     },

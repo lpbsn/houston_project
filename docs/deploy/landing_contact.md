@@ -54,22 +54,18 @@ ils n'envoient aucun e-mail réel. Le succès signifie que Resend a accepté l'e
 pas une garantie de livraison en boîte de réception. Surveiller les échecs/bounces
 et le quota dans Resend après activation.
 
-## Mentions à ajuster avant publication
+## Mentions
 
-Le fichier de contenu partagé contient encore « La landing publique MVP ne collecte
-aucune donnée personnelle ». Le correctif minimal est fourni dans
-`docs/deploy/landing-contact-privacy.patch` :
+Les mentions sont déjà dans `apps/web/src/features/landing/content.ts` (mentions
+légales et politique de confidentialité). Elles décrivent les champs du formulaire
+(nom et prénom, e-mail professionnel, établissement ou groupe, téléphone s'il est
+renseigné, message), la finalité de réponse à la demande, l'absence d'inscription
+automatique à une newsletter, et les prestataires Cloudflare Pages, Turnstile et
+Resend.
 
-```bash
-# Depuis la racine du dépôt, à appliquer par Léo avant activation :
-git apply --check docs/deploy/landing-contact-privacy.patch
-git apply docs/deploy/landing-contact-privacy.patch
-```
-
-Ce patch ne contient aucune coordonnée privée. La réécriture complète du fichier
-partagé, qui contient aussi des coordonnées, avait été bloquée par le contrôle
-automatique d'approbation ; elle n'a pas été contournée. Relire la notice avec les
-modalités de conservation réelles des demandes et les contrats des prestataires.
+La landing ne conserve pas les demandes : elles sont transmises par e-mail. La durée
+de conservation dans la boîte de réception et chez Resend n'est pas fixée dans ce
+dépôt. La confirmer avec les contrats des prestataires avant activation.
 
 ## Garanties et limites techniques
 
