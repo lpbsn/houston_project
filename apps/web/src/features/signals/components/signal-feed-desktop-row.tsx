@@ -1,7 +1,7 @@
 import { MapPin, MoreHorizontal, Pin } from 'lucide-react'
 import { Popover } from 'radix-ui'
 
-import { HoustonBadge } from '@/components/ui/terrain'
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { formatSignalClassification } from '@/lib/signal-classification'
 import { terrain, terrainBrandAction, terrainFeedAvatar } from '@/lib/terrain-styles'
@@ -156,7 +156,7 @@ function PinnedDesktopRow({
           </span>
           {showUnclassified ? <SignalUnclassifiedBadge signal={item} variant="feed" /> : null}
           {!showUnclassified && poleLabel ? (
-            <HoustonBadge variant="gray">{poleLabel}</HoustonBadge>
+            <BusinessUnitBadge colorIndex={item.responsible_business_unit_color_index}>{poleLabel}</BusinessUnitBadge>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">

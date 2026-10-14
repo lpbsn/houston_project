@@ -1,5 +1,6 @@
 import { MapPin, Pin } from 'lucide-react'
 
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { FeedCardActionsButton } from '@/components/domain/feed-card-meta-row'
 import { HoustonBadge } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/lib/display-names'
@@ -40,6 +41,8 @@ export type SignalFeedCardDisplay = Pick<
   | 'affected_business_unit_id'
   | 'affected_business_unit_key'
   | 'affected_business_unit_label'
+  | 'responsible_business_unit_color_index'
+  | 'affected_business_unit_color_index'
   | 'responsible_business_unit_id'
   | 'responsible_business_unit_key'
   | 'responsible_business_unit_label'
@@ -138,7 +141,11 @@ function FeedSignalCard({
           <SignalStatusBadge status={item.status} variant="feed" />
           {showUnclassified ? <SignalUnclassifiedBadge signal={item} variant="feed" /> : null}
           {!showUnclassified && classificationBadgeLabel ? (
-            <HoustonBadge variant="gray">{classificationBadgeLabel}</HoustonBadge>
+            viewMode === 'general' ? (
+              <BusinessUnitBadge colorIndex={item.responsible_business_unit_color_index}>{classificationBadgeLabel}</BusinessUnitBadge>
+            ) : (
+              <HoustonBadge variant="gray">{classificationBadgeLabel}</HoustonBadge>
+            )
           ) : null}
           {validationRequested ? (
             <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[10px] font-semibold text-[#355CA8]">
@@ -244,7 +251,7 @@ function PinnedSignalCard({
           </span>
           {showUnclassified ? <SignalUnclassifiedBadge signal={item} variant="feed" /> : null}
           {!showUnclassified && poleLabel ? (
-            <HoustonBadge variant="gray">{poleLabel}</HoustonBadge>
+            <BusinessUnitBadge colorIndex={item.responsible_business_unit_color_index}>{poleLabel}</BusinessUnitBadge>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">

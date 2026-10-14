@@ -89,7 +89,7 @@ function buildFeedItem(
 }
 
 describe('ActionPlanExecutionFeedDesktopRow', () => {
-  it('shows singular and plural other-poles badges after the pilot pole', () => {
+  it('shows each involved pole by name after the pilot pole', () => {
     const { rerender } = render(
       <ActionPlanExecutionFeedDesktopRow
         item={buildFeedItem({
@@ -98,7 +98,7 @@ describe('ActionPlanExecutionFeedDesktopRow', () => {
         onSelect={vi.fn()}
       />,
     )
-    expect(screen.getByText('+1 pôle')).toBeTruthy()
+    expect(screen.getByText('Hôtel')).toBeTruthy()
 
     rerender(
       <ActionPlanExecutionFeedDesktopRow
@@ -111,7 +111,8 @@ describe('ActionPlanExecutionFeedDesktopRow', () => {
         onSelect={vi.fn()}
       />,
     )
-    expect(screen.getByText('+2 pôles')).toBeTruthy()
+    expect(screen.getByText('Hôtel')).toBeTruthy()
+    expect(screen.getByText('Spa')).toBeTruthy()
   })
 
   it('renders Validé meta, stars for active_review including 0/5, and omits Créé le', () => {

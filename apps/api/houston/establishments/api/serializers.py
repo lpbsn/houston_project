@@ -188,6 +188,7 @@ class ActivitySubjectTreeItemSerializer(serializers.Serializer):
 
 class BusinessUnitTreeItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
+    color_index = serializers.IntegerField(min_value=0, allow_null=True, required=False)
     specific_name = serializers.CharField()
     instance_description = serializers.CharField()
     active = serializers.BooleanField()

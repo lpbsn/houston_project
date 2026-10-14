@@ -104,9 +104,15 @@ class SignalFeedItemSerializer(serializers.Serializer):
     is_pinned = serializers.BooleanField()
     affected_business_unit_id = serializers.UUIDField(allow_null=True, required=False)
     affected_business_unit_key = serializers.CharField(allow_null=True, required=False)
+    affected_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     affected_business_unit_label = serializers.CharField(allow_null=True, required=False)
     responsible_business_unit_id = serializers.UUIDField(allow_null=True, required=False)
     responsible_business_unit_key = serializers.CharField(allow_null=True, required=False)
+    responsible_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     responsible_business_unit_label = serializers.CharField(allow_null=True, required=False)
     activity_subject_id = serializers.UUIDField(allow_null=True, required=False)
     activity_subject_normalized_name = serializers.CharField(allow_null=True, required=False)
@@ -333,6 +339,10 @@ def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = 
         "routing_status": signal.routing_status,
         "is_pinned": signal.is_pinned,
         "affected_business_unit_id": signal.affected_business_unit_id,
+        "affected_business_unit_color_index": (
+            signal.affected_business_unit.color_index
+            if signal.affected_business_unit_id else None
+        ),
         "affected_business_unit_key": (
             business_unit_public_key(business_unit=signal.affected_business_unit)
             if signal.affected_business_unit_id
@@ -344,6 +354,10 @@ def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = 
             else None
         ),
         "responsible_business_unit_id": signal.responsible_business_unit_id,
+        "responsible_business_unit_color_index": (
+            signal.responsible_business_unit.color_index
+            if signal.responsible_business_unit_id else None
+        ),
         "responsible_business_unit_key": (
             business_unit_public_key(business_unit=signal.responsible_business_unit)
             if signal.responsible_business_unit_id
@@ -523,8 +537,14 @@ class SignalHistoryItemSerializer(serializers.Serializer):
     location_text = serializers.CharField(allow_blank=True)
     reporter_display_name = serializers.CharField(allow_null=True, allow_blank=True)
     affected_business_unit_id = serializers.UUIDField(allow_null=True)
+    affected_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     affected_business_unit_label = serializers.CharField(allow_null=True, allow_blank=True)
     responsible_business_unit_id = serializers.UUIDField(allow_null=True)
+    responsible_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     responsible_business_unit_label = serializers.CharField(allow_null=True, allow_blank=True)
     activity_subject_label = serializers.CharField(allow_null=True, allow_blank=True)
     activity_subject_normalized_name = serializers.CharField(allow_null=True, allow_blank=True)
@@ -559,10 +579,18 @@ def serialize_signal_history_item(signal) -> dict:
         "location_text": signal.location_text,
         "reporter_display_name": reporter_display_name_for_signal(signal),
         "affected_business_unit_id": signal.affected_business_unit_id,
+        "affected_business_unit_color_index": (
+            signal.affected_business_unit.color_index
+            if signal.affected_business_unit_id else None
+        ),
         "affected_business_unit_label": (
             business_unit_public_label(business_unit=affected) if affected is not None else None
         ),
         "responsible_business_unit_id": signal.responsible_business_unit_id,
+        "responsible_business_unit_color_index": (
+            signal.responsible_business_unit.color_index
+            if signal.responsible_business_unit_id else None
+        ),
         "responsible_business_unit_label": (
             business_unit_public_label(business_unit=responsible)
             if responsible is not None

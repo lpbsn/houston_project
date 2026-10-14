@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Iterable
 
 from django.db import IntegrityError, transaction
+from django.db.models import Max
 
 from houston.core.exceptions import (
     DomainConflictError,
@@ -165,6 +166,13 @@ def _create_business_unit_core(
             code="duplicate_specific_name",
         )
 
+    # The establishment lock also serializes automatic color allocation. Include
+    # inactive poles so reactivation never steals another pole's color.
+    last_color = BusinessUnit.objects.filter(
+        establishment=locked_establishment
+    ).aggregate(last=Max("color_index"))["last"]
+    color_index = 0 if last_color is None else last_color + 1
+
     business_unit_id = uuid.uuid4()
     normalized_description = instance_description.strip()
     business_unit = BusinessUnit(
@@ -173,6 +181,7 @@ def _create_business_unit_core(
         catalog_business_unit=locked_catalog,
         specific_name=normalized_name_input,
         normalized_specific_name=normalized_specific_name,
+        color_index=color_index,
         routing_key=build_business_unit_routing_key(
             business_unit_id=business_unit_id,
             catalog_key=locked_catalog.key,

@@ -204,6 +204,8 @@ export function buildActionPlanExecutionClassificationInput(
 ): SignalClassificationInput {
   const responsible = execution.responsible_business_unit ?? execution.pilot_business_unit
   return {
+    responsible_business_unit_color_index: responsible.color_index,
+    affected_business_unit_color_index: execution.affected_business_unit?.color_index,
     responsible_business_unit_key: responsible.generic.key,
     responsible_business_unit_label: actionPlanBusinessUnitPrimaryLabel(responsible),
     affected_business_unit_key: execution.affected_business_unit?.generic.key ?? null,

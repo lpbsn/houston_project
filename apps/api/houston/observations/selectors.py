@@ -42,8 +42,10 @@ class ObservationProcessingSignalSummary:
     title: str
     affected_business_unit_key: str
     affected_business_unit_label: str
+    affected_business_unit_color_index: int | None
     responsible_business_unit_key: str
     responsible_business_unit_label: str
+    responsible_business_unit_color_index: int | None
     activity_subject_key: str
     activity_subject_label: str
     location_text: str
@@ -129,6 +131,10 @@ def _signal_summaries_for_ids(
                     if signal.affected_business_unit_id
                     else ""
                 ),
+                affected_business_unit_color_index=(
+                    signal.affected_business_unit.color_index
+                    if signal.affected_business_unit_id else None
+                ),
                 affected_business_unit_label=(
                     business_unit_public_label(business_unit=signal.affected_business_unit)
                     if signal.affected_business_unit_id
@@ -138,6 +144,10 @@ def _signal_summaries_for_ids(
                     business_unit_public_key(business_unit=signal.responsible_business_unit)
                     if signal.responsible_business_unit_id
                     else ""
+                ),
+                responsible_business_unit_color_index=(
+                    signal.responsible_business_unit.color_index
+                    if signal.responsible_business_unit_id else None
                 ),
                 responsible_business_unit_label=(
                     business_unit_public_label(

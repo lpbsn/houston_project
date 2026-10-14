@@ -62,6 +62,7 @@ def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
         "title": signal.title,
         "status": signal.status,
         "affected_business_unit_id": signal.affected_business_unit_id,
+        "affected_business_unit_color_index": affected.color_index if affected else None,
         "affected_business_unit_key": (
             business_unit_public_key(business_unit=affected)
             if affected is not None
@@ -73,6 +74,7 @@ def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
             else None
         ),
         "responsible_business_unit_id": signal.responsible_business_unit_id,
+        "responsible_business_unit_color_index": responsible.color_index if responsible else None,
         "responsible_business_unit_key": (
             business_unit_public_key(business_unit=responsible)
             if responsible is not None
@@ -101,9 +103,15 @@ class ActionSignalSummarySerializer(serializers.Serializer):
     affected_business_unit_id = serializers.UUIDField(allow_null=True)
     affected_business_unit_key = serializers.CharField(allow_null=True)
     affected_business_unit_label = serializers.CharField(allow_null=True)
+    affected_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     responsible_business_unit_id = serializers.UUIDField(allow_null=True)
     responsible_business_unit_key = serializers.CharField(allow_null=True)
     responsible_business_unit_label = serializers.CharField(allow_null=True)
+    responsible_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     activity_subject_id = serializers.UUIDField(allow_null=True)
     activity_subject_normalized_name = serializers.CharField(allow_null=True)
     activity_subject_label = serializers.CharField(allow_null=True)
@@ -112,6 +120,7 @@ class ActionSignalSummarySerializer(serializers.Serializer):
 
 class ActionPlanBusinessUnitSerializer(serializers.Serializer):
     id = serializers.UUIDField()
+    color_index = serializers.IntegerField(min_value=0, allow_null=True, required=False)
     specific_name = serializers.CharField()
     instance_description = serializers.CharField()
     active = serializers.BooleanField()

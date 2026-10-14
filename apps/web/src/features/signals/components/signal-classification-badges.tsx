@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { HoustonBadge } from '@/components/ui/terrain'
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import {
   formatSignalClassification,
   type SignalClassificationInput,
@@ -40,8 +40,8 @@ export function SignalClassificationBadges({
         <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
           {leading}
           {hasPrimary ? (
-            <HoustonBadge
-              variant="gray"
+            <BusinessUnitBadge
+              colorIndex={signal.responsible_business_unit_color_index}
               className={
                 wrapLabel
                   ? 'block min-w-0 max-w-full whitespace-normal break-words text-left leading-snug'
@@ -49,12 +49,14 @@ export function SignalClassificationBadges({
               }
             >
               {classification.primaryLine}
-            </HoustonBadge>
+            </BusinessUnitBadge>
           ) : null}
         </span>
       ) : null}
       {hasAffected ? (
-        <span className="text-[11px] text-[#888]">{classification.affectedLine}</span>
+        <BusinessUnitBadge colorIndex={signal.affected_business_unit_color_index}>
+          {classification.affectedLine}
+        </BusinessUnitBadge>
       ) : null}
     </span>
   )

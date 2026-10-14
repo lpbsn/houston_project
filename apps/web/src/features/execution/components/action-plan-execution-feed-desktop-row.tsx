@@ -1,3 +1,4 @@
+import { ActionPlanPoleBadges } from '@/features/action-plans/components/action-plan-pole-badges'
 import { Pin } from 'lucide-react'
 
 import { HoustonBadge } from '@/components/ui/terrain'
@@ -14,11 +15,9 @@ import {
   formatActionPlanFeedCardDelayLabel,
   formatActionPlanFeedCardStatusLabel,
   formatActionPlanFeedMarkedDoneLine,
-  formatActionPlanFeedOtherPolesCountLabel,
   formatActionPlanFeedTerminalDateLabel,
   formatActionPlanFeedValidatedLine,
   formatExecutionFeedCreatedLabel,
-  getActionPlanFeedOtherPoles,
 } from '../lib/action-plan-execution-feed-card-display'
 import { useFeedCardNow } from '../lib/use-feed-card-now'
 import {
@@ -109,7 +108,6 @@ export function ActionPlanExecutionFeedDesktopRow({
   const now = useFeedCardNow()
   const delayLabel = formatActionPlanFeedCardDelayLabel(item.end_at, now, item.is_overdue)
   const statusLabel = formatActionPlanFeedCardStatusLabel(item)
-  const otherPoles = getActionPlanFeedOtherPoles(item)
   const validatedLine =
     item.status === 'done' && item.validated_at != null
       ? formatActionPlanFeedValidatedLine(item)
@@ -127,7 +125,6 @@ export function ActionPlanExecutionFeedDesktopRow({
     ? null
     : formatExecutionFeedCreatedLabel(item.created_at)
   const creatorName = item.created_by_display_name.trim()
-  const poleLabel = item.pilot_business_unit.specific_name.trim()
   const assignees = item.assignees.filter((assignee) => assignee.display_name.trim().length > 0)
   const showReadOnlyPinnedBadge = !onTogglePin && Boolean(item.is_pinned)
   const showCreatedOrDelay = Boolean(createdLabel || delayLabel)
@@ -156,16 +153,7 @@ export function ActionPlanExecutionFeedDesktopRow({
           <HoustonBadge variant={getActionPlanStatusBadgeVariant(item.status)}>
             {statusLabel}
           </HoustonBadge>
-          {poleLabel ? (
-            <HoustonBadge variant="gray" className="max-w-full leading-none break-words">
-              {poleLabel}
-            </HoustonBadge>
-          ) : null}
-          {otherPoles.otherCount > 0 ? (
-            <HoustonBadge variant="gray" className="shrink-0 leading-none">
-              {formatActionPlanFeedOtherPolesCountLabel(otherPoles.otherCount)}
-            </HoustonBadge>
-          ) : null}
+          <ActionPlanPoleBadges {...item} />
         </span>
         <DebutFinLine item={item} />
         {assignees.length > 0 ? (

@@ -26,8 +26,14 @@ class ObservationProcessingSignalSummarySerializer(serializers.Serializer):
     title = serializers.CharField()
     affected_business_unit_key = serializers.CharField(allow_blank=True)
     affected_business_unit_label = serializers.CharField(allow_blank=True)
+    affected_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     responsible_business_unit_key = serializers.CharField(allow_blank=True)
     responsible_business_unit_label = serializers.CharField(allow_blank=True)
+    responsible_business_unit_color_index = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
     activity_subject_key = serializers.CharField(allow_blank=True)
     activity_subject_label = serializers.CharField(allow_blank=True)
     location_text = serializers.CharField(allow_blank=True)
