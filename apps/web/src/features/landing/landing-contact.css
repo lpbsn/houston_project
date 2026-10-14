@@ -1,0 +1,17 @@
+#spore-landing .sp-contact { background: #fff; color: #043f30; scroll-margin-top: 32px; }
+#spore-landing .sp-contact form { max-width: 850px; margin: 32px auto 0; padding: clamp(20px, 4vw, 40px); background: #f2f7f4; border: 1px solid #9bb8ab; border-radius: 28px; text-align: left; }
+#spore-landing .sp-contact fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+#spore-landing .sp-contact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+#spore-landing .sp-contact label { display: block; font-weight: 650; color: #043f30; margin-bottom: 18px; }
+#spore-landing .sp-contact input, #spore-landing .sp-contact textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; border: 1px solid #6d8c7e; border-radius: 12px; padding: 13px 14px; font: inherit; font-weight: 400; color: #102d23; background: #fff; }
+#spore-landing .sp-contact textarea { resize: vertical; }
+#spore-landing .sp-contact input::placeholder, #spore-landing .sp-contact textarea::placeholder { color: #4b6359; opacity: 1; }
+#spore-landing .sp-contact :focus-visible { outline: 3px solid #076d4b; outline-offset: 3px; }
+#spore-landing .sp-contact .sp-contact-privacy { color: #243e32; font-size: 14px; line-height: 1.6; }
+#spore-landing .sp-contact a { text-decoration: underline; }
+#spore-landing .sp-contact .sp-button { margin-top: 20px; }
+#spore-landing .sp-contact button:disabled { cursor: not-allowed; opacity: .65; }
+#spore-landing .sp-contact .sp-contact-error { padding: 14px; color: #8c2016; background: #fff; border: 1px solid #8c2016; border-radius: 12px; }
+#spore-landing .sp-contact-success { padding: 36px; border: 1px solid #076d4b; border-radius: 24px; background: #f2f7f4; }
+#spore-landing .sp-contact-honeypot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (max-width: 600px) { #spore-landing .sp-contact-grid { grid-template-columns: 1fr; gap: 0; } }

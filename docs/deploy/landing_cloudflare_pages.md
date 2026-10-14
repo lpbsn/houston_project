@@ -60,4 +60,4 @@ Commandes utiles :
    - `https://spore-os.com/sitemap.xml`
    - `https://app.spore-os.com/`
 
-Aucun Dockerfile, nginx ou `railway.toml` landing n’est fourni volontairement : la landing est un site statique.
+Les pages restent statiques. Le formulaire utilise une Pages Function dédiée (`apps/web/functions/api/contact.ts`). Voir [la configuration du formulaire](landing_contact.md) avant de l’activer. Aucun Dockerfile, nginx ou `railway.toml` landing supplémentaire n’est nécessaire.
