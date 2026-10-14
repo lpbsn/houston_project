@@ -1,11 +1,7 @@
 import sporeMark from '@/features/landing/assets/spore-mark.png'
 import { APP_LOGIN_URL } from '@/features/landing/content'
 
-type LandingHeaderProps = {
-  onDemo: () => void
-}
-
-export function LandingHeader({ onDemo }: LandingHeaderProps) {
+export function LandingHeader() {
   return (
     <header className="sp-wrap sp-nav">
       <a className="sp-logo" href="#sp-top">
@@ -20,9 +16,9 @@ export function LandingHeader({ onDemo }: LandingHeaderProps) {
           <a className="sp-login" href={APP_LOGIN_URL}>
             Se connecter
           </a>
-          <button type="button" className="sp-button sp-smallbutton" onClick={onDemo}>
+          <a href="#sp-contact" className="sp-button sp-smallbutton">
             Demander une démo ↗
-          </button>
+          </a>
         </div>
       </nav>
     </header>
