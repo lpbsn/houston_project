@@ -1,8 +1,4 @@
-type LandingHeroProps = {
-  onDemo: () => void
-}
-
-export function LandingHero({ onDemo }: LandingHeroProps) {
+export function LandingHero() {
   return (
     <div className="sp-chapter sp-chapter-hero">
       <section className="sp-wrap sp-hero" id="sp-top">
@@ -20,9 +16,9 @@ export function LandingHero({ onDemo }: LandingHeroProps) {
           qui méritent votre attention, les causes possibles des écarts et les actions à engager.
         </p>
         <div className="sp-heroactions">
-          <button type="button" className="sp-button" onClick={onDemo}>
+          <a href="#sp-contact" className="sp-button">
             Voir Spore en action ↗
-          </button>
+          </a>
           <a className="sp-secondary" href="#sp-product">
             Découvrir le fonctionnement ↓
           </a>

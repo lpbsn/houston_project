@@ -10,11 +10,9 @@ export function LandingFooter() {
       </div>
       <span>Comprenez vos établissements en quelques secondes.</span>
       <nav className="sp-footer-links" aria-label="Informations">
-        <a href={footerContent.loginHref}>{footerContent.loginLabel}</a>
         <a href={footerContent.legalHref}>{footerContent.legalLabel}</a>
         <a href={footerContent.privacyHref}>{footerContent.privacyLabel}</a>
         <a href={footerContent.termsHref}>{footerContent.termsLabel}</a>
-        <a href={footerContent.accountDeletionHref}>{footerContent.accountDeletionLabel}</a>
         <a href={footerContent.supportHref}>{footerContent.supportLabel}</a>
       </nav>
     </footer>

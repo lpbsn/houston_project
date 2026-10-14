@@ -30,3 +30,39 @@
   gap: 10px 14px;
   justify-content: flex-end;
 }
+
+#spore-landing .sp-nav {
+  flex-wrap: wrap;
+}
+#spore-landing .sp-navactions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+#spore-landing .sp-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid #043f30;
+  border-radius: 999px;
+  background: #fff;
+  color: #043f30;
+  font-weight: 600;
+}
+@media (max-width: 850px) {
+  #spore-landing .sp-navlinks > a {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  #spore-landing .sp-navlinks,
+  #spore-landing .sp-navactions {
+    width: 100%;
+  }
+  #spore-landing .sp-navactions {
+    justify-content: space-between;
+  }
+}
