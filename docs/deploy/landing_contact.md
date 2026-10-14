@@ -20,7 +20,7 @@ Configurer séparément **Preview** et **Production** :
 | `TURNSTILE_SECRET_KEY` | Secret de la Function | Secret du même widget |
 | `RESEND_API_KEY` | Secret de la Function | Clé Resend autorisée à envoyer |
 | `CONTACT_FROM_EMAIL` | Variable serveur | Expéditeur sur un domaine vérifié dans Resend |
-| `CONTACT_TO_EMAIL` | Variable serveur | Adresse de réception validée par Maxime, indiquée dans la PR |
+| `CONTACT_TO_EMAIL` | Variable serveur | Adresse de réception communiquée directement par Maxime |
 
 **Ne jamais préfixer les paramètres serveur par `VITE_`.** Aucun destinataire n'est
 inclus dans le JavaScript public ni dans la réponse de l'endpoint. Le bouton Répondre
