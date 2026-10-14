@@ -420,21 +420,21 @@ Railway **waits for GitHub workflows triggered on the commit** before starting a
 
 | Workflow | Trigger | Waited by Railway |
 |---|---|---|
-| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | **Always** (push/PR, no `paths` filter) | Yes — when triggered on the commit |
-| [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) | Only when a filtered path changes on the commit | Yes **when triggered**; not present on commits that do not match |
+| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | `pull_request` on every branch; `push` to `main` only. No `paths` filter. A push to `staging` does not trigger it | Yes — when triggered on the commit |
+| [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) | `pull_request`, or `push` to `main`, and only when a filtered path changes. A push to another branch does not trigger it | Yes **when triggered**; not present on commits that do not match |
 
 Consequences:
 
-* Docs-only commits (`/docs/**`): `ci.yml` still runs; Railway waits for it to pass.
-* Commits touching `infra/docker/api/**` or `infra/docker/railway/**`: Railway waits for **both** `ci.yml` and `docker-smoke.yml`.
-* In GitHub branch protection, the required check from `ci.yml` is `ci-gate`. It fails unless path classification succeeded and every selected job succeeded. Do not require `backend-tests`, `frontend-tests`, or `docs-check` instead: GitHub reports a skipped job as success. `docker-smoke.yml` is path-filtered and is not a required branch-protection check, but Railway still blocks if that workflow is triggered on the commit and fails.
+* On a pull request, or on a push to `main`, a docs-only commit (`/docs/**`) still runs `ci.yml` (no `paths` filter); Railway waits for it. A push to `staging` does not trigger `ci.yml`.
+* On those same events, a commit touching `infra/docker/api/**` or `infra/docker/railway/**` also triggers `docker-smoke.yml`; Railway then waits for both. A push to another branch triggers neither.
+* Rulesets `Protect staging` and `Protect main` still require `backend-tests`, `frontend-tests`, and `docs-check`. The target, not yet applied, is `ci-gate` alone: it fails unless path classification succeeded and every selected job succeeded. Those three jobs are not a sufficient required set, because GitHub reports a skipped job as success. `docker-smoke.yml` is path-filtered and is not a required branch-protection check, but Railway still blocks if that workflow is triggered on the commit and fails.
 
 ### Phase A — test environment (required before prod)
 
 1. Create or reuse a **Railway test project** or clone services connected to a **non-production GitHub branch** (e.g. `railway-test`).
 2. **Enable Wait for CI** on all three test services only.
-3. Push with green CI → build starts after all workflows triggered on the commit complete.
-4. Push touching `infra/docker/api/**` or `infra/docker/railway/**` → confirm Railway waits for `ci.yml` **and** `docker-smoke.yml`.
+3. A commit that triggers CI (`pull_request`, or `push` to `main`) and is green → build starts after all workflows triggered on the commit complete. A push to another branch does not trigger `ci.yml`.
+4. On those same events, a commit touching `infra/docker/api/**` or `infra/docker/railway/**` → confirm Railway waits for `ci.yml` **and** `docker-smoke.yml`.
 5. Deliberately fail CI on the test branch → Railway build must not start or promote.
 6. **Never** deliberately fail CI on the branch connected to **production**.
 
@@ -449,7 +449,7 @@ Consequences:
 
 | Scope | GitHub branch protection | Railway Wait for CI |
 |---|---|---|
-| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | Required check: `ci-gate` (fails closed over `changes` and the path-filtered jobs) | Waits for the workflow when triggered on the commit |
+| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | Today: `backend-tests`, `frontend-tests`, `docs-check`. Target, not yet applied: `ci-gate` alone | Waits for the workflow when triggered on the commit |
 | [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) | Not required (path-filtered workflow) | Waits for the workflow when triggered on the commit |
 
 Railway does not expose a manual checklist of GitHub job names — only workflows triggered on the commit matter.

@@ -53,9 +53,9 @@ Enable only after validating on a Railway **test** project / non-prod branch. Fu
 1. Confirm **Config File path** per service (table above) on deployment details (config-file icon).
 2. **Test first, prod second:** enable Wait for CI on a Railway test project / non-prod branch before production.
 3. **Workflows Railway waits for on each commit** (workflows, not individual job names — no manual job list on Railway):
-   * [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — always triggered
-   * [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) — only when Docker-related paths change
-4. GitHub branch protection (GitHub-only): the required check is `ci-gate`. `backend-tests`, `frontend-tests`, and `docs-check` are path-filtered and are not a sufficient required set, because a skipped job is reported as success. `docker-smoke.yml` is path-filtered and not required in branch protection.
+   * [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — `pull_request` on every branch; `push` to `main` only. No `paths` filter. A push to `staging` does not trigger it.
+   * [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) — on those same events, only when a Docker-related path changes
+4. GitHub branch protection (GitHub-only): rulesets `Protect staging` and `Protect main` still require `backend-tests`, `frontend-tests`, and `docs-check`. The target, not yet applied, is `ci-gate` alone. Those three jobs are not a sufficient required set, because a skipped job is reported as success. `docker-smoke.yml` is path-filtered and not required in branch protection.
 5. Dashboard Wait for CI / Watch Paths may differ from repo config — deployment details config-file icon is the effective source.
 
 ## Related

@@ -177,10 +177,10 @@ cd apps/web && npm run typecheck
 
 GitHub Actions (`.github/workflows/ci.yml`):
 
-- **Triggers**: `pull_request` on all branches; `push` on `main` only (avoids double runs when a PR branch pushes).
+- **Triggers**: `pull_request` on all branches; `push` on `main` only (avoids double runs when a PR branch pushes). A push to `staging` does not trigger this workflow.
 - **Concurrency**: `cancel-in-progress` per ref.
 - **Path filters**: `changes` publishes `backend`, `frontend`, and `docs` as `true` or `false`. `backend-tests`, `frontend-tests`, and `docs-check` run only when the matching output is `true`. Changes to API schema sources or `schema.yml` / `types.ts` still run **both** backend and frontend jobs.
-- **`ci-gate`**: the check branch protection must require. It runs after `changes`, `backend-tests`, `frontend-tests`, and `docs-check`, and fails unless `changes` is `success`, every output is exactly `true` or `false`, every job whose output is `true` is `success`, and every job whose output is `false` is `skipped` or `success`. A skipped job is reported as a successful required check, so those three jobs are not a sufficient required set. The job and its step both use `always()` so a cancelled run does not skip the gate. Any future job in this workflow must be added to `ci-gate`'s `needs`.
+- **`ci-gate`**: target branch-protection check. Rulesets `Protect staging` and `Protect main` still require `backend-tests`, `frontend-tests`, and `docs-check`; that switch is not done. `ci-gate` runs after `changes`, `backend-tests`, `frontend-tests`, and `docs-check`, and fails unless `changes` is `success`, every output is exactly `true` or `false`, every job whose output is `true` is `success`, and every job whose output is `false` is `skipped` or `success`. A skipped job is reported as a successful required check, so those three jobs are not a sufficient required set. The job and its step both use `always()` so a cancelled run does not skip the gate. Any future job in this workflow must be added to `ci-gate`'s `needs`.
 
 | Job | Steps |
 |-----|-------|
