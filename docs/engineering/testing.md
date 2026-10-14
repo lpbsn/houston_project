@@ -179,13 +179,16 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 - **Triggers**: `pull_request` on all branches; `push` on `main` only (avoids double runs when a PR branch pushes).
 - **Concurrency**: `cancel-in-progress` per ref.
-- **Path filters**: backend / frontend / docs jobs run only when relevant paths change; changes to API schema sources or `schema.yml` / `types.ts` still run **both** backend and frontend jobs.
+- **Path filters**: `changes` publishes `backend`, `frontend`, and `docs` as `true` or `false`. `backend-tests`, `frontend-tests`, and `docs-check` run only when the matching output is `true`. Changes to API schema sources or `schema.yml` / `types.ts` still run **both** backend and frontend jobs.
+- **`ci-gate`**: the check branch protection must require. It runs after `changes`, `backend-tests`, `frontend-tests`, and `docs-check`, and fails unless `changes` is `success`, every output is exactly `true` or `false`, every job whose output is `true` is `success`, and every job whose output is `false` is `skipped` or `success`. A skipped job is reported as a successful required check, so those three jobs are not a sufficient required set. The job and its step both use `always()` so a cancelled run does not skip the gate. Any future job in this workflow must be added to `ci-gate`'s `needs`.
 
 | Job | Steps |
 |-----|-------|
+| `changes` | Classifies changed paths and publishes `backend`, `frontend`, `docs` |
 | `backend-tests` | Django check, deploy check, migrations, ruff, OpenAPI regen + diff, pytest (PostgreSQL + Redis; smoke/slow/heavy excluded) |
 | `frontend-tests` | `npm ci`, `api:generate` + diff, lint, vitest, `typecheck` (`tsc -b` once), `build:bundle` and `build:native:bundle` (vite only — no second `tsc -b`) |
 | `docs-check` | `scripts/docs_check.py`, `scripts/agent_config_check.py` |
+| `ci-gate` | Fails closed on the `changes` result, its outputs, and the three job results. No install. |
 
 **Runtime note:** CI backend steps run **native `uv`** with GitHub Actions Postgres/Redis services. Local backend validation uses **Make/Docker only** (`make backend-check`, `make verify`) — do not run `cd apps/api && uv run …` on the host. Frontend checks may run natively from `apps/web` or via `make web-*`.
 
