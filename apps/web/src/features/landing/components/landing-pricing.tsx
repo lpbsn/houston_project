@@ -1,25 +1,4 @@
-import { useEffect, useRef } from 'react'
-
-type LandingPricingProps = {
-  demoOpen: boolean
-  onDemo: () => void
-  onCloseDemo: () => void
-}
-
-export function LandingPricing({ demoOpen, onDemo, onCloseDemo }: LandingPricingProps) {
-  const demoRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!demoOpen || !demoRef.current) return
-    const reduceMotion =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    demoRef.current.scrollIntoView?.({
-      behavior: reduceMotion ? 'auto' : 'smooth',
-      block: 'center',
-    })
-  }, [demoOpen])
-
+export function LandingPricing() {
   return (
     <div className="sp-chapter sp-chapter-pricing">
       <section className="sp-wrap sp-section" id="sp-pricing">
@@ -73,9 +52,9 @@ export function LandingPricing({ demoOpen, onDemo, onCloseDemo }: LandingPricing
                 <strong>Documents et photos conservés pendant 1 mois</strong>
               </li>
             </ul>
-            <button type="button" className="sp-button" onClick={onDemo}>
+            <a href="#sp-contact" className="sp-button">
               Découvrir Spore pour mon établissement ↗
-            </button>
+            </a>
           </article>
           <article className="sp-offer group-offer">
             <div className="sp-eyebrow">Groupes &amp; multi-établissements</div>
@@ -116,30 +95,10 @@ export function LandingPricing({ demoOpen, onDemo, onCloseDemo }: LandingPricing
               Tarification selon le nombre d’établissements, leur taille et le périmètre de votre
               organisation.
             </p>
-            <button type="button" className="sp-button" onClick={onDemo}>
+            <a href="#sp-contact" className="sp-button">
               Demander un devis groupe ↗
-            </button>
+            </a>
           </article>
-        </div>
-        <div
-          id="sp-demo"
-          ref={demoRef}
-          className="sp-demo"
-          hidden={!demoOpen}
-          aria-live="polite"
-        >
-          <strong>Votre démonstration Spore</strong>
-          <p>
-            Découvrez comment Spore peut vous aider à comprendre votre exploitation et à piloter
-            vos actions.
-          </p>
-          <p className="sp-note">
-            La prise de rendez-vous sera disponible ici. Le lien de réservation reste à
-            configurer.
-          </p>
-          <button type="button" className="sp-button sp-smallbutton" id="sp-close" onClick={onCloseDemo}>
-            Fermer
-          </button>
         </div>
       </section>
     </div>

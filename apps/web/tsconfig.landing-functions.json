@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "es2023", "lib": ["ES2023", "DOM"], "module": "esnext",
+    "moduleResolution": "bundler", "strict": true, "noEmit": true,
+    "skipLibCheck": true, "types": []
+  },
+  "include": ["functions/**/*.ts", "shared/contact.ts"],
+  "exclude": ["functions/**/*.test.ts"]
+}
