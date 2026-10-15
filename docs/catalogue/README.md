@@ -1,7 +1,7 @@
 # Business unit catalogue seed
 
 Status: authoritative  
-Last reviewed: 2026-07-16
+Last reviewed: 2026-10-13
 
 Global catalogue CSVs for `CatalogBusinessUnit` and `CatalogActivitySubject`. Domain rules: [`docs/product/domains/business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md).
 
@@ -24,11 +24,13 @@ From repo root (Docker API; local-dev DB guard):
 | `make bootstrap-dev` | `up-backend` → `migrate` → `import-catalog` → `check` → `catalog-check` |
 | `make reset-dev-db` | Destructive: `compose down -v` then `bootstrap-dev` |
 
-Expected seed counts today: **14** `CatalogBusinessUnit`, **134** `CatalogActivitySubject` (driven by CSV length / `catalog_seed_counts.py`).
+Expected seed counts today: **19** `CatalogBusinessUnit`, **161** `CatalogActivitySubject` (driven by CSV length / `catalog_seed_counts.py`).
 
-Optional management flags: `--dry-run`, `--strict`, `--regenerate-from-source` (rebuild normalized CSVs from `suggestion_source.csv`).
+Optional management flags: `--dry-run`, `--strict`, `--regenerate-from-source`.
 
-Railway / prod-test first import: run `import_business_unit_catalog` once after migrate (see [`docs/deploy/prod_test_runbook.md`](../deploy/prod_test_runbook.md)).
+`suggestion_source.csv` stays a historical Excel trace (`Pole d'activité` and `Sujets` only). `--regenerate-from-source` rebuilds the normalized CSVs from that trace: descriptions are emptied, sort orders follow source order, and `unit_type` is `transversal` only for `maintenance`, `communication`, `rh`, and `evenements_privatisations`. Every other pole becomes `dedicated`, and subject keys are slugs of the source labels. That is not a faithful reconstruction of the normalized catalogue. It cannot preserve the descriptions in the normalized CSVs, the `transversal` type of `produit_numerique`, `developpement_logiciel`, `commercial`, `relation_client`, and `gestion_entreprise`, or explicit keys that differ from a label slug (`relation_client__adoption`, `produit_numerique__validation_impact`, `developpement_logiciel__architecture_qualite`, `relation_client__deploiement_configuration`, `gestion_entreprise__conformite_donnees`, and `gestion_entreprise` itself). Import reads `business_units.csv` and `activity_subjects.csv` only. Do not regenerate those files from the historical source.
+
+Railway and prod-test do not import the catalogue during deploy or migrate. Run `import_business_unit_catalog` after migrate, and again after a catalogue change, to upsert the normalized CSV into PostgreSQL (see [`docs/deploy/prod_test_runbook.md`](../deploy/prod_test_runbook.md)). Publishing the CSV does not update the database.
 
 ## Import policy
 
