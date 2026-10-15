@@ -46,7 +46,6 @@ import {
 import { getAppRuntime } from '@/lib/runtime'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { isPlatformOperatorActive } from '@/features/platform/lib/access'
 
 const ROLE_DISPLAY_LABELS: Record<RoleEnum, string> = {
@@ -200,8 +199,7 @@ export function ProfilePage({
   const establishmentId = activeMembership?.establishment_id ?? null
   const pendingResumePath = resolvePendingLandingPath(pendingOnboardingMemberships)
   const isNativeRuntime = getAppRuntime() === 'native'
-  const isLgViewport = useLgViewport()
-  const isDesktopWeb = isDesktopWebLanding(isLgViewport)
+  const isDesktopWeb = isDesktopWebLanding()
   const showOperationalConfig =
     isDesktopWeb &&
     establishmentId !== null &&

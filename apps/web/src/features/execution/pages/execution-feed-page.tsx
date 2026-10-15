@@ -14,7 +14,6 @@ import { serializeScopedExecutionDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
@@ -208,7 +207,7 @@ function ExecutionFeedPageContent({
   const auth = useAuth()
   const { route, search, navigate } = useAppRoute()
   const isCross = source === 'cross'
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const readingScopeKey = executionFeedReadingScopeKey(source, establishmentId)
   const [initialReading] = useState(() => readExecutionFeedReading(readingScopeKey))
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -1162,7 +1161,7 @@ function CalendarPeriodToolbar({
     </div>
   )
 
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
 
   return (
     <div className="px-3 pb-2">

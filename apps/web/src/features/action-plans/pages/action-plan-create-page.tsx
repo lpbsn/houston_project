@@ -19,7 +19,7 @@ import { ActionLinkedSignalStrip } from '@/features/action-plans/components/acti
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
-import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
+import { useXlViewport } from '@/lib/lg-viewport'
 import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { SignalsApiError } from '@/features/signals/api'
@@ -116,7 +116,7 @@ export function ActionPlanCreatePage({
     }
     navigate(fallback)
   }
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const placeFormColumns = useXlViewport()
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const auth = useAuth()

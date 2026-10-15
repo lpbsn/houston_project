@@ -297,6 +297,7 @@ describe('ExecutionUpcomingPage', () => {
   })
 
   it('keeps the scheduled card and the actions sheet outside desktop web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     renderUpcomingPage()
 

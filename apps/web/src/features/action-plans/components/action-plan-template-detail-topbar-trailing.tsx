@@ -6,7 +6,6 @@ import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
 import { terrain } from '@/lib/terrain-styles'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 import {
@@ -78,7 +77,7 @@ export function ActionPlanTemplateDetailTopbarTrailing({
   actionPlanId,
   onNavigate,
 }: ActionPlanTemplateDetailTopbarTrailingProps) {
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const detailQuery = useActionPlanDetailQuery(establishmentId, actionPlanId)
   const deleteMutation = useDeleteActionPlanMutation(establishmentId, actionPlanId)
   const activateMutation = useActivateActionPlanMutation(establishmentId, actionPlanId)

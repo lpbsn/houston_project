@@ -763,6 +763,7 @@ describe('SignalFeedPage desktop actions', () => {
   })
 
   it('routes qualify to openForSignal from the mobile actions sheet', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     mockLgViewport(false)
     feedQueryMock.mockReturnValue(
       buildFeedQueryState({

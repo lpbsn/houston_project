@@ -4,7 +4,6 @@ import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +22,7 @@ const catalogBadgeClassName =
 
 export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalogCardProps) {
   const showUse = canShowActionPlanUse(item.permission_hints)
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const showInvolvedPoles = item.involved_pole_count > 1
   const isInactive = item.catalog_status === 'inactive'
 

@@ -8,7 +8,6 @@ import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-tool
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import { useActionPlanExecutionUpcomingQuery } from '@/features/action-plans/hooks'
 import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
@@ -34,7 +33,7 @@ export function ExecutionUpcomingPage({
 }: ExecutionUpcomingPageProps) {
   const auth = useAuth()
   const { route, search, navigate } = useAppRoute()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const isCross = source === 'cross'
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const feedUrlOptions = isCross ? { defaultViewMode: 'general' as const } : undefined

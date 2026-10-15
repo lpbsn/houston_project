@@ -87,6 +87,7 @@ describe('TerrainTopbar', () => {
   })
 
   it('renders detail back button without visible border classes', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     render(
       <TerrainTopbar variant="detail" title="Observation" onBack={() => undefined} />,
     )
@@ -98,7 +99,8 @@ describe('TerrainTopbar', () => {
     expect(backButton.className).toContain('min-w-12')
   })
 
-  it('applies horizontal safe-area padding on phone chrome only', () => {
+  it('applies horizontal safe-area padding on native chrome only', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     const { unmount } = render(
       <TerrainTopbar variant="detail" title="Observation" onBack={() => undefined} />,
@@ -108,7 +110,8 @@ describe('TerrainTopbar', () => {
     expect(detailRow?.className).toContain('pr-[max(1rem,var(--app-safe-right))]')
     unmount()
 
-    stubLgViewport(true)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    stubLgViewport(false)
     render(<TerrainTopbar variant="hub" pageTitle="Observations" />)
     const hubRow = screen.getByRole('banner').firstElementChild
     expect(hubRow?.className).toContain('px-3')

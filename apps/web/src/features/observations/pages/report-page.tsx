@@ -31,14 +31,13 @@ import {
   PUBLIC_PRIVACY_POLICY_URL,
   readAiConsentStatus,
 } from '@/lib/legal'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { useNetworkStatus } from '@/lib/network-status'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 export function ReportPage({ establishmentId: establishmentIdProp }: { establishmentId?: string | null } = {}) {
   const shouldReduceMotion = useReducedMotion()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const composeLayout = isDesktopWeb ? 'desktop' : 'field'
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const { showBottomNav } = useTerrainShellLayout()

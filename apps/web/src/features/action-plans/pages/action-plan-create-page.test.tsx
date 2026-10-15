@@ -348,6 +348,7 @@ function renderPage(
 
 describe('ActionPlanCreatePage', () => {
   beforeEach(() => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     navigate.mockReset()
     createMutateAsync.mockReset()
     planningMutateAsync.mockReset()
@@ -1059,7 +1060,7 @@ describe('ActionPlanCreatePage', () => {
     expect(createMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('keeps Signal-linked create return path and a single primary action in the desktop frame', () => {
+  it('keeps Signal-linked create return path and a single primary action in the terrain frame', () => {
     renderPage({
       mode: 'signal-linked',
       signalId: 'sig-1',

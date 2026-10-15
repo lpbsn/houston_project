@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
 
 import type {
   AnalyticsPatternDetailResponse,
@@ -500,6 +504,7 @@ describe('AnalyticsPatternDetailPage', () => {
   })
 
   it('uses the desktop signal grid only on desktop web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     stubLgViewport(true)
     setDetailQuery({ data: detail() })
     authState.current = {

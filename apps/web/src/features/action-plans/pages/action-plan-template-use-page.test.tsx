@@ -5,6 +5,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
+
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
 import { ActionPlanTemplateUsePage } from './action-plan-template-use-page'

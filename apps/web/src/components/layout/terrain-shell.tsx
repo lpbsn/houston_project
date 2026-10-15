@@ -52,7 +52,7 @@ export function TerrainShell({
   children,
 }: TerrainShellProps) {
   const shouldReduceMotion = useReducedMotion()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const [surface, setSurface] = useState({
     route,
     search,
@@ -75,10 +75,16 @@ export function TerrainShell({
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const operationalRealtime = useOptionalOperationalRealtime()
   const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const isWide = useLgViewport()
+  const [sidebarPreferences, setSidebarPreferences] = useState({ wide: false, compact: true })
+  const sidebarMode = isWide ? 'wide' : 'compact'
+  const sidebarCollapsed = sidebarPreferences[sidebarMode]
+  const setSidebarCollapsed = (collapsed: boolean) =>
+    setSidebarPreferences(current => ({ ...current, [sidebarMode]: collapsed }))
+  const hasBottomNav = showBottomNav && !isDesktopWeb
 
   return (
-    <TerrainShellLayoutProvider showBottomNav={showBottomNav}>
+    <TerrainShellLayoutProvider showBottomNav={hasBottomNav}>
       <div
         data-terrain-shell-root
         className={cn(
@@ -140,7 +146,7 @@ export function TerrainShell({
               </AnimatePresence>
             )}
           </main>
-          {showBottomNav && !isNativeKeyboardOpen && !isDesktopWeb ? (
+          {hasBottomNav && !isNativeKeyboardOpen ? (
             <BottomMobileNav
               className="shrink-0"
               activePath={activeNavPath}

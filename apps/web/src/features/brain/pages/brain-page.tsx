@@ -1,5 +1,4 @@
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport } from '@/lib/lg-viewport'
 
 import { BrainWorkspace } from './brain-workspace'
 
@@ -9,7 +8,7 @@ type BrainPageProps = {
 }
 
 export function BrainPage({ establishmentId, analysisId }: BrainPageProps) {
-  const desktop = isDesktopWebLanding(useLgViewport())
+  const desktop = isDesktopWebLanding()
   if (!desktop) {
     return (
       <section
@@ -17,7 +16,7 @@ export function BrainPage({ establishmentId, analysisId }: BrainPageProps) {
         data-testid="brain-computer-notice"
       >
         <h1 className="text-xl font-semibold">Spore Brain</h1>
-        <p>Spore Brain est disponible sur ordinateur.</p>
+        <p>Spore Brain est disponible dans la version web de Spore.</p>
       </section>
     )
   }

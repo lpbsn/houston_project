@@ -7,7 +7,6 @@ import {
   serializeScopedSignalDetailPath,
   serializeScopedTerrainPath,
 } from '@/app/scoped-terrain'
-import { useLgViewport } from '@/lib/lg-viewport'
 import {
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
@@ -150,8 +149,7 @@ function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const { route, navigate, search: locationSearch, history } = useAppRoute()
-  const isLgViewport = useLgViewport()
-  const isDesktopWeb = isDesktopWebLanding(isLgViewport)
+  const isDesktopWeb = isDesktopWebLanding()
   // Captured for this render. A layout correction navigates before passive
   // effects and would otherwise make a pop look programmatic.
   const navigationCause = history.getNavigationCause()
@@ -426,7 +424,6 @@ function App() {
     authRoutingSession.memberships,
     authRoutingSession.sessionEstablishmentId,
     isDesktopWeb,
-    isLgViewport,
     locationSearch,
     history,
     navigate,

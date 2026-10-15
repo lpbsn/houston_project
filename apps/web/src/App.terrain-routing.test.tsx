@@ -283,6 +283,7 @@ afterEach(() => {
 
 describe('App terrain active membership routing', () => {
   it('keeps analytics available without active membership and redirects reporting to selection', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     const bootstrap = bootstrapWithoutActiveMembership()
     authState.bootstrap = bootstrap
     authState.memberships = bootstrap.memberships
@@ -485,7 +486,8 @@ describe('App terrain active membership routing', () => {
     )
   })
 
-  it('carries a membership-required login next without a hint to the selector on a small viewport', async () => {
+  it('carries a membership-required login next without a hint to the selector on native', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     window.history.replaceState(
       null,
       '',
@@ -631,7 +633,8 @@ describe('App terrain active membership routing', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('omits notifications on the mobile library and keeps them on desktop', () => {
+  it('omits notifications on the native library and keeps them on narrow web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     const bootstrap = bootstrapWithSelectedEstablishment('est-1')
     authState.bootstrap = bootstrap
@@ -645,7 +648,8 @@ describe('App terrain active membership routing', () => {
     expect(screen.queryByTestId('notification-center')).toBeNull()
     mobile.unmount()
 
-    stubLgViewport(true)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    stubLgViewport(false)
     render(wrapApp())
 
     expect(screen.getByTestId('notification-center')).toBeTruthy()
@@ -703,7 +707,8 @@ describe('App terrain active membership routing', () => {
     )
   })
 
-  it('sends a mobile scoped mismatch to the selector without switching', async () => {
+  it('sends a native scoped mismatch to the selector without switching', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     const bootstrap = bootstrapWithSelectedEstablishment('est-1')
     authState.bootstrap = bootstrap
@@ -782,7 +787,8 @@ describe('App terrain active membership routing', () => {
     })
   })
 
-  it('keeps operational mobile users on the selector even with an establishment hint', async () => {
+  it('keeps operational native users on the selector even with an establishment hint', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     window.history.replaceState(
       null,
@@ -802,7 +808,8 @@ describe('App terrain active membership routing', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('keeps operational mobile users on the selector without a hint', async () => {
+  it('keeps operational native users on the selector without a hint', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     const bootstrap = bootstrapWithSelectedEstablishment('est-1')
     authState.bootstrap = bootstrap
@@ -894,7 +901,7 @@ describe('App terrain active membership routing', () => {
     )
   })
 
-  it('redirects web mobile operational-config to reporting without mounting the editor', async () => {
+  it('keeps operational-config accessible on narrow web', async () => {
     stubLgViewport(false)
     const bootstrap = bootstrapWithSelectedEstablishment('est-2')
     authState.bootstrap = bootstrap
@@ -908,10 +915,8 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
-    })
-    expect(screen.queryByTestId('operational-config')).toBeNull()
+    expect(screen.getByTestId('operational-config')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
@@ -937,7 +942,7 @@ describe('App terrain active membership routing', () => {
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
-  it('redirects web mobile /platform without mounting PlatformShell', async () => {
+  it('keeps PlatformShell accessible on narrow web for an operator', async () => {
     stubLgViewport(false)
     const bootstrap = bootstrapWithoutActiveMembership({
       memberships: [],
@@ -960,10 +965,8 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/no-establishment', { replace: true })
-    })
-    expect(screen.queryByTestId('platform-shell')).toBeNull()
+    expect(await screen.findByTestId('platform-shell')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('mounts PlatformShell on desktop web for an operator without membership', async () => {
@@ -1052,7 +1055,8 @@ describe('App terrain active membership routing', () => {
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
-  it('sends mobile browser back between establishments through the selector', async () => {
+  it('sends native navigation back between establishments through the selector', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     const bootstrap = bootstrapWithSelectedEstablishment('est-1')
     authState.bootstrap = bootstrap
@@ -1088,7 +1092,8 @@ describe('App terrain active membership routing', () => {
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
-  it('sends mobile browser back from Cross to an establishment through the selector', async () => {
+  it('sends native navigation back from Cross to an establishment through the selector', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     const bootstrap = bootstrapWithSelectedEstablishment('est-1')
     authState.bootstrap = bootstrap

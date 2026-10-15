@@ -2,7 +2,11 @@
 
 import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+
+// Terrain presentation is selected explicitly, independently of the test viewport.
+beforeEach(() => vi.stubEnv('VITE_APP_RUNTIME', 'native'))
+
 
 import type { BootstrapResponse } from '@/features/auth/types'
 import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
@@ -293,6 +297,7 @@ describe('ProfilePage', () => {
   })
 
   it('keeps public legal destinations after account deletion', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     render(
       createElement(ProfilePage, {
         onNavigate,
@@ -340,6 +345,7 @@ describe('ProfilePage', () => {
   })
 
   it('hides history on the desktop general profile', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     lgViewportState.current = true
     render(
       createElement(ProfilePage, {
@@ -680,6 +686,7 @@ describe('ProfilePage', () => {
   })
 
   it('hides the push toggle on web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     render(
       createElement(ProfilePage, {
         onNavigate,
@@ -1053,6 +1060,7 @@ describe('ProfilePage', () => {
   })
 
   it('hides switch establishment on desktop web lg', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     lgViewportState.current = true
     authState.current = {
       ...authState.current,
@@ -1085,6 +1093,7 @@ describe('ProfilePage', () => {
   })
 
   it('hides analytics and sign-out on desktop web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     lgViewportState.current = true
     authState.current = {
       ...authState.current,
@@ -1130,6 +1139,7 @@ describe('ProfilePage', () => {
   })
 
   it('opens operational config under team for a desktop owner or director', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     lgViewportState.current = true
     authState.current = {
       ...authState.current,
@@ -1176,7 +1186,8 @@ describe('ProfilePage', () => {
     expect(onNavigate).toHaveBeenCalledWith('/e/est-1/operational-config')
   })
 
-  it('hides operational config for a manager and on mobile', () => {
+  it('hides operational config for a manager on web and a director on native', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     authState.current = {
       ...authState.current,
       activeMembership: {
@@ -1223,6 +1234,7 @@ describe('ProfilePage', () => {
     expect(screen.queryByRole('button', { name: /Configuration opérationnelle/i })).toBeNull()
 
     cleanup()
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     lgViewportState.current = true
     authState.current = {
       ...authState.current,

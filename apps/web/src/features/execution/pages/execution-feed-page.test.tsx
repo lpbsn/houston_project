@@ -1567,6 +1567,7 @@ describe('ExecutionFeedPage desktop list', () => {
   })
 
   it('keeps a compact mobile create control and tight list/calendar toolbar padding', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(false)
     permissionHintsHolder.value = {
       can_create_action_plan: true,

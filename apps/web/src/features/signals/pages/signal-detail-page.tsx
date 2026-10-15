@@ -12,7 +12,6 @@ import {
   type AnalyticsSignalReturnContext,
 } from '@/features/analytics/lib/analytics-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { useLocationSearch } from '@/lib/location-search'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -70,7 +69,7 @@ export function SignalDetailPage({
   source = 'establishment',
 }: SignalDetailPageProps) {
   const auth = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const sessionEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const establishmentId = establishmentIdProp ?? sessionEstablishmentId
   const locationSearch = useLocationSearch()

@@ -81,16 +81,14 @@ describe('isDesktopWebLanding', () => {
     vi.unstubAllEnvs()
   })
 
-  it('is true only for web on a large viewport', () => {
+  it('selects the SaaS experience for the web runtime', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'web')
-    expect(isDesktopWebLanding(true)).toBe(true)
-    expect(isDesktopWebLanding(false)).toBe(false)
+    expect(isDesktopWebLanding()).toBe(true)
   })
 
   it('is false on native regardless of viewport', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
-    expect(isDesktopWebLanding(true)).toBe(false)
-    expect(isDesktopWebLanding(false)).toBe(false)
+    expect(isDesktopWebLanding()).toBe(false)
   })
 })
 
@@ -130,7 +128,7 @@ describe('resolveAuthenticatedLanding', () => {
       permission_hints: ownerOrgHints,
     })
     expect(
-      getAuthenticatedLandingPath(multiOwner, { isDesktop: isDesktopWebLanding(true) }),
+      getAuthenticatedLandingPath(multiOwner, { isDesktop: isDesktopWebLanding() }),
     ).toBe('/select-establishment')
   })
 
@@ -326,8 +324,8 @@ describe('resolveAuthenticatedLanding', () => {
     ).toEqual({ kind: 'platform', path: '/platform/onboardings' })
   })
 
-  it('returns empty for operator-only outside desktop web', () => {
-    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+  it('returns empty for operator-only on native', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
     expect(
       resolveAuthenticatedLanding(
         bootstrap({

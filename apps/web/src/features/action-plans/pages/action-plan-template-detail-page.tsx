@@ -11,7 +11,7 @@ import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { notifySuccess } from '@/lib/success-toast'
-import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
+import { useXlViewport } from '@/lib/lg-viewport'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -69,7 +69,7 @@ type ActionPlanTemplateDetailPageProps = {
 export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplateDetailPageProps) {
   const { navigate } = useAppRoute()
   const { activeMembership, bootstrap } = useAuth()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const placeDetailColumns = useXlViewport()
   const establishmentId = activeMembership?.establishment_id ?? null
   const staffUseMode = isStaffActionPlanUsageRole(activeMembership?.role ?? null)

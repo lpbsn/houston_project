@@ -44,7 +44,6 @@ import {
   type HistoryViewMode,
 } from '@/features/history/lib/history-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type HistoryPageProps = {
@@ -123,7 +122,7 @@ function statusOptions(kind: HistoryKind): { value: string; label: string }[] {
 export function HistoryPage({ scope }: HistoryPageProps) {
   const auth = useAuth()
   const { route, search, navigate } = useAppRoute()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const inheritedEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const source = scope?.type === 'cross' ? 'cross' : 'establishment'
   const establishmentId =

@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
+import { useXlViewport } from '@/lib/lg-viewport'
 import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
 import { terrainBrandAction, terrainSectionLabelClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -72,7 +72,7 @@ export function ActionPlanExecutionEditPage({
   onBack,
 }: ActionPlanExecutionEditPageProps) {
   const { navigate, search } = useAppRoute()
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isDesktopWeb = isDesktopWebLanding()
   const placeFormColumns = useXlViewport()
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const auth = useAuth()
