@@ -18,6 +18,7 @@ from django.db.utils import OperationalError
 
 from houston.analytics.journal import get_history_reliable_from
 from houston.brain.collection import REQUIRED_SEARCHES, collect_capture
+from houston.brain.dossier import assemble_period_snapshot, persist_period_contents
 from houston.brain.errors import BrainWorkError, CaptureTimeout
 from houston.brain.models import (
     BrainAnalysis,
@@ -133,6 +134,144 @@ def capture_dossier(
             "dossier_id": str(dossier.id),
         },
     )
+    return dossier
+
+
+def capture_period_dossier(
+    analysis_id,
+    *,
+    _pauses: tuple[float, ...] = (),
+    _fail_before_close: bool = False,
+    _before_close=None,
+    _before_commit=None,
+) -> BrainDossier:
+    """Copy one period and close that dossier. The current executor does not call this.
+
+    The transaction matches ``capture_dossier``: REPEATABLE READ, one timestamp,
+    commit closes the dossier. Observations are not read. No provider call is made.
+    """
+    if connection.in_atomic_block:
+        raise BrainWorkError(
+            code="capture_nested_transaction",
+            message="La capture doit ouvrir sa propre transaction.",
+        )
+    started = time.monotonic()
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            analysis = _load_analysis(analysis_id)
+            timeout_seconds, ceiling = _ceilings(analysis)
+            budget = _Budget(started, timeout_seconds)
+            for delay in _pauses:
+                budget.pause(delay)
+            capture_at = budget.run(_transaction_timestamp)
+            dossier = _capture_period_in_snapshot(
+                analysis,
+                capture_at=capture_at,
+                ceiling=ceiling,
+                budget=budget,
+                fail_before_close=_fail_before_close,
+                before_close=_before_close,
+                before_commit=_before_commit,
+            )
+            budget.arm()
+    except CaptureTimeout:
+        logger.info(
+            "brain_capture_timeout",
+            extra={"event": "brain_capture_timeout", "analysis_id": str(analysis_id)},
+        )
+        raise
+    except OperationalError as exc:
+        if _is_statement_timeout(exc):
+            logger.info(
+                "brain_capture_timeout",
+                extra={"event": "brain_capture_timeout", "analysis_id": str(analysis_id)},
+            )
+            raise CaptureTimeout() from exc
+        raise
+    logger.info(
+        "brain_period_dossier_closed",
+        extra={
+            "event": "brain_period_dossier_closed",
+            "analysis_id": str(analysis.id),
+            "dossier_id": str(dossier.id),
+        },
+    )
+    return dossier
+
+
+def _capture_period_in_snapshot(
+    analysis: BrainAnalysis,
+    *,
+    capture_at,
+    ceiling: int,
+    budget: _Budget,
+    fail_before_close: bool,
+    before_close,
+    before_commit,
+) -> BrainDossier:
+    if analysis.status not in _OPEN_STATUSES:
+        raise BrainWorkError(
+            code="analysis_not_open",
+            message="Cette analyse n'accepte plus de capture.",
+        )
+    reporting = analysis.reporting
+    if (
+        reporting.period_start is None
+        or reporting.period_end is None
+        or reporting.establishment_id != analysis.establishment_id
+    ):
+        raise BrainWorkError(
+            code="reporting_period_missing",
+            message="La période confirmée du reporting est absente.",
+        )
+    closed = budget.run(
+        lambda: BrainDossier.objects.filter(
+            analysis_id=analysis.id,
+            closed_at__isnull=False,
+        ).exists()
+    )
+    if closed:
+        raise BrainWorkError(
+            code="dossier_already_closed",
+            message="Le dossier est déjà fermé.",
+        )
+    extraction = _locked_extraction(budget, analysis)
+    reliable_from = budget.run(get_history_reliable_from)
+    assembled = assemble_period_snapshot(
+        establishment=analysis.establishment,
+        reporting=reporting,
+        extraction_payload=extraction.payload,
+        capture_at=capture_at,
+        reliable_from=reliable_from,
+        ceiling=ceiling,
+        run=budget.run,
+    )
+    if before_close is not None:
+        budget.arm()
+        before_close()
+    if fail_before_close:
+        raise BrainWorkError(
+            code="capture_incomplete",
+            message="La capture n'a pas été fermée.",
+        )
+    establishment = analysis.establishment
+    dossier = budget.run(
+        lambda: BrainDossier.objects.create(
+            analysis=analysis,
+            establishment=establishment,
+            timezone=establishment.timezone,
+            period_start=reporting.period_start,
+            period_end=reporting.period_end,
+            capture_started_at=capture_at,
+        )
+    )
+    budget.run(lambda: persist_period_contents(dossier, assembled))
+    dossier.closed_at = budget.run(_transaction_timestamp)
+    budget.run(lambda: dossier.save(update_fields=["closed_at", "updated_at"]))
+    if before_commit is not None:
+        before_commit(budget)
     return dossier
 
 

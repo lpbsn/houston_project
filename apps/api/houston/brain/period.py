@@ -16,7 +16,12 @@ import json
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 
-from houston.brain.configuration import json_token_count
+from houston.brain.configuration import (
+    CALL_FRAMING_TOKENS,
+    _encode_len,
+    encoding_for_frozen,
+    json_token_count,
+)
 from houston.brain.investigation import (
     FORBIDDEN_SIGNAL_KEYS,
     PER_CALL_INPUT_TOKENS,
@@ -189,6 +194,29 @@ class DiscoveredItem:
 
 
 @dataclass(frozen=True)
+class ReadingAllowance:
+    """What one call may spend on the dossier after the provider envelope.
+
+    Instructions and the provider schema are counted when they are supplied.
+    Their place stays in the formula either way. The framing margin is always
+    reserved. This does not build a prompt and it does not call a provider.
+    """
+
+    per_call_input_tokens: int
+    instruction_tokens: int
+    schema_tokens: int
+    framing_tokens: int
+
+    @property
+    def overhead_tokens(self) -> int:
+        return self.instruction_tokens + self.schema_tokens + self.framing_tokens
+
+    @property
+    def dossier_tokens(self) -> int:
+        return self.per_call_input_tokens - self.overhead_tokens
+
+
+@dataclass(frozen=True)
 class FirstReading:
     launched: bool
     limit: str | None
@@ -205,9 +233,7 @@ class FirstReading:
             "code": "premiere_lecture",
             "limit": self.limit,
             "examined_ids": list(self.examined_ids),
-            "discovered_not_examined": [
-                item.as_record() for item in self.discovered_not_examined
-            ],
+            "discovered_not_examined": [item.as_record() for item in self.discovered_not_examined],
         }
 
 
@@ -397,6 +423,30 @@ def reading_input_tokens(
     )
 
 
+def reading_allowance(
+    *,
+    instructions: str = "",
+    schema: object | None = None,
+    per_call_input_tokens: int = PER_CALL_INPUT_TOKENS,
+    provider: str = "fake",
+    model: str = "fake",
+) -> ReadingAllowance:
+    """Real call budget. The dossier receives what remains after the envelope."""
+    if per_call_input_tokens <= 0:
+        raise PeriodSnapshotError("budget_invalid")
+    encoding = encoding_for_frozen(provider=provider, model=model)
+    instruction_tokens = _encode_len(encoding, instructions) if instructions else 0
+    schema_tokens = (
+        0 if schema is None else json_token_count(schema, provider=provider, model=model)
+    )
+    return ReadingAllowance(
+        per_call_input_tokens=per_call_input_tokens,
+        instruction_tokens=instruction_tokens,
+        schema_tokens=schema_tokens,
+        framing_tokens=CALL_FRAMING_TOKENS,
+    )
+
+
 def select_first_reading(
     snapshot: PeriodSnapshot,
     *,
@@ -404,6 +454,7 @@ def select_first_reading(
     subject_start: date,
     subject_end: date,
     input_token_budget: int = PER_CALL_INPUT_TOKENS,
+    allowance: ReadingAllowance | None = None,
     provider: str = "fake",
     model: str = "fake",
 ) -> FirstReading:
@@ -414,7 +465,14 @@ def select_first_reading(
     Same-pole texts fill that remainder before other poles. A representative
     already chosen is not removed to make room. When the reporting plus one
     text per pole exceeds the window, no packet is built.
+
+    An allowance reserves instructions, the provider schema and the framing
+    margin. The comparison then uses only the tokens left for the dossier.
     """
+    overhead = 0
+    if allowance is not None:
+        input_token_budget = allowance.dossier_tokens
+        overhead = allowance.overhead_tokens
     representatives = _representatives(snapshot, subject_pole, subject_start, subject_end)
     representative_ids = tuple(item.source_id for item in representatives)
     mandatory = reading_input_tokens(
@@ -439,7 +497,7 @@ def select_first_reading(
             representative_ids=representative_ids,
             discovered_not_examined=discovered,
             competing_period_lead_excluded=bool(representatives),
-            input_tokens=mandatory,
+            input_tokens=mandatory + overhead,
         )
 
     selected = list(representatives)
@@ -465,7 +523,8 @@ def select_first_reading(
             examined_ids,
             provider=provider,
             model=model,
-        ),
+        )
+        + overhead,
     )
 
 
@@ -508,8 +567,23 @@ def _blocked_discovered(snapshot, representatives, subject_pole, subject_start, 
 
 
 def _overlap_rank(item: PeriodCopy, subject_start: date, subject_end: date):
+    """Best overlap with the subject, then the tighter span.
+
+    Two signals can cover the subject for the same number of days. The one
+    whose own dates stick out less is the closer match. A longer span does
+    not win that tie.
+    """
     overlap = _overlap_days(item.start, item.end, subject_start, subject_end)
-    return (-overlap, item.start or date.max, item.source_id)
+    return (-overlap, _days_outside_subject(item, subject_start, subject_end), item.source_id)
+
+
+def _days_outside_subject(item: PeriodCopy, subject_start: date, subject_end: date) -> int:
+    if item.start is None:
+        return 10**9
+    end = item.end if item.end is not None else item.start + timedelta(days=1)
+    span = max(0, (end - item.start).days)
+    overlap = _overlap_days(item.start, item.end, subject_start, subject_end)
+    return span - overlap
 
 
 def _overlap_days(
@@ -665,9 +739,7 @@ def _index_for(copies: tuple[PeriodCopy, ...]) -> tuple[PeriodIndexEntry, ...]:
                 start=item.start,
                 end=item.end,
                 title=item.title,
-                text_tokens=json_token_count(
-                    {"title": item.title, "structured_summary": summary}
-                ),
+                text_tokens=json_token_count({"title": item.title, "structured_summary": summary}),
             )
         )
     return tuple(entries)

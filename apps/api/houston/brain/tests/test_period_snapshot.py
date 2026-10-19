@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from houston.brain.configuration import json_token_count
+from houston.brain.configuration import CALL_FRAMING_TOKENS, json_token_count
 from houston.brain.investigation import (
     QUALIFICATION_COMPLETE,
     QUALIFICATION_REFUSED,
@@ -22,6 +22,7 @@ from houston.brain.period import (
     PeriodSnapshotError,
     PeriodSource,
     freeze_period_snapshot,
+    reading_allowance,
     reading_input_tokens,
     select_first_reading,
     stored_view,
@@ -484,6 +485,138 @@ def test_period_snapshot_keeps_the_period_and_drops_forbidden_text():
     assert "EXECUTION-HEBERGEMENT" in json.dumps(reading.payload)
     assert "P-01" not in reading.examined_ids
     assert reading.competing_period_lead_excluded is False
+
+
+def test_a_tighter_signal_beats_a_longer_span_with_the_same_overlap():
+    subject = (date(2026, 3, 5), date(2026, 3, 8))
+    sources = (
+        field(
+            "R-LONG",
+            pole="restauration",
+            title="Longue salle",
+            summary="LONG-RESTAURATION",
+            start=date(2026, 3, 1),
+            end=date(2026, 3, 8),
+        ),
+        field(
+            "S-01",
+            pole="restauration",
+            title="Service salle",
+            summary="PREUVE-NOYEE",
+            start=subject[0],
+            end=subject[1],
+        ),
+        field(
+            "R-01",
+            pole="restauration",
+            title="Incident court",
+            summary="REMPLISSAGE-RESTAURATION",
+            start=subject[0],
+            end=date(2026, 3, 6),
+        ),
+        field(
+            "H-LONG",
+            pole="hebergement",
+            title="Long hebergement",
+            summary="LONG-HEBERGEMENT",
+            start=date(2026, 3, 1),
+            end=date(2026, 3, 8),
+        ),
+        field(
+            "S-02",
+            pole="hebergement",
+            title="Clients heberges",
+            summary="PISTE-HEBERGEMENT",
+            start=subject[0],
+            end=subject[1],
+        ),
+    )
+    snapshot = freeze_period_snapshot(
+        capture_at=CAPTURE_AT,
+        period_start=PERIOD[0],
+        period_end=PERIOD[1],
+        reporting=reporting(),
+        series=series(),
+        sources=sources,
+    )
+    opened = select_first_reading(
+        snapshot,
+        subject_pole="restauration",
+        subject_start=subject[0],
+        subject_end=subject[1],
+        input_token_budget=10**9,
+    )
+    payload_cost = reading_input_tokens(snapshot, opened.representative_ids)
+    reading = select_first_reading(
+        snapshot,
+        subject_pole="restauration",
+        subject_start=subject[0],
+        subject_end=subject[1],
+        input_token_budget=payload_cost,
+    )
+    discovered = [item.source_id for item in reading.discovered_not_examined]
+    s01_span = (subject[1] - subject[0]).days
+    long_span = (date(2026, 3, 8) - date(2026, 3, 1)).days
+
+    assert s01_span < long_span
+    assert opened.representative_ids == ("S-01", "S-02")
+    assert reading.launched is True
+    assert reading.examined_ids == ("S-01", "S-02")
+    assert discovered[0] == "R-LONG"
+    assert discovered.index("R-LONG") < discovered.index("H-LONG")
+    assert "S-02" not in discovered
+    assert "PISTE-HEBERGEMENT" in json.dumps(reading.payload)
+    assert "LONG-RESTAURATION" not in json.dumps(reading.payload)
+    assert "LONG-HEBERGEMENT" not in json.dumps(reading.payload)
+
+
+def test_the_call_budget_reserves_instructions_and_the_provider_schema():
+    snapshot, _source = restaurant_week()
+    representatives = _select(snapshot, 10**9).representative_ids
+    payload_cost = reading_input_tokens(snapshot, representatives)
+    instructions = "Lis le reporting, puis un signal de chaque pole."
+    schema = {"type": "object", "properties": {"constats": {"type": "array"}}}
+    reserved = reading_allowance(
+        instructions=instructions,
+        schema=schema,
+        per_call_input_tokens=payload_cost + 10**6,
+    )
+    fitting = reading_allowance(
+        instructions=instructions,
+        schema=schema,
+        per_call_input_tokens=payload_cost + reserved.overhead_tokens,
+    )
+    short = reading_allowance(
+        instructions=instructions,
+        schema=schema,
+        per_call_input_tokens=payload_cost + reserved.overhead_tokens - 1,
+    )
+    reading = select_first_reading(
+        snapshot,
+        subject_pole="restauration",
+        subject_start=WEEK[0],
+        subject_end=WEEK[1],
+        allowance=fitting,
+    )
+    refused = select_first_reading(
+        snapshot,
+        subject_pole="restauration",
+        subject_start=WEEK[0],
+        subject_end=WEEK[1],
+        allowance=short,
+    )
+
+    assert reserved.instruction_tokens > 0
+    assert reserved.schema_tokens > 0
+    assert reserved.framing_tokens == CALL_FRAMING_TOKENS
+    assert fitting.dossier_tokens == payload_cost
+    assert reading.launched is True
+    assert reading.examined_ids == representatives
+    assert reading.input_tokens == payload_cost + reserved.overhead_tokens
+    assert refused.launched is False
+    assert refused.payload is None
+    assert refused.limit == LIMIT_PERIOD_EXCEEDS_CALL
+    assert "PISTE-HEBERGEMENT" not in json.dumps(refused.search_record())
 
 
 def test_a_reporting_observation_is_refused_without_its_text():
