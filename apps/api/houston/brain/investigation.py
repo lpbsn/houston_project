@@ -84,6 +84,20 @@ FORBIDDEN_SIGNAL_KEYS = frozenset(
 
 
 @dataclass(frozen=True)
+class TimingVerdict:
+    """Whether one attempt can host every call the engine may start.
+
+    The lease is renewed before a call, so it has to outlive the provider
+    timeout and still leave the write. The worker soft and hard limits have
+    to cover every call running up to that timeout.
+    """
+
+    coherent: bool
+    needed_seconds: int
+    issues: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class DeepeningDecision:
     accepted: bool
     code: str
@@ -153,6 +167,36 @@ def investigation_ceilings() -> dict[str, int]:
         "max_provider_calls": MAX_PROVIDER_CALLS,
         "total_input_tokens": MAX_PROVIDER_CALLS * PER_CALL_INPUT_TOKENS,
     }
+
+
+def investigation_timing(ceilings: dict) -> TimingVerdict:
+    """Coherence of provider timeout, worker lease, and the attempt limits.
+
+    ``needed_seconds`` is one full timeout for every provider call. A lease
+    that expires on the timeout leaves no time to persist the step. An attempt
+    shorter than the calls is killed before the investigation can stop cleanly.
+    """
+    try:
+        timeout = int(ceilings["provider_timeout_seconds"])
+        lease = int(ceilings["lease_seconds"])
+        soft = int(ceilings["attempt_soft_seconds"])
+        hard = int(ceilings["attempt_hard_seconds"])
+        calls = int(ceilings.get("max_provider_calls", MAX_PROVIDER_CALLS))
+    except (KeyError, TypeError, ValueError):
+        return TimingVerdict(False, 0, ("timing_unreadable",))
+    if min(timeout, lease, soft, hard, calls) <= 0:
+        return TimingVerdict(False, 0, ("timing_unreadable",))
+    needed = calls * timeout
+    issues: list[str] = []
+    if lease <= timeout:
+        issues.append("lease_not_after_timeout")
+    if hard < needed:
+        issues.append("attempt_shorter_than_calls")
+    if soft >= hard:
+        issues.append("soft_not_before_hard")
+    if soft < needed:
+        issues.append("soft_shorter_than_calls")
+    return TimingVerdict(not issues, needed, tuple(issues))
 
 
 def accept_deepening(
