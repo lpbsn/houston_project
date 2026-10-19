@@ -7,10 +7,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from houston.brain.investigation_contract import (
     assess_reading,
+    causal_evidence_issue,
     investigation_prompt,
     investigation_response_schema,
+    subject_figures_verified,
 )
 from houston.brain.numbers import decimal_text
 
@@ -63,6 +67,7 @@ def _reading(subjects: list[dict], contradictions: list[dict] | None = None) -> 
 
 _BEFORE = ("2026-02-01", "2026-02-08")
 _AFTER = ("2026-02-08", "2026-02-15")
+_N_MINUS_ONE = ("2025-02-01", "2025-02-08")
 
 
 def _measure(
@@ -1000,7 +1005,7 @@ def test_an_operand_must_match_the_cited_measure():
 
     elsewhere = _catalog(
         _measure("before", "12", "EUR", definition="CA"),
-        _measure("after", "10", "EUR", definition="CA", start=_AFTER),
+        _measure("after", "10", "EUR", definition="CA"),
         _measure("decoy", "120", "EUR", definition="autre"),
     )
     borrowed = _subject(
@@ -1104,3 +1109,279 @@ def test_an_action_or_a_measure_is_not_an_established_cause():
         measures=_catalog(_measure("measure:0", "80", "couvert", definition="frequentation")),
     )
     assert "measurement_not_cause" in measured.errors
+
+
+_ROLES = ("gap", "component", "identity")
+
+
+def _calculation(
+    operation: str,
+    role: str,
+    operands: list[dict],
+    published: str,
+    unit: str,
+) -> dict:
+    comparison = "temporal" if operation in {"variation", "difference"} else "identity"
+    return {
+        "operation": operation,
+        "role": role,
+        "comparison": comparison,
+        "label": operation,
+        "operands": operands,
+        "published_value": published,
+        "unit": unit,
+    }
+
+
+def _published(operation: str, values: tuple[str, ...]) -> str:
+    numbers = tuple(Decimal(value) for value in values)
+    if operation == "variation":
+        return decimal_text((numbers[1] - numbers[0]) / numbers[0])
+    if operation == "difference":
+        return decimal_text(numbers[0] - numbers[1])
+    if operation == "product":
+        return decimal_text(numbers[0] * numbers[1])
+    if operation == "ratio":
+        return decimal_text(numbers[0] / numbers[1])
+    return decimal_text(sum(numbers, Decimal(0)))
+
+
+@pytest.mark.parametrize("role", _ROLES)
+def test_relabeling_an_operation_does_not_bypass_measure_compatibility(role):
+    left = _measure("left", "100", "EUR", definition="CA", tax="ht")
+    right = _measure("right", "80", "EUR", definition="CA", tax="ttc", start=_AFTER)
+    ambiguous = _measure(
+        "ambiguous",
+        "50",
+        "EUR",
+        definition="CA",
+        tax="unspecified",
+        ambiguities=("ht_ttc",),
+    )
+    budget = _measure("budget", "90", "EUR", definition="CA", tax="ht", nature="budget")
+    earlier = _measure("earlier", "70", "EUR", definition="CA", tax="ht", start=_N_MINUS_ONE)
+    same_ttc = _measure("same-ttc", "120", "EUR", definition="CA", tax="ttc")
+    room = _measure("room", "600", "EUR", definition="salle", scope="salle", tax="ht")
+    terrace = _measure("terrace", "400", "EUR", definition="terrasse", scope="terrasse", tax="ht")
+    covers = _measure("covers", "88", "couvert", definition="couverts", tax="unspecified")
+    price = _measure("price", "10", "EUR", definition="panier", tax="ht")
+    catalog = _catalog(
+        left, right, ambiguous, budget, earlier, same_ttc, room, terrace, covers, price
+    )
+    refused = (
+        ("variation", (left, right), "tax_mismatch"),
+        ("difference", (left, right), "tax_mismatch"),
+        ("sum", (left, same_ttc), "tax_mismatch"),
+        ("product", (left, same_ttc), "tax_mismatch"),
+        ("ratio", (left, same_ttc), "tax_mismatch"),
+        ("variation", (left, ambiguous), "ambiguous"),
+        ("sum", (room, ambiguous), "ambiguous"),
+        ("product", (covers, ambiguous), "ambiguous"),
+        ("sum", (left, budget), "nature_mixed"),
+        ("product", (left, budget), "nature_mixed"),
+        ("ratio", (left, budget), "nature_mixed"),
+        ("sum", (left, earlier), "period_mismatch"),
+        ("product", (left, earlier), "period_mismatch"),
+        ("ratio", (left, earlier), "period_mismatch"),
+    )
+    for operation, terms, code in refused:
+        operands = [_op(term["measure_id"], term["value"], term["unit"]) for term in terms]
+        published = _published(operation, tuple(term["value"] for term in terms))
+        unit = "" if operation in {"variation", "ratio", "product"} else terms[0]["unit"]
+        assessment = _assess(
+            _reading(
+                [
+                    _subject(
+                        "ca",
+                        movement="degradation",
+                        calculations=[
+                            _calculation(operation, role, operands, published, unit),
+                        ],
+                    )
+                ]
+            ),
+            citable_ids={term["measure_id"] for term in terms},
+            proposed_keys={"ca"},
+            measures=catalog,
+        )
+        assert code in assessment.errors, (operation, role)
+        assert assessment.ok is False
+
+    accepted = (
+        (
+            "variation",
+            (earlier, left),
+            "degradation",
+            {"earlier", "left"},
+        ),
+        (
+            "difference",
+            (earlier, left),
+            "degradation",
+            {"earlier", "left"},
+        ),
+        ("sum", (room, terrace), "degradation", {"room", "terrace"}),
+        ("product", (covers, price), "degradation", {"covers", "price"}),
+        ("ratio", (price, covers), "degradation", {"price", "covers"}),
+    )
+    for operation, terms, movement, cited in accepted:
+        operands = [_op(term["measure_id"], term["value"], term["unit"]) for term in terms]
+        published = _published(operation, tuple(term["value"] for term in terms))
+        unit = "" if operation in {"variation", "ratio", "product"} else terms[0]["unit"]
+        assessment = _assess(
+            _reading(
+                [
+                    _subject(
+                        "ca",
+                        movement=movement,
+                        calculations=[_calculation(operation, role, operands, published, unit)],
+                    )
+                ]
+            ),
+            citable_ids=cited,
+            proposed_keys={"ca"},
+            measures=catalog,
+        )
+        assert assessment.ok, (operation, role, assessment.errors)
+
+
+@pytest.mark.parametrize("role", _ROLES)
+def test_a_movement_does_not_follow_the_role_written_on_the_figure(role):
+    before = _measure("before", "25", "EUR", definition="panier")
+    after = _measure("after", "23", "EUR", definition="panier", start=_AFTER)
+    base = _measure("base", "40", "EUR", definition="panier")
+    flat = _measure("flat", "40", "EUR", definition="panier", start=_AFTER)
+    room = _measure("room", "600", "EUR", definition="salle", scope="salle")
+    terrace = _measure("terrace", "400", "EUR", definition="terrasse", scope="terrasse")
+    measures = _catalog(before, after, base, flat, room, terrace)
+    change = _variation("panier", role, ("before", "25"), ("after", "23"), "EUR")
+    gap = _calculation(
+        "difference",
+        role,
+        [_op("before", "25", "EUR"), _op("after", "23", "EUR")],
+        "2",
+        "EUR",
+    )
+    stable = _variation("panier", role, ("base", "40"), ("flat", "40"), "EUR")
+    level = _calculation(
+        "sum",
+        role,
+        [_op("room", "600", "EUR"), _op("terrace", "400", "EUR")],
+        "1000",
+        "EUR",
+    )
+
+    def verdict(movement: str, calculations: list[dict]):
+        return _assess(
+            _reading([_subject("panier", movement=movement, calculations=calculations)]),
+            citable_ids={"before", "after", "base", "flat", "room", "terrace"},
+            proposed_keys={"panier"},
+            measures=measures,
+        )
+
+    assert "movement_conflict" in verdict("stability", [change]).errors
+    assert "movement_conflict" in verdict("stability", [gap]).errors
+    assert "movement_conflict" in verdict("qualitative", [change]).errors
+    assert "movement_conflict" in verdict("qualitative", [gap]).errors
+    assert "movement_conflict" in verdict("qualitative", [level]).errors
+    assert verdict("stability", [stable]).ok
+    assert verdict("improvement", [change]).ok
+    assert verdict("stability", [level]).ok
+
+
+def test_a_declared_source_is_not_causal_proof_and_only_recomputed_figures_qualify():
+    sources = {
+        "signal_ids": {"signal-1"},
+        "action_ids": {"plan-1"},
+        "measure_ids": {"measure:0"},
+        "reporting_ids": {"reporting-1"},
+    }
+    claims = (
+        (["reporting-1"], "reporting_not_cause"),
+        (["signal-1"], "signal_cause_refused"),
+        (["plan-1"], "action_not_cause"),
+        (["measure:0"], "measurement_not_cause"),
+        (["measure:0", "reporting-1"], "reporting_not_cause"),
+        (["invented-lead"], "source_not_cause"),
+        ([], "cause_without_evidence"),
+    )
+    for evidence, code in claims:
+        assert causal_evidence_issue(evidence, **sources) == code
+        assessment = _assess(
+            _reading([_subject("ca", cause="established", evidence_ids=evidence)]),
+            citable_ids=set(evidence),
+            signal_ids=sources["signal_ids"],
+            action_ids=sources["action_ids"],
+            reporting_ids=sources["reporting_ids"],
+            proposed_keys={"ca"},
+            measures=_catalog(_measure("measure:0", "80", "couvert", definition="frequentation")),
+        )
+        assert code in assessment.errors
+
+    supported = _subject(
+        "ca",
+        explanations=[
+            {
+                "text": "Le document suffirait.",
+                "status": "supported",
+                "support_ids": ["invented-lead"],
+                "contradiction_ids": [],
+            }
+        ],
+    )
+    assert (
+        "explanation_not_cause"
+        in _assess(
+            _reading([supported]),
+            citable_ids={"invented-lead"},
+            proposed_keys={"ca"},
+        ).errors
+    )
+
+    mixed = _subject(
+        "ca",
+        movement="degradation",
+        calculations=[
+            _calculation(
+                "sum",
+                "identity",
+                [_op("ht", "100", "EUR"), _op("ttc", "120", "EUR")],
+                "220",
+                "EUR",
+            )
+        ],
+    )
+    measures = _catalog(
+        _measure("ht", "100", "EUR", definition="CA", tax="ht"),
+        _measure("ttc", "120", "EUR", definition="CA", tax="ttc"),
+        _measure("before", "100", "couvert", definition="frequentation"),
+        _measure("after", "80", "couvert", definition="frequentation", start=_AFTER),
+    )
+    assert (
+        subject_figures_verified(
+            mixed,
+            measures=measures,
+            signal_ids=set(),
+            action_ids=set(),
+        )
+        is False
+    )
+    verified = _subject(
+        "ca",
+        movement="degradation",
+        calculations=[
+            _variation(
+                "frequentation",
+                "component",
+                ("before", "100"),
+                ("after", "80"),
+                "couvert",
+            )
+        ],
+    )
+    assert subject_figures_verified(
+        verified,
+        measures=measures,
+        signal_ids=set(),
+        action_ids=set(),
+    )

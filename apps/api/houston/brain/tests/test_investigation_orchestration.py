@@ -32,8 +32,10 @@ from houston.brain.investigation_contract import (
     investigation_response_schema,
 )
 from houston.brain.models import BrainAnalysis, BrainDossier, BrainExtraction, BrainSearchRun
-from houston.brain.orchestration import run_investigation
+from houston.brain.orchestration import _fit_call, run_investigation
 from houston.brain.period import (
+    PeriodCopy,
+    PeriodSnapshot,
     reading_allowance,
     reading_input_tokens,
     select_first_reading,
@@ -546,10 +548,100 @@ def test_a_contradiction_that_does_not_fit_blocks_the_finding(settings):
     assert "CONTRADICTION-LARGE" not in conclusion
     assert "CANDIDAT-PETIT" in conclusion
     assert "PISTE-HEBERGEMENT" in conclusion
+    examined = provider.calls[-1]["payload"]["examined"]
+    assert large_id not in {row.get("source_id") for row in examined}
+    assert not any(row.get("reduced") or row.get("text_withheld") for row in examined)
     assert large_id in outcome.withheld_contradiction_ids
     assert outcome.qualification == "refused"
     assert outcome.investigation_succeeded is False
     assert outcome.published is False
+
+
+def test_a_text_left_out_of_the_call_is_not_presented_as_examined(monkeypatch):
+    def cost(payload):
+        examined = payload.get("examined") or []
+        if any("LONG-TEXT" in json.dumps(row, ensure_ascii=False) for row in examined):
+            return 100
+        return 10 if len(examined) <= 1 else 100
+
+    monkeypatch.setattr("houston.brain.orchestration.investigation_call_tokens", cost)
+    kept = _copy("kept", "TEXTE-COURT")
+    dropped = _copy("dropped", "TEXTE-ECARTE")
+    large = _copy("large", "LONG-TEXT " + ("L" * 20))
+    small = _copy("small", "PETIT-TEXTE")
+    snapshot = _snapshot((kept, dropped, large, small))
+
+    fitted = _fit_call(
+        snapshot,
+        examined_ids=("kept", "dropped"),
+        protected_ids={"kept"},
+        contradictions=[],
+        discovered=(),
+        representative_ids=("kept",),
+        competing=False,
+        reading_index=2,
+        deepenings_remaining=1,
+        per_call=10,
+        limits=[],
+    )
+    examined = fitted.payload["examined"]
+    discovered = fitted.payload["discovered_not_examined"]
+
+    assert [row["source_id"] for row in examined] == ["kept"]
+    assert "TEXTE-ECARTE" not in json.dumps(fitted.payload, ensure_ascii=False)
+    assert discovered[0]["source_id"] == "dropped"
+    assert discovered[0]["disposition"] == "discovered_not_examined"
+    assert fitted.omitted_ids == ("dropped",)
+    assert not any(row.get("reduced") or row.get("text_withheld") for row in examined)
+
+    withheld = _fit_call(
+        snapshot,
+        examined_ids=("small", "large"),
+        protected_ids={"small", "large"},
+        contradictions=[{"subject_key": "frequentation", "item_id": "large"}],
+        discovered=(),
+        representative_ids=("small",),
+        competing=False,
+        reading_index=2,
+        deepenings_remaining=1,
+        per_call=10,
+        limits=[],
+    )
+    sent = json.dumps(withheld.payload, ensure_ascii=False)
+
+    assert "LONG-TEXT" not in sent
+    assert "PETIT-TEXTE" in sent
+    assert "large" not in {row.get("source_id") for row in withheld.payload["examined"]}
+    assert withheld.withheld_ids == ("large",)
+    assert "large" in withheld.omitted_ids
+    assert not any(row.get("reduced") for row in withheld.payload["examined"])
+
+
+def _copy(source_id: str, text: str) -> PeriodCopy:
+    return PeriodCopy(
+        source_id=source_id,
+        category="signal",
+        pole="frequentation",
+        role="periode",
+        title=source_id,
+        start=PERIOD_START,
+        end=PERIOD_END,
+        payload={"source_id": source_id, "title": source_id, "structured_summary": text},
+    )
+
+
+def _snapshot(copies: tuple[PeriodCopy, ...]) -> PeriodSnapshot:
+    return PeriodSnapshot(
+        capture_at=datetime(2026, 4, 1, 12, tzinfo=PARIS),
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+        reporting={"source_id": "reporting-1", "measures": []},
+        series=(),
+        objectives=(),
+        copies=copies,
+        index=(),
+        omissions=(),
+    )
 
 
 def test_continuous_deepening_stops_after_two_openings(settings):
@@ -880,21 +972,29 @@ def test_a_modified_historical_signal_is_excluded_and_blocks_the_affirmative(set
     def handle(step, payload, analysis_id):
         if step == "lecture:1":
             return _reading(deepening=_open("seasonal_window"))
-        reporting_id = payload["reporting"]["source_id"]
-        return _reading(cause="established", evidence=(reporting_id,))
+        if step == "lecture:2":
+            reporting_id = payload["reporting"]["source_id"]
+            return _reading(cause="established", evidence=(reporting_id,))
+        return _reading()
 
     provider = ScriptedProvider(handle)
     outcome = _run(world["analysis"], provider)
     sent = json.dumps([call["payload"] for call in provider.calls], ensure_ascii=False)
+    stored = BrainSearchRun.objects.get(
+        dossier__analysis=world["analysis"],
+        code="lecture:2",
+    ).criteria["output"]
 
-    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2"]
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2", "correction:1"]
+    assert "reporting_not_cause" in provider.calls[-1]["payload"]["correction"]["errors"]
+    assert stored["subjects"][0]["cause"] == "unknown"
     assert "APRES-SAISON-MODIFIEE" not in sent
     assert "APRES-SAISON-MODIFIEE" not in _blob(world["analysis"])
     assert "SAISON-AVANT" not in sent
     assert "PREUVE-SALLE" in _blob(world["analysis"])
     assert "APRES-PERIODE" not in _blob(world["analysis"])
     assert any(row["code"] == "modified_after_capture" for row in outcome.limits)
-    assert outcome.qualification == "refused"
+    assert outcome.qualification == "factual_reading"
     assert outcome.investigation_succeeded is False
     assert outcome.published is False
 
@@ -1467,13 +1567,23 @@ def test_an_unscoped_exclusion_blocks_the_cause_and_keeps_the_gap(settings):
     def handle(step, payload, analysis_id):
         if step == "lecture:1":
             return {**_gap(), "deepening": opening}
-        reporting_id = payload["reporting"]["source_id"]
-        return _gap(cause="established", evidence=(reporting_id,))
+        if step == "lecture:2":
+            reporting_id = payload["reporting"]["source_id"]
+            return _gap(cause="established", evidence=(reporting_id,))
+        return _gap()
 
-    outcome = _run(world["analysis"], ScriptedProvider(handle))
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+    stored = BrainSearchRun.objects.get(
+        dossier__analysis=world["analysis"],
+        code="lecture:2",
+    ).criteria["output"]
 
-    assert outcome.qualification == "refused"
-    assert outcome.investigation_succeeded is False
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2", "correction:1"]
+    assert "reporting_not_cause" in provider.calls[-1]["payload"]["correction"]["errors"]
+    assert stored["subjects"][0]["cause"] == "unknown"
+    assert outcome.qualification == "partial"
+    assert outcome.investigation_succeeded is True
     assert any(row["code"] == "modified_after_capture" for row in outcome.limits)
 
 

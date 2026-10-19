@@ -12,10 +12,13 @@ from houston.brain.comparability import (
     freeze_measure,
     kpi_from_frozen,
     measured_difference,
+    measured_product,
+    measured_ratio,
     measured_variation,
     recompose_amount,
     recompose_unit_price,
     recompose_volume,
+    sum_measures,
     sum_values,
 )
 from houston.brain.contract import SCHEMA_VERSION
@@ -240,6 +243,47 @@ def test_amount_identity_is_recomputed_and_a_missing_component_is_not_a_breakdow
     assert split.volume_effect == Decimal("-200")
     assert split.price_effect == Decimal("0")
     assert split.amount_difference == Decimal("-200")
+
+
+def test_a_total_may_mix_scopes_and_still_refuses_incompatible_terms():
+    room = kpi(value=Decimal("600"), scope="salle", definition="salle")
+    terrace = kpi(value=Decimal("400"), scope="terrasse", definition="terrasse")
+    total = sum_measures((room, terrace))
+
+    assert total.accepted is True
+    assert total.value == Decimal("1000")
+    assert total.unit == "EUR"
+    assert sum_measures((room, terrace, kpi(value=Decimal("50"), tax_treatment="ttc"))).code == (
+        "tax_mismatch"
+    )
+    assert sum_measures((room, kpi(ambiguities=("ht_ttc",)))).code == "ambiguous"
+    assert sum_measures((room, kpi(nature="budget"))).code == "nature_mixed"
+    assert sum_measures((room, prior(value=Decimal("400")))).code == "period_mismatch"
+
+
+def test_a_product_or_ratio_shares_the_period_and_refuses_two_explicit_taxes():
+    covers = kpi(
+        value=Decimal("88"),
+        unit="couvert",
+        tax_treatment="unspecified",
+        definition="couverts",
+    )
+    price = kpi(value=Decimal("10"), unit="EUR", definition="panier")
+    identity = measured_product(covers, price)
+    basket = measured_ratio(price, covers)
+
+    assert identity.accepted is True
+    assert identity.value == Decimal("880")
+    assert basket.accepted is True
+    assert basket.value == Decimal("10") / Decimal("88")
+    assert measured_product(price, kpi(tax_treatment="ttc")).code == "tax_mismatch"
+    assert measured_ratio(price, kpi(value=Decimal("120"), tax_treatment="ttc")).code == (
+        "tax_mismatch"
+    )
+    assert measured_product(price, prior()).code == "period_mismatch"
+    assert measured_ratio(price, kpi(value=Decimal("0"))).code == "invalid_calculation"
+    assert measured_product(kpi(unit="%"), price).code == "rate_not_factor"
+    assert measured_product(price, kpi(ambiguities=("ht_ttc",))).code == "ambiguous"
 
 
 def test_rates_are_not_summed_or_varied_like_amounts():

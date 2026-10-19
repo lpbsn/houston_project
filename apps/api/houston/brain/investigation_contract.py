@@ -5,8 +5,8 @@ that call. Token budgets that prepare a V3 reading count these texts, not
 the v1 prompt or the v1 schema.
 
 The model proposes the reading. This module recomputes every published
-figure, keeps competing explanations open, and refuses a Signal, a memory
-row, or an unknown effect presented as an established cause. It does not
+figure, keeps competing explanations open, and refuses a reporting document,
+a Signal, an action, or a measure presented as an established cause. It does not
 create a plan, an objective, or a Knowledge mechanism.
 """
 
@@ -24,8 +24,10 @@ from houston.brain.comparability import (
     decompose_variation,
     kpi_from_frozen,
     measured_difference,
+    measured_product,
+    measured_ratio,
     measured_variation,
-    sum_values,
+    sum_measures,
 )
 from houston.brain.configuration import (
     CALL_FRAMING_TOKENS,
@@ -51,6 +53,8 @@ _PROMPT = (
     "ni une baisse défavorable. "
     "Chaque sujet déclare son mouvement : degradation, improvement, stability ou qualitative. "
     "stability ne porte pas d'écart numérique non nul. "
+    "Cela vaut pour chaque variation, chaque différence et chaque ventilation, "
+    "quel que soit le rôle écrit. Un sujet qualitative ne publie aucun chiffre. "
     "Le signe d'une variation ne décide pas à lui seul d'une dégradation ou d'une amélioration. "
     "Une comparaison n'est recevable que si son type et ses conditions sont écrits : "
     "temporal sur la même définition, le même périmètre, la même unité et le même traitement "
@@ -63,6 +67,11 @@ _PROMPT = (
     "Une comparaison temporal ou actual_vs_reference n'est publiée que si les deux "
     "mesures ont la même définition, le même périmètre, la même unité et le même "
     "traitement HT ou TTC. Une période non datée dans le dossier n'est pas devinée. "
+    "Une somme n'est publiée que si ses mesures partagent l'unité, le traitement "
+    "HT ou TTC, la nature et la période. Leurs périmètres peuvent différer. "
+    "Un produit ou un ratio n'est publié que si ses mesures partagent la période "
+    "et la nature. Deux taxes explicites différentes sont refusées. "
+    "Une mesure ambiguë ne se combine pas. "
     "Une décomposition n'existe que si ses opérandes sont ces mesures. "
     "Plusieurs calculs peuvent éclairer le même écart : difference, variation, product, "
     "ratio, sum, et une ou plusieurs ventilations volume-prix. "
@@ -83,14 +92,18 @@ _PROMPT = (
     "ni si un autre pôle de la période n'a pas été lu. "
     "Deux explications utiles suffisent, quatre au plus. "
     "Leur statut est supported, plausible, contradicted ou unresolved. "
-    "supported n'est pas une cause établie et ne s'appuie pas sur un Signal seul. "
+    "supported ne se pose pas : un reporting, un Signal, une action ou une mesure "
+    "ne le portent pas, et aucun autre identifiant du dossier non plus. "
     "contradicted cite la contradiction rattachée au sujet. "
     "Un propos tenu dans un Signal est un fait rapporté. Il n'est pas une cause établie. "
     "Une exécution ou un plan est une action exécutée. Il ne prouve pas l'effet qu'on lui prête. "
     "Un calcul est un effet mesuré. Il n'est pas, à lui seul, une cause opérationnelle. "
+    "Le document de reporting non plus. Citer un reporting, un Signal, une action "
+    "ou une mesure n'établit pas une cause. "
     "Une vérification checked cite un élément examiné. "
     "Une vérification missing ne cite rien et nomme le manque. "
     "Un constat cite ses sources. "
+    "Un élément dont le texte n'est pas dans le dossier transmis n'est pas examiné. "
     "Une limite dit ce qu'elle bloque : blocks_cause, blocks_comparison, "
     "narrows_action ou coverage. "
     "Les orientations sont ACTION, INVESTIGATION ou NO_ACTION, avec une justification concrète. "
@@ -464,6 +477,7 @@ def assess_reading(
     measures: dict[str, dict] | None = None,
     action_ids: set[str] | None = None,
     memory_ids: set[str] | None = None,
+    reporting_ids: set[str] | None = None,
 ) -> ReadingAssessment:
     """Accept a reading or list stable error codes. The model does not qualify."""
     if _forbidden(payload):
@@ -482,6 +496,7 @@ def assess_reading(
     remembered = memory_ids or set()
     catalog = measures or {}
     actions = action_ids or set()
+    reports = reporting_ids or set()
     for subject in parsed.subjects:
         _assess_subject(
             subject,
@@ -490,6 +505,7 @@ def assess_reading(
             signal_ids=signal_ids,
             action_ids=actions,
             measures=catalog,
+            reporting_ids=reports,
             remembered=remembered,
             marks=marks,
         )
@@ -532,6 +548,70 @@ def cited_item_ids(value: object) -> set[str]:
     return found
 
 
+_CHANGE = frozenset({"difference", "variation"})
+
+
+def causal_evidence_issue(
+    evidence_ids: list[str],
+    *,
+    signal_ids: set[str],
+    action_ids: set[str],
+    measure_ids: set[str],
+    reporting_ids: set[str],
+) -> str | None:
+    """Why these citations cannot establish a cause.
+
+    A reporting document, a Signal, an executed action and a measure are not
+    causal proof. An identifier outside those classes is not causal proof either:
+    this contract has no source that establishes an operational cause.
+    """
+    if not evidence_ids:
+        return "cause_without_evidence"
+    if any(item_id in signal_ids for item_id in evidence_ids):
+        return "signal_cause_refused"
+    if any(item_id in action_ids for item_id in evidence_ids):
+        return "action_not_cause"
+    if all(item_id in measure_ids for item_id in evidence_ids):
+        return "measurement_not_cause"
+    non_probative = signal_ids | action_ids | measure_ids | reporting_ids
+    if all(item_id in non_probative for item_id in evidence_ids):
+        return "reporting_not_cause"
+    return "source_not_cause"
+
+
+def subject_figures_verified(
+    subject: dict,
+    *,
+    measures: dict[str, dict],
+    signal_ids: set[str],
+    action_ids: set[str],
+) -> bool:
+    """True only when every cited figure recomputes. An empty list proves nothing."""
+    calculations = subject.get("calculations") or []
+    breakdowns = subject.get("breakdowns") or []
+    if not isinstance(calculations, list) or not isinstance(breakdowns, list):
+        return False
+    if not calculations and not breakdowns:
+        return False
+    for raw in calculations:
+        try:
+            calculation = Calculation.model_validate(raw)
+        except ValidationError:
+            return False
+        code, value = _recompute(calculation, measures, signal_ids, action_ids)
+        if code or value is None:
+            return False
+    for raw in breakdowns:
+        try:
+            breakdown = Breakdown.model_validate(raw)
+        except ValidationError:
+            return False
+        code, amount = _recompute_breakdown(breakdown, measures, signal_ids, action_ids)
+        if code or amount is None:
+            return False
+    return True
+
+
 def _assess_subject(
     subject: SubjectReading,
     errors: list[str],
@@ -540,6 +620,7 @@ def _assess_subject(
     signal_ids: set[str],
     action_ids: set[str],
     measures: dict[str, dict],
+    reporting_ids: set[str],
     remembered: set[str],
     marks: set[tuple[str, str]],
 ) -> None:
@@ -552,14 +633,15 @@ def _assess_subject(
     if subject.cause == "established" and not subject.examined:
         errors.append("cause_not_examined")
     if subject.cause == "established":
-        if not subject.evidence_ids:
-            errors.append("cause_without_evidence")
-        if any(item_id in signal_ids for item_id in subject.evidence_ids):
-            errors.append("signal_cause_refused")
-        if any(item_id in action_ids for item_id in subject.evidence_ids):
-            errors.append("action_not_cause")
-        if subject.evidence_ids and all(item_id in measures for item_id in subject.evidence_ids):
-            errors.append("measurement_not_cause")
+        issue = causal_evidence_issue(
+            subject.evidence_ids,
+            signal_ids=signal_ids,
+            action_ids=action_ids,
+            measure_ids=set(measures),
+            reporting_ids=reporting_ids,
+        )
+        if issue:
+            errors.append(issue)
     traced = subject.findings or subject.limits or subject.calculations or subject.breakdowns
     if subject.examined and not traced:
         errors.append("examined_without_trace")
@@ -569,44 +651,45 @@ def _assess_subject(
     for item_id in subject.contradiction_ids:
         if (subject.key, item_id) not in marks:
             errors.append("contradiction_not_marked")
-    _assess_explanations(subject, errors, signal_ids, action_ids)
+    _assess_explanations(subject, errors)
     _assess_checks(subject, errors)
     _assess_orientation(subject, errors)
-    gap_values: list[Decimal] = []
+    change_values: list[Decimal] = []
+    numeric = False
     for calculation in subject.calculations:
         code, value = _recompute(calculation, measures, signal_ids, action_ids)
         if code:
             errors.append(code)
-        elif value is not None and calculation.role == "gap":
-            gap_values.append(value)
+            continue
+        if value is None:
+            continue
+        numeric = True
+        if calculation.operation in _CHANGE:
+            change_values.append(value)
     for breakdown in subject.breakdowns:
         code, amount = _recompute_breakdown(breakdown, measures, signal_ids, action_ids)
         if code:
             errors.append(code)
-        elif amount is not None:
-            gap_values.append(amount)
-    if subject.movement == "qualitative" and gap_values:
+            continue
+        if amount is None:
+            continue
+        numeric = True
+        change_values.append(amount)
+    if subject.movement == "qualitative" and numeric:
         errors.append("movement_conflict")
-    if subject.movement == "stability" and any(value != 0 for value in gap_values):
+    if subject.movement == "stability" and any(value != 0 for value in change_values):
         errors.append("movement_conflict")
 
 
-def _assess_explanations(
-    subject: SubjectReading,
-    errors: list[str],
-    signal_ids: set[str],
-    action_ids: set[str],
-) -> None:
+def _assess_explanations(subject: SubjectReading, errors: list[str]) -> None:
     supported = 0
     open_lead = False
-    field_ids = signal_ids | action_ids
     for explanation in subject.explanations:
         if explanation.status == "supported":
             supported += 1
-            field_support = any(item_id in field_ids for item_id in explanation.support_ids)
-            other_support = any(item_id not in field_ids for item_id in explanation.support_ids)
-            if field_support or not other_support:
-                errors.append("explanation_not_cause")
+            # Reporting, Signal, action and measure are not causal support.
+            # Neither is an identifier the model invents a class for.
+            errors.append("explanation_not_cause")
         elif explanation.status in _OPEN:
             open_lead = True
         elif explanation.status == "contradicted":
@@ -712,15 +795,18 @@ def _apply(
     if operation == "product":
         if len(measures) != 2:
             return "invalid_calculation", None
-        return None, measures[0].value * measures[1].value
+        verdict = measured_product(measures[0], measures[1])
+        if not verdict.accepted or verdict.value is None:
+            return verdict.code, None
+        return None, verdict.value
     if operation == "ratio":
-        if len(measures) != 2 or measures[1].value == 0:
+        if len(measures) != 2:
             return "invalid_calculation", None
-        return None, measures[0].value / measures[1].value
-    verdict = sum_values(
-        tuple(measure.value for measure in measures),
-        tuple(measure.unit for measure in measures),
-    )
+        verdict = measured_ratio(measures[0], measures[1])
+        if not verdict.accepted or verdict.value is None:
+            return verdict.code, None
+        return None, verdict.value
+    verdict = sum_measures(tuple(measures))
     if not verdict.accepted or verdict.value is None:
         return verdict.code, None
     if fold(calculation.unit) != fold(verdict.unit or ""):

@@ -156,6 +156,47 @@ def measured_variation(base: KpiMeasure, current: KpiMeasure) -> ArithmeticVerdi
     )
 
 
+def sum_measures(measures: tuple[KpiMeasure, ...]) -> ArithmeticVerdict:
+    """Sum components of one total.
+
+    Scopes and definitions may differ: a dining-room amount and a terrace amount
+    can form one total. Tax, nature, method and period may not. An ambiguous
+    measure is not a term of that total.
+    """
+    code = _same_total_code(measures)
+    if code:
+        return _arithmetic(code)
+    return sum_values(
+        tuple(measure.value for measure in measures),
+        tuple(measure.unit for measure in measures),
+    )
+
+
+def measured_product(left: KpiMeasure, right: KpiMeasure) -> ArithmeticVerdict:
+    """Recompute one period's product. Volume and price may use different units.
+
+    Two explicit taxes that differ are refused. A count with no tax written can
+    multiply a price. An ambiguous factor produces no identity.
+    """
+    code = _factor_code(left, right)
+    if code:
+        return _arithmetic(code)
+    return ArithmeticVerdict(True, "accepted", left.value * right.value)
+
+
+def measured_ratio(numerator: KpiMeasure, denominator: KpiMeasure) -> ArithmeticVerdict:
+    """Recompute one period's ratio. The denominator is not a missing zero.
+
+    The same tax, nature and ambiguity rules apply as for a product.
+    """
+    code = _factor_code(numerator, denominator)
+    if code:
+        return _arithmetic(code)
+    if denominator.value == 0:
+        return _arithmetic("invalid_calculation")
+    return ArithmeticVerdict(True, "accepted", numerator.value / denominator.value)
+
+
 def sum_values(
     values: tuple[Decimal | None, ...],
     units: tuple[str | None, ...],
@@ -272,15 +313,59 @@ def decompose_variation(
     )
 
 
-def _shared_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
-    if _span_days(left) is None or _span_days(right) is None:
+def _usable_code(measure: KpiMeasure) -> str | None:
+    if _span_days(measure) is None:
         return "period_invalid"
-    if left.ambiguities or right.ambiguities:
+    if measure.ambiguities:
         return "ambiguous"
-    if left.nature not in _NATURES or right.nature not in _NATURES:
+    if measure.nature not in _NATURES:
         return "nature_invalid"
-    if left.tax_treatment not in _TAX_TREATMENTS or right.tax_treatment not in _TAX_TREATMENTS:
+    if measure.tax_treatment not in _TAX_TREATMENTS:
         return "tax_invalid"
+    return None
+
+
+def _same_total_code(measures: tuple[KpiMeasure, ...]) -> str | None:
+    if len(measures) < 2:
+        return "invalid_calculation"
+    for measure in measures:
+        code = _usable_code(measure)
+        if code:
+            return code
+    if len({measure.tax_treatment for measure in measures}) != 1:
+        return "tax_mismatch"
+    if len({measure.nature for measure in measures}) != 1:
+        return "nature_mixed"
+    periods = {(measure.period_start, measure.period_end) for measure in measures}
+    if len(periods) != 1:
+        return "period_mismatch"
+    if len({_text(measure.method) for measure in measures}) != 1:
+        return "method_changed"
+    return None
+
+
+def _factor_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
+    for measure in (left, right):
+        code = _usable_code(measure)
+        if code:
+            return code
+        if _is_rate(measure.unit):
+            return "rate_not_factor"
+    if left.nature != right.nature:
+        return "nature_mixed"
+    if (left.period_start, left.period_end) != (right.period_start, right.period_end):
+        return "period_mismatch"
+    explicit = {left.tax_treatment, right.tax_treatment} & {TAX_HT, TAX_TTC}
+    if explicit == {TAX_HT, TAX_TTC}:
+        return "tax_mismatch"
+    return None
+
+
+def _shared_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
+    for measure in (left, right):
+        code = _usable_code(measure)
+        if code:
+            return code
     if left.tax_treatment != right.tax_treatment:
         return "tax_mismatch"
     left_unit = _unit_key(left.unit)

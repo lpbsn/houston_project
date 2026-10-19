@@ -41,11 +41,13 @@ from houston.brain.investigation_contract import (
     SCHEMA_VERSION,
     InvestigationReading,
     assess_reading,
+    causal_evidence_issue,
     cited_item_ids,
     investigation_call_tokens,
     investigation_prompt,
     investigation_response_schema,
     output_token_count,
+    subject_figures_verified,
 )
 from houston.brain.models import BrainAnalysis, BrainDossier, BrainSearchRun
 from houston.brain.period import (
@@ -108,6 +110,7 @@ class _PreparedCall:
     discovered: tuple[dict, ...]
     representative_ids: tuple[str, ...]
     competing: bool
+    omitted_ids: tuple[str, ...] = ()
 
 
 def run_investigation(
@@ -385,40 +388,59 @@ def _fit_call(
     per_call: int,
     limits: list[dict],
 ) -> _PreparedCall:
+    """Send a copy only with its text. A text that does not fit is not examined."""
     by_id = {item.source_id: item for item in snapshot.copies}
 
-    def build(full_ids: set[str], withheld: tuple[str, ...]) -> dict:
-        return _payload(
+    def pack(
+        examined: tuple[str, ...],
+        discovered_rows: tuple[dict, ...],
+        withheld: tuple[str, ...],
+    ) -> tuple[dict, int]:
+        payload = _payload(
             snapshot,
             reading_index=reading_index,
-            examined_ids=examined_ids,
-            full_ids=full_ids,
+            examined_ids=examined,
+            full_ids=set(examined),
             withheld_ids=set(withheld),
             by_id=by_id,
             contradictions=contradictions,
-            discovered=discovered,
+            discovered=discovered_rows,
             deepenings_remaining=deepenings_remaining,
             limits=limits,
         )
+        return payload, investigation_call_tokens(payload)
 
-    def cost(payload: dict) -> int:
-        return investigation_call_tokens(payload)
-
-    full_ids = set(examined_ids)
-    payload = build(full_ids, ())
-    spent = cost(payload)
+    payload, spent = pack(examined_ids, discovered, ())
     if spent <= per_call:
         return _ready(
-            payload, full_ids, (), spent, examined_ids, discovered, representative_ids, competing
+            payload,
+            set(examined_ids),
+            (),
+            spent,
+            examined_ids,
+            discovered,
+            representative_ids,
+            competing,
+            (),
         )
-    kept = set(protected_ids).intersection(examined_ids)
-    payload = build(kept, ())
-    spent = cost(payload)
+    kept = tuple(source_id for source_id in examined_ids if source_id in protected_ids)
+    dropped = tuple(source_id for source_id in examined_ids if source_id not in protected_ids)
+    discovered_kept = _discover(discovered, dropped, by_id)
+    payload, spent = pack(kept, discovered_kept, ())
     if spent <= per_call:
         return _ready(
-            payload, kept, (), spent, examined_ids, discovered, representative_ids, competing
+            payload,
+            set(kept),
+            (),
+            spent,
+            kept,
+            discovered_kept,
+            representative_ids,
+            competing,
+            dropped,
         )
     withheld: list[str] = []
+    kept_ids = set(kept)
     contradiction_ids = {row["item_id"] for row in contradictions}
     candidates = [
         source_id
@@ -427,25 +449,27 @@ def _fit_call(
     ]
     candidates.sort(key=lambda source_id: _copy_tokens(by_id[source_id]), reverse=True)
     for source_id in candidates:
-        kept.discard(source_id)
+        kept_ids.discard(source_id)
         withheld.append(source_id)
-        payload = build(kept, tuple(withheld))
-        spent = cost(payload)
+        current = tuple(item_id for item_id in kept if item_id in kept_ids)
+        discovered_now = _discover(discovered_kept, tuple(withheld), by_id)
+        payload, spent = pack(current, discovered_now, tuple(withheld))
         if spent <= per_call:
             return _ready(
                 payload,
-                kept,
+                set(current),
                 tuple(withheld),
                 spent,
-                examined_ids,
-                discovered,
+                current,
+                discovered_now,
                 representative_ids,
                 competing,
+                dropped + tuple(withheld),
             )
     limit = LIMIT_PERIOD_EXCEEDS_CALL if reading_index == 1 else "budget_exceeded"
     return _PreparedCall(
         payload=None,
-        full_text_ids=tuple(kept),
+        full_text_ids=tuple(kept_ids),
         withheld_ids=tuple(withheld),
         input_tokens=spent,
         limit=limit,
@@ -456,7 +480,40 @@ def _fit_call(
     )
 
 
-def _ready(payload, full_ids, withheld, spent, examined, discovered, representatives, competing):
+def _discover(
+    rows: tuple[dict, ...],
+    source_ids: tuple[str, ...],
+    by_id: dict[str, PeriodCopy],
+) -> tuple[dict, ...]:
+    known = {str(row.get("source_id") or "") for row in rows}
+    merged = list(rows)
+    for source_id in source_ids:
+        if not source_id or source_id in known:
+            continue
+        item = by_id.get(source_id)
+        merged.append(
+            {
+                "source_id": source_id,
+                "pole": item.pole if item is not None else "",
+                "category": item.category if item is not None else "",
+                "disposition": DISCOVERED_NOT_EXAMINED,
+            }
+        )
+        known.add(source_id)
+    return tuple(merged)
+
+
+def _ready(
+    payload,
+    full_ids,
+    withheld,
+    spent,
+    examined,
+    discovered,
+    representatives,
+    competing,
+    omitted,
+):
     return _PreparedCall(
         payload=payload,
         full_text_ids=tuple(full_ids),
@@ -467,6 +524,7 @@ def _ready(payload, full_ids, withheld, spent, examined, discovered, representat
         discovered=discovered,
         representative_ids=representatives,
         competing=competing,
+        omitted_ids=tuple(omitted),
     )
 
 
@@ -485,13 +543,9 @@ def _payload(
 ) -> dict:
     examined = []
     for source_id in examined_ids:
-        item = by_id[source_id]
-        if source_id in withheld_ids:
-            examined.append(_card(item, withheld=True))
-        elif source_id in full_ids:
-            examined.append(_full_text(item))
-        else:
-            examined.append(_card(item, withheld=False))
+        if source_id in withheld_ids or source_id not in full_ids:
+            continue
+        examined.append(_full_text(by_id[source_id]))
     visible = []
     for row in contradictions:
         marked = {"subject_key": row["subject_key"], "item_id": row["item_id"]}
@@ -624,26 +678,10 @@ def _deepen(snapshot, analysis, parsed, state, *, subject_start, subject_end):
 
 
 def _assess(output, snapshot: PeriodSnapshot, prepared: _PreparedCall):
-    visible = set(prepared.full_text_ids)
-    signal_ids = set()
-    action_ids = set()
-    for item in snapshot.copies:
-        if item.source_id not in visible:
-            continue
-        if item.category == CATEGORY_SIGNAL:
-            signal_ids.add(item.source_id)
-        elif item.category in {CATEGORY_EXECUTION, CATEGORY_PLAN}:
-            action_ids.add(item.source_id)
-    reporting_id = str(snapshot.reporting.get("source_id") or "")
-    measures = {
-        str(row.get("measure_id")): row
-        for row in snapshot.reporting.get("measures") or []
-        if isinstance(row, dict) and row.get("measure_id")
-    }
-    citable = set(visible)
+    signal_ids, action_ids, reporting_ids, measures = _source_classes(snapshot)
+    citable = set(prepared.full_text_ids)
     citable.update(measures)
-    if reporting_id:
-        citable.add(reporting_id)
+    citable.update(reporting_ids)
     proposed = {row["key"] for row in _proposed(snapshot)}
     memory_ids = {item.source_id for item in snapshot.copies if item.category == CATEGORY_MEMORY}
     return assess_reading(
@@ -654,6 +692,7 @@ def _assess(output, snapshot: PeriodSnapshot, prepared: _PreparedCall):
         proposed_keys=proposed,
         measures=measures,
         memory_ids=memory_ids,
+        reporting_ids=reporting_ids,
     )
 
 
@@ -688,6 +727,7 @@ def _store_reading(dossier_id, state, prepared: _PreparedCall, parsed, correctio
         "examined_ids": list(prepared.examined_ids),
         "full_text_ids": list(prepared.full_text_ids),
         "withheld_ids": list(prepared.withheld_ids),
+        "omitted_ids": list(prepared.omitted_ids),
         "discovered_not_examined": list(prepared.discovered),
         "representative_ids": list(prepared.representative_ids),
     }
@@ -993,25 +1033,41 @@ def _facts(
     blocked_keys = blocked_subjects or set()
     modified = modified_subjects or set()
     proposed = {row["key"] for row in _proposed(snapshot)}
+    signal_ids, action_ids, reporting_ids, measures = _source_classes(snapshot)
+    measure_ids = set(measures)
     subjects = []
     usable_arithmetic = False
     for subject in output.get("subjects") or []:
-        cause = subject.get("cause") == "established"
+        cause = _cause_verified(
+            subject,
+            signal_ids=signal_ids,
+            action_ids=action_ids,
+            measure_ids=measure_ids,
+            reporting_ids=reporting_ids,
+        )
         blocked = subject["key"] in blocked_keys or bool(
             withheld_ids.intersection(subject.get("contradiction_ids") or [])
         )
         if cause and (unscoped_exclusion or subject["key"] in modified or competing):
             blocked = True
-        arithmetic = _arithmetic(subject) and not blocked
+        arithmetic = (
+            subject_figures_verified(
+                subject,
+                measures=measures,
+                signal_ids=signal_ids,
+                action_ids=action_ids,
+            )
+            and not blocked
+        )
         usable_arithmetic = usable_arithmetic or arithmetic
         subjects.append(
             SubjectFinding(
                 key=subject["key"],
                 significant=True,
                 examined=bool(subject.get("examined")),
-                cause_established=cause,
+                cause_established=cause and not blocked,
                 verified_analytical=arithmetic,
-                affirmative=cause,
+                affirmative=cause and not blocked,
                 unexamined_contradiction=blocked,
                 undermines_published=False,
                 named=subject["key"] in proposed or bool(subject.get("examined")),
@@ -1019,7 +1075,16 @@ def _facts(
         )
     rows = [row for row in output.get("subjects") or [] if isinstance(row, dict)]
     reported_only = bool(rows) and not usable_arithmetic
-    reported_only = reported_only and all(row.get("cause") != "established" for row in rows)
+    reported_only = reported_only and not any(
+        _cause_verified(
+            row,
+            signal_ids=signal_ids,
+            action_ids=action_ids,
+            measure_ids=measure_ids,
+            reporting_ids=reporting_ids,
+        )
+        for row in rows
+    )
     reported_only = reported_only and not any(
         subject.unexamined_contradiction for subject in subjects
     )
@@ -1148,6 +1213,8 @@ def _unscoped_exclusion(state) -> bool:
 def _coverage_incomplete(state, unread: tuple[str, ...]) -> bool:
     if unread:
         return True
+    if state["lectures"] and (state["lectures"][-1].get("omitted_ids") or []):
+        return True
     for decision in state["decisions"]:
         rows = list(decision.get("exclusions") or []) + list(decision.get("limits") or [])
         if _has_code(rows, *_COVERAGE_CODES):
@@ -1205,9 +1272,45 @@ def _prior_evidence(lectures: list[dict]) -> set[str]:
     return found
 
 
-def _arithmetic(subject: dict) -> bool:
-    """A figure the contract already recomputed. The model does not qualify it."""
-    return bool(subject.get("calculations") or subject.get("breakdowns"))
+def _source_classes(snapshot: PeriodSnapshot):
+    """Classes the backend assigns. The model's wording does not choose them."""
+    signal_ids = set()
+    action_ids = set()
+    for item in snapshot.copies:
+        if item.category == CATEGORY_SIGNAL:
+            signal_ids.add(item.source_id)
+        elif item.category in {CATEGORY_EXECUTION, CATEGORY_PLAN}:
+            action_ids.add(item.source_id)
+    reporting_id = str(snapshot.reporting.get("source_id") or "")
+    measures = {
+        str(row.get("measure_id")): row
+        for row in snapshot.reporting.get("measures") or []
+        if isinstance(row, dict) and row.get("measure_id")
+    }
+    return signal_ids, action_ids, ({reporting_id} if reporting_id else set()), measures
+
+
+def _cause_verified(
+    subject: dict,
+    *,
+    signal_ids: set[str],
+    action_ids: set[str],
+    measure_ids: set[str],
+    reporting_ids: set[str],
+) -> bool:
+    if subject.get("cause") != "established":
+        return False
+    evidence = [item for item in subject.get("evidence_ids") or [] if isinstance(item, str)]
+    return (
+        causal_evidence_issue(
+            evidence,
+            signal_ids=signal_ids,
+            action_ids=action_ids,
+            measure_ids=measure_ids,
+            reporting_ids=reporting_ids,
+        )
+        is None
+    )
 
 
 def _contradictions(lectures: list[dict]) -> list[dict]:
@@ -1292,18 +1395,6 @@ def _full_text(item: PeriodCopy) -> dict:
     payload["start"] = item.start.isoformat() if item.start else None
     payload["end"] = item.end.isoformat() if item.end else None
     return payload
-
-
-def _card(item: PeriodCopy, *, withheld: bool) -> dict:
-    return {
-        "source_id": item.source_id,
-        "pole": item.pole,
-        "title": item.title,
-        "start": item.start.isoformat() if item.start else None,
-        "end": item.end.isoformat() if item.end else None,
-        "reduced": True,
-        "text_withheld": withheld,
-    }
 
 
 def _copy_tokens(item: PeriodCopy) -> int:
