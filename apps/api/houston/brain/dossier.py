@@ -37,6 +37,7 @@ from houston.brain.collection import (
     execution_overlap_q,
     signal_overlap_q,
 )
+from houston.brain.comparability import freeze_measure
 from houston.brain.errors import BrainWorkError
 from houston.brain.investigation import PER_CALL_INPUT_TOKENS, historical_copy_decision
 from houston.brain.models import (
@@ -48,6 +49,7 @@ from houston.brain.models import (
 from houston.brain.numbers import fold
 from houston.brain.period import (
     CATEGORY_EXECUTION,
+    CATEGORY_MEMORY,
     CATEGORY_OBJECTIVE,
     CATEGORY_PLAN,
     CATEGORY_SIGNAL,
@@ -391,7 +393,7 @@ def _snapshot_from_items(dossier, items, criteria: object) -> PeriodSnapshot:
             source_id = str(payload.get("source_id") or "")
             if source_id:
                 index_by_id[source_id] = payload
-        elif item.category in _COPY_CATEGORIES:
+        elif item.category == CATEGORY_MEMORY or item.category in _COPY_CATEGORIES:
             source_id = str(payload.get("source_id") or "")
             if source_id:
                 copies_by_id[source_id] = (item, payload)
@@ -403,6 +405,9 @@ def _snapshot_from_items(dossier, items, criteria: object) -> PeriodSnapshot:
     copies = []
     for source_id, (item, payload) in copies_by_id.items():
         if item.category == CATEGORY_OBJECTIVE:
+            continue
+        if item.category == CATEGORY_MEMORY:
+            copies.append(_memory_copy(item.role, payload))
             continue
         indexed = index_by_id.get(source_id)
         if indexed is None:
@@ -428,6 +433,19 @@ def _snapshot_from_items(dossier, items, criteria: object) -> PeriodSnapshot:
         copies=ordered,
         index=_index_for(ordered),
         omissions=tuple(sorted(exclusions, key=lambda item: item.source_id)),
+    )
+
+
+def _memory_copy(role: str, payload: dict) -> PeriodCopy:
+    return PeriodCopy(
+        source_id=str(payload.get("source_id") or ""),
+        category=CATEGORY_MEMORY,
+        pole="",
+        role=role,
+        title=str(payload.get("title") or ""),
+        start=None,
+        end=None,
+        payload=payload,
     )
 
 
@@ -603,8 +621,17 @@ def _execution_events(run, establishment_id, execution_ids, capture_at):
     return grouped
 
 
-def _signal_source(signal, *, tz, period, capture_at, events, reliable_from) -> PeriodSource:
-    start, end = _signal_span(signal, tz, period.end_on, capture_at)
+def _signal_source(
+    signal,
+    *,
+    tz,
+    period,
+    capture_at,
+    events,
+    reliable_from,
+    span_end: date | None = None,
+) -> PeriodSource:
+    start, end = _signal_span(signal, tz, span_end or period.end_on, capture_at)
     pole = (
         _specific(signal.affected_business_unit)
         or _specific(signal.responsible_business_unit)
@@ -690,8 +717,9 @@ def _execution_source(
     capture_at,
     events,
     reliable_from,
+    span_end: date | None = None,
 ) -> PeriodSource:
-    start, end = _execution_span(execution, tz, period.end_on)
+    start, end = _execution_span(execution, tz, span_end or period.end_on)
     pole = (
         _specific(execution.affected_business_unit)
         or _specific(execution.pilot_business_unit)
@@ -877,11 +905,20 @@ def _reporting_payload(reporting, extraction_payload: dict) -> dict:
         if not text:
             continue
         qualitative.append({"kind": str(block.get("kind") or "paragraph"), "text": text})
+    measures = [
+        freeze_measure(
+            raw,
+            measure_id=f"measure:{index}",
+            period_start=reporting.period_start,
+            period_end=reporting.period_end,
+        )
+        for index, raw in enumerate(_measures(payload))
+    ]
     return {
         "source_id": str(reporting.id),
         "period_start": reporting.period_start.isoformat(),
         "period_end": reporting.period_end.isoformat(),
-        "measures": _measures(payload),
+        "measures": measures,
         "qualitative": qualitative,
     }
 

@@ -7,9 +7,12 @@ The published figure is recomposed from its operands.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+
+from dateutil.relativedelta import relativedelta
 
 from houston.brain.numbers import decimal_text, fold
 
@@ -354,6 +357,150 @@ def _text(value: str | None) -> str:
 
 def _unit_key(unit: str | None) -> str:
     return _text(unit)
+
+
+def rate_unit(unit: str | None) -> bool:
+    """True when this unit must not be summed or varied like an amount."""
+    return _is_rate(unit)
+
+
+def freeze_measure(
+    raw: dict,
+    *,
+    measure_id: str,
+    period_start: date,
+    period_end: date,
+) -> dict:
+    """Copy one extracted measure with only the comparison conditions it states.
+
+    An empty period uses the confirmed reporting period. ``N-1`` shifts that
+    period by one written year. A month name or any other unbound text stays
+    unresolved: no calendar is guessed. HT, TTC, budget and forecast are read
+    from the label. When neither tax is written, the treatment stays unspecified.
+    """
+    label = str(raw.get("label") or "").strip()
+    definition = str(raw.get("definition") or label).strip()
+    scope = str(raw.get("scope") or "").strip()
+    unit = str(raw.get("unit") or "").strip()
+    period_text = str(raw.get("period") or "").strip()
+    ambiguities = [str(flag) for flag in raw.get("ambiguities") or []]
+    tax = _tax_treatment(f"{label} {definition} {unit} {period_text}", ambiguities)
+    nature = _nature(f"{label} {definition} {period_text}")
+    start, end, unresolved = _measure_period(period_text, period_start, period_end)
+    return {
+        "measure_id": measure_id,
+        "label": label,
+        "value": raw.get("value"),
+        "value_kind": str(raw.get("value_kind") or ""),
+        "unit": unit,
+        "definition": definition,
+        "scope": scope,
+        "nature": nature,
+        "tax_treatment": tax,
+        "period_start": start.isoformat() if start else None,
+        "period_end": end.isoformat() if end else None,
+        "period_unresolved": unresolved,
+        "duration_days": _optional_int(raw.get("duration_days")),
+        "opening_days": _optional_int(raw.get("opening_days")),
+        "ambiguities": ambiguities,
+        "method": _text_or_none(raw.get("method")),
+    }
+
+
+def kpi_from_frozen(record: dict) -> tuple[str | None, KpiMeasure | None]:
+    """Build the measure the comparison code already knows how to judge."""
+    if record.get("period_unresolved"):
+        return "period_unresolved", None
+    try:
+        value = Decimal(str(record.get("value")))
+        start = date.fromisoformat(str(record.get("period_start")))
+        end = date.fromisoformat(str(record.get("period_end")))
+    except (InvalidOperation, TypeError, ValueError):
+        return "operand_unreadable", None
+    ambiguities = tuple(str(flag) for flag in record.get("ambiguities") or ())
+    return None, KpiMeasure(
+        value=value,
+        unit=str(record.get("unit") or ""),
+        definition=str(record.get("definition") or ""),
+        scope=str(record.get("scope") or ""),
+        nature=str(record.get("nature") or ""),
+        tax_treatment=str(record.get("tax_treatment") or ""),
+        period_start=start,
+        period_end=end,
+        duration_days=_optional_int(record.get("duration_days")),
+        opening_days=_optional_int(record.get("opening_days")),
+        ambiguities=ambiguities,
+        method=_text_or_none(record.get("method")),
+    )
+
+
+def _tax_treatment(text: str, ambiguities: list[str]) -> str:
+    if "ht_ttc" in ambiguities:
+        return TAX_UNSPECIFIED
+    folded = fold(text)
+    has_ht = bool(re.search(r"(?<![a-z])ht(?![a-z])", folded) or "hors taxe" in folded)
+    has_ttc = "ttc" in folded or "toutes taxes" in folded
+    if has_ht and has_ttc:
+        if "ht_ttc" not in ambiguities:
+            ambiguities.append("ht_ttc")
+        return TAX_UNSPECIFIED
+    if has_ht:
+        return TAX_HT
+    if has_ttc:
+        return TAX_TTC
+    return TAX_UNSPECIFIED
+
+
+def _nature(text: str) -> str:
+    folded = fold(text)
+    budget = "budget" in folded
+    forecast = "prevision" in folded or "forecast" in folded
+    if budget and forecast:
+        return ""
+    if budget:
+        return NATURE_BUDGET
+    if forecast:
+        return NATURE_FORECAST
+    return NATURE_ACTUAL
+
+
+def _measure_period(
+    period_text: str,
+    period_start: date,
+    period_end: date,
+) -> tuple[date | None, date | None, bool]:
+    if not period_text:
+        return period_start, period_end, False
+    folded = fold(period_text)
+    if re.search(r"n\s*-\s*1", folded) or "annee precedente" in folded:
+        return (
+            period_start - relativedelta(years=1),
+            period_end - relativedelta(years=1),
+            False,
+        )
+    found = re.findall(r"\d{4}-\d{2}-\d{2}", period_text)
+    if len(found) >= 2:
+        start = date.fromisoformat(found[0])
+        end = date.fromisoformat(found[1])
+        if end <= start:
+            return None, None, True
+        return start, end, False
+    return None, None, True
+
+
+def _optional_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _text_or_none(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
 
 
 def _is_rate(unit: str | None) -> bool:

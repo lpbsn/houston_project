@@ -9,6 +9,8 @@ from houston.brain.comparability import (
     KpiMeasure,
     compare_measures,
     decompose_variation,
+    freeze_measure,
+    kpi_from_frozen,
     measured_difference,
     measured_variation,
     recompose_amount,
@@ -18,7 +20,9 @@ from houston.brain.comparability import (
 )
 from houston.brain.contract import SCHEMA_VERSION
 from houston.brain.investigation import (
+    ACTIVITY_SAMPLE_LIMIT,
     ENGINE_VERSION,
+    MEMORY_SAMPLE_LIMIT,
     QUALIFICATION_COMPLETE,
     QUALIFICATION_FACTUAL,
     QUALIFICATION_PARTIAL,
@@ -34,8 +38,10 @@ from houston.brain.investigation import (
     events_visible_at_capture,
     investigation_ceilings,
     investigation_engine,
+    investigation_timing,
     project_signal_copy,
     qualify,
+    retained_execution_budget,
 )
 
 CAPTURE_AT = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
@@ -613,3 +619,59 @@ def test_current_analyses_stay_on_the_existing_contract():
     assert ceilings["max_semantic_readings"] == 3
     assert ceilings["max_provider_calls"] == 4
     assert ceilings["total_input_tokens"] == 320_000
+    assert ACTIVITY_SAMPLE_LIMIT == 8
+    assert MEMORY_SAMPLE_LIMIT == 4
+    retained = retained_execution_budget()
+    assert investigation_timing(retained).coherent is True
+    assert retained["attempt_soft_seconds"] == 720
+    assert retained["attempt_hard_seconds"] == 780
+    assert retained["lease_seconds"] == 240
+    assert retained["max_provider_calls"] == 4
+
+
+def test_a_frozen_measure_keeps_only_the_period_and_treatment_it_states():
+    start = date(2026, 3, 1)
+    end = date(2026, 3, 8)
+    current = freeze_measure(
+        {"label": "frequentation", "value": "100", "unit": "couvert", "scope": "Restauration"},
+        measure_id="measure:0",
+        period_start=start,
+        period_end=end,
+    )
+    previous = freeze_measure(
+        {"label": "frequentation", "value": "80", "unit": "couvert", "period": "N-1"},
+        measure_id="measure:1",
+        period_start=start,
+        period_end=end,
+    )
+    month = freeze_measure(
+        {"label": "frequentation", "value": "70", "unit": "couvert", "period": "mars"},
+        measure_id="measure:2",
+        period_start=start,
+        period_end=end,
+    )
+    taxed = freeze_measure(
+        {"label": "CA TTC", "value": "880", "unit": "EUR", "ambiguities": ["ht_ttc"]},
+        measure_id="measure:3",
+        period_start=start,
+        period_end=end,
+    )
+    budget = freeze_measure(
+        {"label": "CA budget", "value": "900", "unit": "EUR"},
+        measure_id="measure:4",
+        period_start=start,
+        period_end=end,
+    )
+
+    assert current["period_start"] == "2026-03-01"
+    assert current["period_end"] == "2026-03-08"
+    assert current["period_unresolved"] is False
+    assert current["nature"] == "actual"
+    assert current["tax_treatment"] == "unspecified"
+    assert previous["period_start"] == "2025-03-01"
+    assert previous["period_end"] == "2025-03-08"
+    assert month["period_unresolved"] is True
+    assert kpi_from_frozen(month)[0] == "period_unresolved"
+    assert taxed["tax_treatment"] == "unspecified"
+    assert "ht_ttc" in taxed["ambiguities"]
+    assert budget["nature"] == "budget"

@@ -27,6 +27,10 @@ DEEPEN_SEASONAL_WINDOW = "seasonal_window"
 DEEPEN_ACTIVITY_SUBJECT = "activity_subject_sample"
 DEEPEN_COMPLETED_MEMORY = "completed_analysis_memory"
 DEEPEN_PERIOD_INDEX = "period_index_identifier"
+ACTIVITY_SAMPLE_LIMIT = 8
+MEMORY_SAMPLE_LIMIT = 4
+ATTEMPT_HARD_MARGIN_SECONDS = 60
+LEASE_MARGIN_SECONDS = 60
 DEEPENING_MENU = frozenset(
     {
         DEEPEN_SEASONAL_WINDOW,
@@ -140,6 +144,7 @@ class InvestigationFacts:
     accepted_decomposition: bool = False
     treatment: str = TREATMENT_COMPLETED
     checks_impossible: bool = False
+    coverage_incomplete: bool = False
 
 
 @dataclass(frozen=True)
@@ -154,6 +159,36 @@ def investigation_engine(configuration: object) -> bool:
     if not isinstance(configuration, dict):
         return False
     return configuration.get(ENGINE_VERSION_KEY) == ENGINE_VERSION
+
+
+def retained_execution_budget() -> dict[str, int]:
+    """Budgets to freeze when V3 is activated. Worker settings stay as shipped.
+
+    One task runs the investigation. The dossier already checkpoints each
+    reading and each deepening, so a lost worker replays the persisted step
+    and does not open another deepening. The task therefore has to survive
+    every provider call at the full timeout: four calls times 180 seconds,
+    plus the 60 second gap the workers already keep between the soft and hard
+    limits.
+
+    The lease stays one timeout plus that same 60 second gap, and it is
+    renewed before each call, as the current executor already renews it. A
+    lease as long as the whole task would keep the establishment blocked after
+    a dead worker. Token ceilings stay the investigation copy, not the legacy
+    twelve calls and 400 000 tokens.
+
+    ``investigation_timing`` still refuses to start while the frozen attempt
+    is the shipped 600 / 660 seconds.
+    """
+    timeout = PROVIDER_TIMEOUT_SECONDS
+    span = MAX_PROVIDER_CALLS * timeout
+    return {
+        "provider_timeout_seconds": timeout,
+        "lease_seconds": timeout + LEASE_MARGIN_SECONDS,
+        "attempt_soft_seconds": span,
+        "attempt_hard_seconds": span + ATTEMPT_HARD_MARGIN_SECONDS,
+        "max_provider_calls": MAX_PROVIDER_CALLS,
+    }
 
 
 def investigation_ceilings() -> dict[str, int]:
@@ -356,7 +391,7 @@ def _is_complete(
     blocked: tuple[str, ...],
     analytical: bool,
 ) -> bool:
-    if not analytical or blocked or facts.checks_impossible:
+    if not analytical or blocked or facts.checks_impossible or facts.coverage_incomplete:
         return False
     if facts.competing_period_lead_excluded:
         return False

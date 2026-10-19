@@ -24,13 +24,14 @@ from houston.brain.investigation import (
     investigation_ceilings,
     investigation_engine,
     investigation_timing,
+    retained_execution_budget,
 )
 from houston.brain.investigation_contract import (
     investigation_call_tokens,
     investigation_prompt,
     investigation_response_schema,
 )
-from houston.brain.models import BrainAnalysis, BrainSearchRun
+from houston.brain.models import BrainAnalysis, BrainDossier, BrainExtraction, BrainSearchRun
 from houston.brain.orchestration import run_investigation
 from houston.brain.period import (
     reading_allowance,
@@ -42,7 +43,7 @@ from houston.brain.records import EXTRACTOR_ID, EXTRACTOR_VERSION
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
 from houston.observations.models import Observation
-from houston.signals.models import Signal, SignalSourceObservation
+from houston.signals.models import Signal, SignalLifecycleEvent, SignalSourceObservation
 from houston.testing.factories import create_establishment, create_membership
 from houston.testing.taxonomy import create_business_unit
 
@@ -87,16 +88,29 @@ def _reading(
         "subjects": [
             {
                 "key": key,
+                "movement": "qualitative",
                 "statement": "Le reporting montre le sujet.",
                 "examined": True,
                 "cause": cause,
                 "evidence_ids": list(evidence),
                 "contradiction_ids": [row["item_id"] for row in marks],
                 "reported_facts": reported or [],
-                "hypotheses": [],
-                "orientation": "INVESTIGATION",
-                "limits": [],
-                "calculation": None,
+                "explanations": [],
+                "decisive_checks": [],
+                "findings": [],
+                "calculations": [],
+                "breakdowns": [],
+                "tradeoffs": [],
+                "orientation": "NO_ACTION",
+                "justification": "Ce contrôle ne décide pas d'une action.",
+                "does_not_promise": "",
+                "limits": [
+                    {
+                        "text": "Contrôle du moteur.",
+                        "effect": "coverage",
+                        "item_ids": [],
+                    }
+                ],
             }
         ],
         "contradictions": marks,
@@ -169,6 +183,7 @@ def _world(
     filler_text: str = "REMPLISSAGE",
     filler_texts: list[str] | None = None,
     filler_rows: list[tuple[str, date]] | None = None,
+    before_capture=None,
 ):
     settings.HOUSTON_BRAIN_CAPTURE_TIMEOUT_SECONDS = 30
     establishment = create_establishment(name=f"Orchestration {key}", timezone="Europe/Paris")
@@ -244,9 +259,23 @@ def _world(
         reporting_id=reporting.id,
         idempotency_key=f"orchestration-{key}",
     )
+    if before_capture is not None:
+        before_capture(
+            {
+                "establishment": establishment,
+                "owner": owner,
+                "reporting": reporting,
+                "analysis": analysis,
+                "room": room,
+                "housing": housing_signal,
+            }
+        )
     capture_period_dossier(analysis.id)
     return {
         "analysis": analysis,
+        "establishment": establishment,
+        "owner": owner,
+        "reporting": reporting,
         "room": room,
         "housing": housing_signal,
         "extras": extras,
@@ -335,6 +364,13 @@ def test_shipped_attempt_cannot_cover_four_provider_timeouts():
     assert "lease_not_after_timeout" not in verdict.issues
     assert "attempt_shorter_than_calls" in verdict.issues
     assert "soft_shorter_than_calls" in verdict.issues
+    retained = retained_execution_budget()
+    assert investigation_timing(retained).coherent is True
+    assert settings.HOUSTON_BRAIN_ATTEMPT_SOFT_SECONDS < retained["attempt_soft_seconds"]
+    assert settings.HOUSTON_BRAIN_ATTEMPT_HARD_SECONDS < retained["attempt_hard_seconds"]
+    assert settings.HOUSTON_BRAIN_LEASE_SECONDS == retained["lease_seconds"]
+    assert settings.HOUSTON_BRAIN_ATTEMPT_SOFT_SECONDS == 600
+    assert settings.HOUSTON_BRAIN_ATTEMPT_HARD_SECONDS == 660
 
 
 def test_prompt_and_schema_are_counted_apart_from_the_current_contract():
@@ -642,29 +678,19 @@ def test_cancellation_before_the_next_call_publishes_nothing(settings):
     assert analysis.result is None
 
 
-def test_outside_the_menu_and_a_historical_kind_do_not_query_the_database(settings):
-    world = _world(settings, "menu")
-
-    def handle(step, payload, analysis_id):
-        return _reading(deepening=_open("seasonal_window"))
-
-    provider = ScriptedProvider(handle)
+def test_outside_the_menu_does_not_query_the_database(settings):
+    world = _world(settings, "hors-menu")
+    provider = ScriptedProvider(
+        lambda step, payload, analysis_id: _reading(deepening=_open("sql_query"))
+    )
     with CaptureQueriesContext(connection) as queries:
-        outcome = _run(world["analysis"], provider)
+        refused = _run(world["analysis"], provider)
     sql = "\n".join(query["sql"] for query in queries.captured_queries)
 
     assert [call["step"] for call in provider.calls] == ["lecture:1"]
-    assert outcome.code == "not_in_frozen_dossier"
-    assert outcome.semantic_readings == 1
-    assert Signal._meta.db_table not in sql
-
-    other = _world(settings, "hors-menu")
-    outsider = ScriptedProvider(
-        lambda step, payload, analysis_id: _reading(deepening=_open("sql_query"))
-    )
-    refused = _run(other["analysis"], outsider)
-    assert [call["step"] for call in outsider.calls] == ["lecture:1"]
     assert refused.code == "outside_menu"
+    assert refused.semantic_readings == 1
+    assert Signal._meta.db_table not in sql
 
 
 def test_the_attempt_stops_before_a_call_that_cannot_finish(settings):
@@ -748,3 +774,795 @@ def _frozen_summary(analysis, source_id: str) -> str:
         stable_key=f"signal:{source_id}",
     ).payload
     return str(payload["structured_summary"])
+
+
+def test_seasonal_window_copies_the_subject_year_and_keeps_the_contradiction(settings):
+    kept = {}
+
+    def prepare(context):
+        kept["signal"] = _historical_signal(
+            context["establishment"],
+            title="Saison passée",
+            summary="SAISON-CONSERVE",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=context["room"].affected_business_unit,
+        )
+        kept["outside"] = _historical_signal(
+            context["establishment"],
+            title="Hors fenêtre",
+            summary="HORS-FENETRE",
+            created_at=_at(date(2025, 3, 2)),
+            business_unit=context["room"].affected_business_unit,
+        )
+        other = create_establishment(name="Autre saison", timezone="Europe/Paris")
+        other_unit = create_business_unit(
+            establishment=other,
+            key="autre-saison",
+            label="Restauration",
+        )
+        kept["foreign"] = _historical_signal(
+            other,
+            title="Autre établissement",
+            summary="AUTRE-ETABLISSEMENT",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=other_unit,
+        )
+
+    world = _world(settings, "saison", before_capture=prepare)
+    housing_id = str(world["housing"].id)
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return _reading(
+                contradictions=[
+                    {
+                        "subject_key": "frequentation",
+                        "item_id": housing_id,
+                        "note": "Autre pôle sur les mêmes dates.",
+                    }
+                ],
+                deepening=_open("seasonal_window"),
+            )
+        sent = json.dumps(payload, ensure_ascii=False)
+        assert "SAISON-CONSERVE" in sent
+        assert "HORS-FENETRE" not in sent
+        assert "AUTRE-ETABLISSEMENT" not in sent
+        assert "PISTE-HEBERGEMENT" in sent
+        assert any(row["item_id"] == housing_id for row in payload["contradictions"])
+        opened = next(
+            row for row in payload["examined"] if row.get("source_id") == str(kept["signal"].id)
+        )
+        assert opened["role"] == "saison"
+        return _reading(
+            contradictions=[
+                {
+                    "subject_key": "frequentation",
+                    "item_id": housing_id,
+                    "note": "La contradiction reste jusqu'à la conclusion.",
+                }
+            ]
+        )
+
+    provider = ScriptedProvider(handle)
+    with CaptureQueriesContext(connection) as queries:
+        outcome = _run(world["analysis"], provider)
+    sql = "\n".join(query["sql"] for query in queries.captured_queries)
+    conclusion = json.dumps(provider.calls[-1]["payload"], ensure_ascii=False)
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2"]
+    assert outcome.semantic_readings == 2
+    assert outcome.published is False
+    assert "PISTE-HEBERGEMENT" in conclusion
+    assert any(row["item_id"] == housing_id for row in outcome.contradictions)
+    assert "SAISON-CONSERVE" in _blob(world["analysis"])
+    assert "HORS-FENETRE" not in _blob(world["analysis"])
+    assert Observation._meta.db_table not in sql
+    assert Comment._meta.db_table not in sql
+
+
+def test_a_modified_historical_signal_is_excluded_and_blocks_the_affirmative(settings):
+    def prepare(context):
+        _historical_signal(
+            context["establishment"],
+            title="Saison modifiée",
+            summary="SAISON-AVANT",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=context["room"].affected_business_unit,
+        )
+
+    world = _world(settings, "saison-modifiee", before_capture=prepare)
+    historical = Signal.objects.get(structured_summary="SAISON-AVANT")
+    historical.structured_summary = "APRES-SAISON-MODIFIEE"
+    historical.save(update_fields=["structured_summary", "updated_at"])
+    world["room"].structured_summary = "APRES-PERIODE"
+    world["room"].save(update_fields=["structured_summary", "updated_at"])
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return _reading(deepening=_open("seasonal_window"))
+        reporting_id = payload["reporting"]["source_id"]
+        return _reading(cause="established", evidence=(reporting_id,))
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+    sent = json.dumps([call["payload"] for call in provider.calls], ensure_ascii=False)
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2"]
+    assert "APRES-SAISON-MODIFIEE" not in sent
+    assert "APRES-SAISON-MODIFIEE" not in _blob(world["analysis"])
+    assert "SAISON-AVANT" not in sent
+    assert "PREUVE-SALLE" in _blob(world["analysis"])
+    assert "APRES-PERIODE" not in _blob(world["analysis"])
+    assert any(row["code"] == "modified_after_capture" for row in outcome.limits)
+    assert outcome.qualification == "refused"
+    assert outcome.investigation_succeeded is False
+    assert outcome.published is False
+
+
+def test_activity_sample_stays_on_the_named_subject(settings):
+    box = {}
+
+    def prepare(context):
+        from houston.testing.taxonomy import create_activity_subject
+
+        restaurant = context["room"].affected_business_unit
+        lunch = create_activity_subject(
+            establishment=context["establishment"],
+            business_unit=restaurant,
+            label="Déjeuner",
+        )
+        spa = create_activity_subject(
+            establishment=context["establishment"],
+            business_unit=restaurant,
+            label="Spa",
+        )
+        context["room"].activity_subject = lunch
+        context["room"].save(update_fields=["activity_subject", "updated_at"])
+        box["same"] = _historical_signal(
+            context["establishment"],
+            title="Même sujet",
+            summary="MEME-SUJET",
+            created_at=_at(date(2025, 6, 2)),
+            business_unit=restaurant,
+            activity_subject=lunch,
+        )
+        box["other"] = _historical_signal(
+            context["establishment"],
+            title="Autre sujet",
+            summary="AUTRE-SUJET",
+            created_at=_at(date(2025, 6, 3)),
+            business_unit=restaurant,
+            activity_subject=spa,
+        )
+
+    world = _world(settings, "activite", before_capture=prepare)
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            request = _open("activity_subject_sample")
+            request["activity_subject"] = "Déjeuner"
+            return _reading(deepening=request)
+        sent = json.dumps(payload, ensure_ascii=False)
+        assert "MEME-SUJET" in sent
+        assert "AUTRE-SUJET" not in sent
+        opened = next(
+            row for row in payload["examined"] if row.get("source_id") == str(box["same"].id)
+        )
+        assert opened["role"] == "echantillon_activite"
+        return _reading()
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2"]
+    assert outcome.treatment == "completed"
+    assert "AUTRE-SUJET" not in _blob(world["analysis"])
+
+    unknown = _world(settings, "activite-inconnue")
+    outsider = ScriptedProvider(
+        lambda step, payload, analysis_id: _reading(
+            deepening={**_open("activity_subject_sample"), "activity_subject": "Inconnu"}
+        )
+    )
+    with CaptureQueriesContext(connection) as queries:
+        refused = _run(unknown["analysis"], outsider)
+    sql = "\n".join(query["sql"] for query in queries.captured_queries)
+    assert refused.code == "unknown_activity_subject"
+    assert [call["step"] for call in outsider.calls] == ["lecture:1"]
+    assert Signal._meta.db_table not in sql
+
+
+def test_completed_analysis_memory_is_not_evidence(settings):
+    box = {}
+
+    def prepare(context):
+        box["prior"] = _prior_analysis(
+            context["establishment"],
+            context["owner"],
+            context["reporting"],
+            key=f"memoire-{context['analysis'].id}",
+            created_at=_at(date(2025, 1, 15)),
+            result={
+                "schema_version": "brain_analysis_v1",
+                "subjects": [
+                    {
+                        "key": "frequentation",
+                        "statement": "HYPOTHESE-ANCIENNE sur la fréquentation.",
+                        "interpretation": "HYPOTHESE-ANCIENNE reste une hypothèse.",
+                        "orientation": "INVESTIGATION",
+                        "limits": ["LIMITE-ANCIENNE"],
+                        "raw_text": RAW_OBSERVATION,
+                    }
+                ],
+                "limits": [{"code": "ancien", "message": "LIMITE-DOSSIER"}],
+            },
+        )
+        box["edited"] = _prior_analysis(
+            context["establishment"],
+            context["owner"],
+            context["reporting"],
+            key=f"memoire-modifiee-{context['analysis'].id}",
+            created_at=_at(date(2025, 2, 15)),
+            result={
+                "schema_version": "brain_analysis_v1",
+                "subjects": [
+                    {
+                        "key": "frequentation",
+                        "statement": "ANCIEN-MODIFIE",
+                        "interpretation": "ANCIEN-MODIFIE",
+                        "orientation": "NO_ACTION",
+                        "limits": [],
+                    }
+                ],
+            },
+        )
+        _prior_analysis(
+            context["establishment"],
+            context["owner"],
+            context["reporting"],
+            key=f"memoire-echouee-{context['analysis'].id}",
+            created_at=_at(date(2025, 2, 20)),
+            status=BrainAnalysis.Status.FAILED,
+            result={
+                "schema_version": "brain_analysis_v1",
+                "subjects": [{"statement": "MEMOIRE-ECHOUEE", "key": "x"}],
+            },
+        )
+        other = create_establishment(name="Autre mémoire", timezone="Europe/Paris")
+        other_owner = create_membership(
+            establishment=other,
+            role=EstablishmentMembership.Role.OWNER,
+        )
+        other_reporting = _reporting(other, other_owner, f"autre-{context['analysis'].id}")
+        _prior_analysis(
+            other,
+            other_owner,
+            other_reporting,
+            key="memoire-autre",
+            created_at=_at(date(2025, 1, 20)),
+            result={
+                "schema_version": "brain_analysis_v1",
+                "subjects": [{"statement": "MEMOIRE-AUTRE", "key": "x"}],
+            },
+        )
+
+    world = _world(settings, "memoire", before_capture=prepare)
+    box["edited"].result = {
+        "schema_version": "brain_analysis_v1",
+        "subjects": [{"key": "frequentation", "statement": "APRES-MEMOIRE"}],
+    }
+    box["edited"].save(update_fields=["result", "updated_at"])
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return _reading(deepening=_open("completed_analysis_memory"))
+        if step == "lecture:2":
+            sent = json.dumps(payload, ensure_ascii=False)
+            memory = payload["memory"]
+            assert any(row["source_id"] == str(box["prior"].id) for row in memory)
+            assert all(row["not_evidence"] is True for row in memory)
+            assert "HYPOTHESE-ANCIENNE" in sent
+            assert "LIMITE-ANCIENNE" in sent
+            assert "APRES-MEMOIRE" not in sent
+            assert "ANCIEN-MODIFIE" not in sent
+            assert "MEMOIRE-AUTRE" not in sent
+            assert "MEMOIRE-ECHOUEE" not in sent
+            assert "raw_text" not in sent
+            assert RAW_OBSERVATION not in sent
+            assert str(box["prior"].id) not in {row.get("source_id") for row in payload["examined"]}
+            return _reading(cause="established", evidence=(str(box["prior"].id),))
+        return _reading()
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+    stored = BrainSearchRun.objects.get(
+        dossier__analysis=world["analysis"],
+        code="lecture:2",
+    ).criteria["output"]
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2", "correction:1"]
+    assert "memory_not_evidence" in provider.calls[2]["payload"]["correction"]["errors"]
+    assert outcome.treatment == "completed"
+    assert outcome.corrections == 1
+    assert str(box["prior"].id) not in stored["subjects"][0]["evidence_ids"]
+    assert "APRES-MEMOIRE" not in _blob(world["analysis"])
+    assert outcome.published is False
+
+
+def test_a_recorded_search_reloads_without_the_live_row(settings):
+    def prepare(context):
+        _historical_signal(
+            context["establishment"],
+            title="Saison reprise",
+            summary="SAISON-REPRISE",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=context["room"].affected_business_unit,
+        )
+
+    world = _world(settings, "reprise-saison", before_capture=prepare)
+    failed = {"pending": True}
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:2" and failed["pending"]:
+            failed["pending"] = False
+            return None
+        if step == "lecture:1":
+            return _reading(deepening=_open("seasonal_window"))
+        return _reading()
+
+    provider = ScriptedProvider(handle)
+    interrupted = _run(world["analysis"], provider)
+    historical = Signal.objects.get(structured_summary="SAISON-REPRISE")
+    historical.structured_summary = "APRES-REPRISE"
+    historical.save(update_fields=["structured_summary", "updated_at"])
+    with CaptureQueriesContext(connection) as queries:
+        resumed = _run(world["analysis"], provider)
+    sql = "\n".join(query["sql"] for query in queries.captured_queries)
+    searches = BrainSearchRun.objects.filter(
+        dossier__analysis=world["analysis"],
+        code="approfondissement:1:seasonal_window",
+    )
+
+    assert interrupted.treatment == "interrupted"
+    assert interrupted.replay_step == "lecture:2"
+    assert interrupted.semantic_readings == 1
+    assert resumed.semantic_readings == 2
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2", "lecture:2"]
+    assert "SAISON-REPRISE" in json.dumps(provider.calls[-1]["payload"], ensure_ascii=False)
+    assert "APRES-REPRISE" not in json.dumps(provider.calls[-1]["payload"], ensure_ascii=False)
+    assert searches.count() == 1
+    assert Signal._meta.db_table not in sql
+    assert Observation._meta.db_table not in sql
+
+
+def test_sample_ceilings_leave_the_extra_row_out(settings, monkeypatch):
+    def prepare(context):
+        unit = context["room"].affected_business_unit
+        _historical_signal(
+            context["establishment"],
+            title="Saison une",
+            summary="SAISON-GARDER",
+            created_at=_at(date(2025, 3, 5)),
+            business_unit=unit,
+        )
+        _historical_signal(
+            context["establishment"],
+            title="Saison deux",
+            summary="SAISON-ECARTER",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=unit,
+        )
+
+    world = _world(settings, "plafond-saison", before_capture=prepare)
+    configuration = dict(world["analysis"].configuration)
+    ceilings = dict(configuration["ceilings"])
+    ceilings["max_candidates_per_category"] = 1
+    configuration["ceilings"] = ceilings
+    world["analysis"].configuration = configuration
+    world["analysis"].save(update_fields=["configuration", "updated_at"])
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return _reading(deepening=_open("seasonal_window"))
+        sent = json.dumps(payload, ensure_ascii=False)
+        assert "SAISON-GARDER" in sent
+        assert "SAISON-ECARTER" not in sent
+        assert any(row["code"] == "seasonal_truncated" for row in payload["limits"])
+        return _reading()
+
+    outcome = _run(world["analysis"], ScriptedProvider(handle))
+    assert outcome.semantic_readings == 2
+    assert any(row["code"] == "seasonal_truncated" for row in outcome.limits)
+
+    box = {}
+
+    def prepare_activity(context):
+        from houston.testing.taxonomy import create_activity_subject
+
+        unit = context["room"].affected_business_unit
+        subject = create_activity_subject(
+            establishment=context["establishment"],
+            business_unit=unit,
+            label="Déjeuner",
+        )
+        context["room"].activity_subject = subject
+        context["room"].save(update_fields=["activity_subject", "updated_at"])
+        box["older"] = _historical_signal(
+            context["establishment"],
+            title="Ancien déjeuner",
+            summary="ECHANTILLON-ANCIEN",
+            created_at=_at(date(2025, 5, 1)),
+            business_unit=unit,
+            activity_subject=subject,
+        )
+        box["newer"] = _historical_signal(
+            context["establishment"],
+            title="Récent déjeuner",
+            summary="ECHANTILLON-RECENT",
+            created_at=_at(date(2025, 6, 1)),
+            business_unit=unit,
+            activity_subject=subject,
+        )
+
+    monkeypatch.setattr("houston.brain.deepening.ACTIVITY_SAMPLE_LIMIT", 1)
+    sampled = _world(settings, "plafond-activite", before_capture=prepare_activity)
+
+    def handle_activity(step, payload, analysis_id):
+        if step == "lecture:1":
+            request = _open("activity_subject_sample")
+            request["activity_subject"] = "Déjeuner"
+            return _reading(deepening=request)
+        sent = json.dumps(payload, ensure_ascii=False)
+        assert "ECHANTILLON-RECENT" in sent
+        assert "ECHANTILLON-ANCIEN" not in sent
+        assert any(row["code"] == "sample_truncated" for row in payload["limits"])
+        return _reading()
+
+    sampled_outcome = _run(sampled["analysis"], ScriptedProvider(handle_activity))
+    assert sampled_outcome.semantic_readings == 2
+    assert any(row["code"] == "sample_truncated" for row in sampled_outcome.limits)
+
+
+def test_continuous_seasonal_requests_stop_after_two_openings(settings):
+    world = _world(settings, "plafond-saison-boucle")
+
+    def handle(step, payload, analysis_id):
+        return _reading(deepening=_open("seasonal_window"))
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+    codes = {
+        row.code: row.criteria.get("code")
+        for row in BrainSearchRun.objects.filter(dossier__analysis=world["analysis"])
+    }
+    searches = [
+        row.code
+        for row in BrainSearchRun.objects.filter(dossier__analysis=world["analysis"])
+        if row.code.startswith("approfondissement:")
+    ]
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "lecture:2", "lecture:3"]
+    assert outcome.semantic_readings == 3
+    assert outcome.provider_calls == 3
+    assert outcome.code == "deepen_budget_exhausted"
+    assert codes["decision:3"] == "deepen_budget_exhausted"
+    assert sorted(searches) == [
+        "approfondissement:1:seasonal_window",
+        "approfondissement:2:seasonal_window",
+    ]
+    assert any(row["code"] == "seasonal_window_empty" for row in outcome.limits)
+
+
+def _historical_signal(
+    establishment,
+    *,
+    title,
+    summary,
+    created_at,
+    business_unit,
+    activity_subject=None,
+):
+    signal = _signal(
+        establishment,
+        title=title,
+        summary=summary,
+        created_at=created_at,
+        business_unit=business_unit,
+    )
+    signal.status = Signal.Status.RESOLVED
+    signal.resolved_at = created_at
+    if activity_subject is not None:
+        signal.activity_subject = activity_subject
+    signal.save(update_fields=["status", "resolved_at", "activity_subject", "updated_at"])
+    Signal.objects.filter(pk=signal.pk).update(
+        created_at=created_at,
+        updated_at=created_at,
+        resolved_at=created_at,
+        last_activity_at=created_at,
+    )
+    signal.refresh_from_db()
+    return signal
+
+
+def _prior_analysis(
+    establishment,
+    owner,
+    reporting,
+    *,
+    key,
+    created_at,
+    result,
+    status=BrainAnalysis.Status.COMPLETED,
+):
+    row = BrainAnalysis.objects.create(
+        establishment=establishment,
+        reporting=reporting,
+        author=owner.user,
+        idempotency_key=key,
+        status=status,
+        configuration={"schema_version": "brain_analysis_v1"},
+        result=result,
+        published_at=created_at,
+    )
+    BrainAnalysis.objects.filter(pk=row.pk).update(
+        created_at=created_at,
+        updated_at=created_at,
+        published_at=created_at,
+    )
+    row.refresh_from_db()
+    return row
+
+
+def _replace_measures(reporting) -> None:
+    extraction = BrainExtraction.objects.get(reporting=reporting)
+    extraction.payload = {
+        "measures": [
+            {
+                "label": "frequentation",
+                "value": "100",
+                "value_kind": "number",
+                "unit": "couvert",
+                "scope": "Restauration",
+            },
+            {
+                "label": "frequentation",
+                "value": "80",
+                "value_kind": "number",
+                "unit": "couvert",
+                "scope": "Restauration",
+                "period": "N-1",
+            },
+        ],
+        "qualitative": [{"kind": "paragraph", "text": "Baisse de frequentation en salle."}],
+    }
+    extraction.save(update_fields=["payload", "updated_at"])
+
+
+def _gap(cause: str = "unknown", evidence: tuple[str, ...] = ()) -> dict:
+    return {
+        "schema_version": "brain_investigation_v3",
+        "subjects": [
+            {
+                "key": "frequentation",
+                "movement": "degradation",
+                "statement": "La fréquentation passe de 100 à 80 couverts.",
+                "examined": True,
+                "cause": cause,
+                "evidence_ids": list(evidence),
+                "contradiction_ids": [],
+                "reported_facts": [],
+                "explanations": [],
+                "decisive_checks": [],
+                "findings": [
+                    {
+                        "kind": "arithmetic",
+                        "text": "Écart mesuré sur la même définition.",
+                        "item_ids": ["measure:0", "measure:1"],
+                    }
+                ],
+                "calculations": [
+                    {
+                        "operation": "variation",
+                        "role": "gap",
+                        "comparison": "temporal",
+                        "label": "frequentation",
+                        "operands": [
+                            {"item_id": "measure:0", "value": "100", "unit": "couvert"},
+                            {"item_id": "measure:1", "value": "80", "unit": "couvert"},
+                        ],
+                        "published_value": "-0.2",
+                        "unit": "",
+                    }
+                ],
+                "breakdowns": [],
+                "tradeoffs": [],
+                "orientation": "NO_ACTION",
+                "justification": "L'écart est mesuré. Aucune cause opérationnelle ne l'est.",
+                "does_not_promise": "",
+                "limits": [
+                    {
+                        "text": "La cause opérationnelle n'est pas établie.",
+                        "effect": "blocks_cause",
+                        "item_ids": [],
+                    }
+                ],
+            }
+        ],
+        "contradictions": [],
+        "deepening": None,
+    }
+
+
+def test_an_unread_seasonal_copy_keeps_its_period_and_an_independent_gap(settings, monkeypatch):
+    def prepare(context):
+        _replace_measures(context["reporting"])
+        created_at = _at(date(2025, 3, 6))
+        signal = _signal(
+            context["establishment"],
+            title="Saison ouverte",
+            summary="SAISON-OUVERTE",
+            created_at=created_at,
+            business_unit=context["room"].affected_business_unit,
+        )
+        signal.status = Signal.Status.RESOLVED
+        signal.save(update_fields=["status", "updated_at"])
+        Signal.objects.filter(pk=signal.pk).update(updated_at=created_at)
+        SignalLifecycleEvent.objects.create(
+            signal=signal,
+            establishment=context["establishment"],
+            event_type=SignalLifecycleEvent.EventType.CREATED,
+            occurred_at=_at(date(2025, 3, 6)),
+            metadata_safe={},
+        )
+
+    world = _world(settings, "saison-non-lue", before_capture=prepare)
+
+    def costly(payload):
+        examined = payload.get("examined") or []
+        if any(row.get("role") == "saison" for row in examined):
+            return 10**9
+        return 100
+
+    monkeypatch.setattr("houston.brain.orchestration.investigation_call_tokens", costly)
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return {**_gap(), "deepening": _open("seasonal_window")}
+        return _gap()
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+    snapshot = reload_period_dossier(world["analysis"].id)
+    seasonal = next(item for item in snapshot.copies if item.role == "saison")
+    capture_on = snapshot.capture_at.astimezone(PARIS).date()
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1"]
+    assert seasonal.source_id in outcome.discovered_not_examined
+    assert outcome.qualification == "partial"
+    assert outcome.investigation_succeeded is True
+    assert outcome.code == "budget_exceeded"
+    assert seasonal.payload["events"][0]["role"] == "anterieur"
+    assert seasonal.end == capture_on
+    assert seasonal.end != date(2025, 3, 8)
+
+
+def test_an_unscoped_exclusion_blocks_the_cause_and_keeps_the_gap(settings):
+    def prepare(context):
+        _replace_measures(context["reporting"])
+        _historical_signal(
+            context["establishment"],
+            title="Saison sans sujet",
+            summary="SAISON-SANS-SUJET",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=context["room"].affected_business_unit,
+        )
+
+    world = _world(settings, "exclusion-sans-sujet", before_capture=prepare)
+    historical = Signal.objects.get(structured_summary="SAISON-SANS-SUJET")
+    historical.structured_summary = "APRES-SANS-SUJET"
+    historical.save(update_fields=["structured_summary", "updated_at"])
+    opening = _open("seasonal_window")
+    opening["subject_key"] = ""
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return {**_gap(), "deepening": opening}
+        reporting_id = payload["reporting"]["source_id"]
+        return _gap(cause="established", evidence=(reporting_id,))
+
+    outcome = _run(world["analysis"], ScriptedProvider(handle))
+
+    assert outcome.qualification == "refused"
+    assert outcome.investigation_succeeded is False
+    assert any(row["code"] == "modified_after_capture" for row in outcome.limits)
+
+
+def test_an_unscoped_exclusion_still_qualifies_an_independent_gap(settings):
+    def prepare(context):
+        _replace_measures(context["reporting"])
+        _historical_signal(
+            context["establishment"],
+            title="Saison calcul",
+            summary="SAISON-CALCUL",
+            created_at=_at(date(2025, 3, 6)),
+            business_unit=context["room"].affected_business_unit,
+        )
+
+    world = _world(settings, "exclusion-calcul", before_capture=prepare)
+    historical = Signal.objects.get(structured_summary="SAISON-CALCUL")
+    historical.structured_summary = "APRES-CALCUL"
+    historical.save(update_fields=["structured_summary", "updated_at"])
+    opening = _open("seasonal_window")
+    opening["subject_key"] = ""
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return {**_gap(), "deepening": opening}
+        return _gap()
+
+    outcome = _run(world["analysis"], ScriptedProvider(handle))
+
+    assert any(row["code"] == "modified_after_capture" for row in outcome.limits)
+    assert outcome.qualification == "partial"
+    assert outcome.investigation_succeeded is True
+
+
+def test_an_accepted_correction_without_its_lecture_row_resumes(settings):
+    world = _world(settings, "reprise-correction")
+    dossier = BrainDossier.objects.get(analysis=world["analysis"])
+    record = {
+        "input_hash": "stored",
+        "input_tokens": 10,
+        "payload": {},
+        "output": _reading(),
+        "examined_ids": [],
+        "full_text_ids": [],
+        "withheld_ids": [],
+        "discovered_not_examined": [],
+        "representative_ids": [],
+    }
+    BrainSearchRun.objects.create(
+        dossier=dossier,
+        code="correction:1",
+        criteria={
+            "accepted": True,
+            "reading_index": 1,
+            "reading": record,
+            "errors": ["response_invalid"],
+            "input_tokens": 10,
+        },
+        examined_count=1,
+        retained_count=0,
+    )
+    provider = ScriptedProvider(lambda step, payload, analysis_id: _reading())
+    outcome = _run(world["analysis"], provider)
+
+    assert provider.calls == []
+    assert outcome.semantic_readings == 1
+    assert outcome.corrections == 1
+    assert outcome.qualification == "factual_reading"
+    assert outcome.treatment == "completed"
+
+
+def test_a_rejected_correction_without_a_stop_does_not_consume_the_budget(settings):
+    world = _world(settings, "correction-orpheline")
+    dossier = BrainDossier.objects.get(analysis=world["analysis"])
+    BrainSearchRun.objects.create(
+        dossier=dossier,
+        code="correction:1",
+        criteria={"accepted": False, "errors": ["response_invalid"], "input_tokens": 10},
+        examined_count=1,
+        retained_count=0,
+    )
+
+    def handle(step, payload, analysis_id):
+        if step == "lecture:1":
+            return {"schema_version": "nope"}
+        return _reading()
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "correction:1"]
+    assert outcome.treatment == "completed"
+    assert outcome.corrections == 1

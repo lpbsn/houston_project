@@ -1,8 +1,8 @@
 """Bounded investigation loop. The current executor does not call it.
 
-A reading sees frozen copies only. A deepening opens an identifier already
-in the period index, or it is refused. Nothing here admits an analysis,
-writes a published result, or calls a paid provider.
+A reading sees frozen copies only. A deepening either opens an identifier
+already in the period index, or appends one closed-menu search. Nothing here
+admits an analysis, writes a published result, or calls a paid provider.
 """
 
 from __future__ import annotations
@@ -13,6 +13,13 @@ from datetime import datetime
 from django.db import transaction
 
 from houston.brain.configuration import digest, json_token_count
+from houston.brain.deepening import (
+    LIMIT_MEMORY_TRUNCATED,
+    LIMIT_SAMPLE_TRUNCATED,
+    LIMIT_SEASONAL_TRUNCATED,
+    DeepeningOpen,
+    open_deepening,
+)
 from houston.brain.dossier import open_indexed_copy, reload_period_dossier
 from houston.brain.errors import BrainWorkError
 from houston.brain.investigation import (
@@ -32,8 +39,9 @@ from houston.brain.investigation import (
 )
 from houston.brain.investigation_contract import (
     SCHEMA_VERSION,
+    InvestigationReading,
     assess_reading,
-    grounded_blob,
+    cited_item_ids,
     investigation_call_tokens,
     investigation_prompt,
     investigation_response_schema,
@@ -41,6 +49,11 @@ from houston.brain.investigation_contract import (
 )
 from houston.brain.models import BrainAnalysis, BrainDossier, BrainSearchRun
 from houston.brain.period import (
+    CATEGORY_EXECUTION,
+    CATEGORY_MEMORY,
+    CATEGORY_PLAN,
+    CATEGORY_SIGNAL,
+    DISCOVERED_NOT_EXAMINED,
     LIMIT_PERIOD_EXCEEDS_CALL,
     PeriodCopy,
     PeriodSnapshot,
@@ -53,6 +66,14 @@ from houston.brain.provider import BrainProvider, BrainProviderUnavailable
 STOP_CODE = "investigation_stop"
 _CORRECTION_CODE = "correction:1"
 _TREATMENT_INTERRUPTED = "interrupted"
+_COVERAGE_CODES = frozenset(
+    {
+        "modified_after_capture",
+        LIMIT_SEASONAL_TRUNCATED,
+        LIMIT_SAMPLE_TRUNCATED,
+        LIMIT_MEMORY_TRUNCATED,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +92,7 @@ class InvestigationOutcome:
     contradictions: tuple[dict, ...]
     full_text_ids: tuple[str, ...]
     withheld_contradiction_ids: tuple[str, ...]
+    limits: tuple[dict, ...] = ()
     replay_step: str = ""
     published: bool = False
 
@@ -136,22 +158,47 @@ def run_investigation(
                 dossier_id,
                 _conclusion(
                     state,
+                    snapshot=snapshot,
                     treatment=TREATMENT_CANCELED,
                     code="cancel_requested",
                     qualification=None,
                     succeeded=False,
                 ),
             )
-        if state["readings"] >= resolved["max_semantic_readings"]:
-            pending = state["lectures"][-1]["output"].get("deepening")
+        if _pending_request(state):
+            decision, opened = _deepen(
+                snapshot,
+                analysis,
+                _parsed_output(state),
+                state,
+                subject_start=subject_start,
+                subject_end=subject_end,
+            )
+            _store_decision(dossier_id, state, decision, _parsed_output(state), opened)
+            if decision is None or not decision.accepted:
+                return _save_stop(
+                    dossier_id,
+                    _accepted_conclusion(
+                        state,
+                        snapshot,
+                        competing=bool(_last_withheld(state)),
+                        code="" if decision is None else decision.code,
+                        withheld=_last_withheld(state),
+                    ),
+                )
+            snapshot = reload_period_dossier(analysis_id)
+            continue
+        if state["readings"] >= resolved["max_semantic_readings"] or not _needs_provider_call(
+            state
+        ):
             return _save_stop(
                 dossier_id,
                 _accepted_conclusion(
                     state,
                     snapshot,
-                    competing=False,
-                    code="deepen_budget_exhausted" if pending else "",
-                    withheld=(),
+                    competing=bool(_last_withheld(state)),
+                    code=_stop_code(state, resolved["max_semantic_readings"]),
+                    withheld=_last_withheld(state),
                 ),
             )
         prepared = _prepare(
@@ -169,14 +216,19 @@ def run_investigation(
                     dossier_id,
                     _refused(state, code, competing=prepared.competing),
                 )
+            previous = set(state["lectures"][-1]["examined_ids"])
+            unread = tuple(
+                source_id for source_id in prepared.examined_ids if source_id not in previous
+            )
             return _save_stop(
                 dossier_id,
                 _accepted_conclusion(
                     state,
                     snapshot,
-                    competing=prepared.competing,
+                    competing=prepared.competing or bool(unread),
                     code=code,
                     withheld=prepared.withheld_ids,
+                    unread=unread,
                 ),
             )
         if state["calls"] >= resolved["max_provider_calls"]:
@@ -209,6 +261,7 @@ def run_investigation(
         if not _output_within(result, resolved):
             return _save_stop(dossier_id, _failed(state, "provider_output_rejected"))
         assessment = _assess(result.output, snapshot, prepared)
+        correction = None
         if not assessment.ok:
             corrected = _correct(
                 provider,
@@ -224,23 +277,10 @@ def run_investigation(
             )
             if isinstance(corrected, InvestigationOutcome):
                 return corrected
-            assessment_output = corrected
+            assessment_output, correction = corrected
         else:
             assessment_output = assessment.parsed
-        _store_reading(dossier_id, state, prepared, assessment_output)
-        decision, opened = _deepen(snapshot, analysis, assessment_output, state, prepared)
-        _store_decision(dossier_id, state, decision, assessment_output, opened)
-        if decision is None or not decision.accepted:
-            return _save_stop(
-                dossier_id,
-                _accepted_conclusion(
-                    state,
-                    snapshot,
-                    competing=prepared.competing,
-                    code="" if decision is None else decision.code,
-                    withheld=prepared.withheld_ids,
-                ),
-            )
+        _store_reading(dossier_id, state, prepared, assessment_output, correction=correction)
 
 
 def _ceilings(overrides: dict | None, analysis: BrainAnalysis) -> dict:
@@ -471,6 +511,9 @@ def _payload(
         "deepening_menu": sorted(DEEPENING_MENU),
         "deepenings_remaining": deepenings_remaining,
         "limits": limits,
+        "memory": [
+            dict(item.payload) for item in snapshot.copies if item.category == CATEGORY_MEMORY
+        ],
     }
 
 
@@ -513,17 +556,29 @@ def _correct(
         return _interrupted(state, step)
     state["calls"] += 1
     state["tokens"] += cost
-    state["corrections"] += 1
-    _store_correction(dossier_id, errors, cost)
     if not _output_within(result, ceilings):
-        return _save_stop(dossier_id, _failed(state, "provider_output_rejected"))
+        state["corrections"] += 1
+        return _save_stop(
+            dossier_id,
+            _failed(state, "provider_output_rejected"),
+            correction={"errors": list(errors), "input_tokens": cost, "accepted": False},
+        )
     assessment = _assess(result.output, snapshot, prepared)
     if not assessment.ok:
-        return _save_stop(dossier_id, _failed(state, "response_invalid"))
-    return assessment.parsed
+        state["corrections"] += 1
+        return _save_stop(
+            dossier_id,
+            _failed(state, "response_invalid"),
+            correction={"errors": list(errors), "input_tokens": cost, "accepted": False},
+        )
+    return assessment.parsed, {
+        "errors": list(errors),
+        "input_tokens": cost,
+        "accepted": True,
+    }
 
 
-def _deepen(snapshot, analysis, parsed, state, prepared):
+def _deepen(snapshot, analysis, parsed, state, *, subject_start, subject_end):
     request = parsed.deepening
     if request is None:
         return None, None
@@ -539,38 +594,66 @@ def _deepen(snapshot, analysis, parsed, state, prepared):
     )
     if not decision.accepted:
         return decision, None
-    if request.kind != DEEPEN_PERIOD_INDEX:
-        return DeepeningDecision(False, "not_in_frozen_dossier"), None
-    if not request.source_id or request.source_id in prepared.examined_ids:
-        code = "already_examined" if request.source_id else "outside_index"
-        return DeepeningDecision(False, code), None
-    try:
-        opened = open_indexed_copy(snapshot, request.source_id)
-    except PeriodSnapshotError:
-        return DeepeningDecision(False, "outside_index"), None
+    if request.kind == DEEPEN_PERIOD_INDEX:
+        examined = set(_examined_ids(state))
+        if not request.source_id or request.source_id in examined:
+            code = "already_examined" if request.source_id else "outside_index"
+            return DeepeningDecision(False, code), None
+        try:
+            opened = open_indexed_copy(snapshot, request.source_id)
+        except PeriodSnapshotError:
+            return DeepeningDecision(False, "outside_index"), None
+        return DeepeningDecision(True, "accepted"), DeepeningOpen(
+            True,
+            "accepted",
+            opened_source_ids=(opened.source_id,),
+        )
+    opened = open_deepening(
+        analysis=analysis,
+        snapshot=snapshot,
+        kind=request.kind,
+        subject_key=request.subject_key,
+        activity_subject=request.activity_subject,
+        reading_index=state["readings"],
+        subject_start=subject_start,
+        subject_end=subject_end,
+    )
+    if not opened.accepted:
+        return DeepeningDecision(False, opened.code), None
     return DeepeningDecision(True, "accepted"), opened
 
 
 def _assess(output, snapshot: PeriodSnapshot, prepared: _PreparedCall):
-    full = [
-        item.payload for item in snapshot.copies if item.source_id in set(prepared.full_text_ids)
-    ]
-    signal_ids = {
-        item.source_id
-        for item in snapshot.copies
-        if item.source_id in set(prepared.full_text_ids) and item.category == "signal"
-    }
+    visible = set(prepared.full_text_ids)
+    signal_ids = set()
+    action_ids = set()
+    for item in snapshot.copies:
+        if item.source_id not in visible:
+            continue
+        if item.category == CATEGORY_SIGNAL:
+            signal_ids.add(item.source_id)
+        elif item.category in {CATEGORY_EXECUTION, CATEGORY_PLAN}:
+            action_ids.add(item.source_id)
     reporting_id = str(snapshot.reporting.get("source_id") or "")
-    citable = set(prepared.full_text_ids)
+    measures = {
+        str(row.get("measure_id")): row
+        for row in snapshot.reporting.get("measures") or []
+        if isinstance(row, dict) and row.get("measure_id")
+    }
+    citable = set(visible)
+    citable.update(measures)
     if reporting_id:
         citable.add(reporting_id)
     proposed = {row["key"] for row in _proposed(snapshot)}
+    memory_ids = {item.source_id for item in snapshot.copies if item.category == CATEGORY_MEMORY}
     return assess_reading(
         output,
         citable_ids=citable,
         signal_ids=signal_ids,
+        action_ids=action_ids,
         proposed_keys=proposed,
-        grounded_text=grounded_blob(snapshot.reporting, full),
+        measures=measures,
+        memory_ids=memory_ids,
     )
 
 
@@ -595,7 +678,7 @@ def _output_within(result, ceilings) -> bool:
     return counted <= ceilings["per_call_output_tokens"]
 
 
-def _store_reading(dossier_id, state, prepared: _PreparedCall, parsed) -> None:
+def _store_reading(dossier_id, state, prepared: _PreparedCall, parsed, correction=None) -> None:
     output = parsed.model_dump()
     record = {
         "input_hash": digest(prepared.payload),
@@ -609,23 +692,49 @@ def _store_reading(dossier_id, state, prepared: _PreparedCall, parsed) -> None:
         "representative_ids": list(prepared.representative_ids),
     }
     index = state["readings"] + 1
-    _write(dossier_id, f"lecture:{index}", record, examined=len(prepared.examined_ids))
+    with transaction.atomic():
+        _write_row(dossier_id, f"lecture:{index}", record, examined=len(prepared.examined_ids))
+        if correction is not None:
+            _write_row(
+                dossier_id,
+                _CORRECTION_CODE,
+                {
+                    **correction,
+                    "reading_index": index,
+                    "reading": record,
+                },
+                examined=1,
+                retained=0,
+            )
     state["lectures"].append(record)
     state["readings"] = index
+    if correction is not None:
+        state["corrections"] += 1
 
 
 def _store_decision(dossier_id, state, decision, parsed, opened) -> None:
     if decision is None:
         return
+    request = parsed.deepening
     record = {
-        "kind": parsed.deepening.kind if parsed.deepening is not None else "",
-        "source_id": parsed.deepening.source_id if parsed.deepening is not None else "",
+        "kind": request.kind if request is not None else "",
+        "source_id": request.source_id if request is not None else "",
+        "subject_key": request.subject_key if request is not None else "",
         "code": decision.code,
         "accepted": decision.accepted,
         "after_reading": state["readings"],
+        "opened_source_ids": [],
+        "memory_ids": [],
+        "exclusions": [],
+        "limits": [],
     }
     if opened is not None:
-        record["opened_source_id"] = opened.source_id
+        record["opened_source_ids"] = list(opened.opened_source_ids)
+        record["memory_ids"] = list(opened.memory_ids)
+        record["exclusions"] = list(opened.exclusions)
+        record["limits"] = list(opened.limits)
+        if opened.opened_source_ids:
+            record["opened_source_id"] = opened.opened_source_ids[0]
     _write(
         dossier_id,
         f"decision:{state['readings']}",
@@ -636,18 +745,22 @@ def _store_decision(dossier_id, state, decision, parsed, opened) -> None:
     state["decisions"].append(record)
 
 
-def _store_correction(dossier_id, errors, cost) -> None:
-    _write(
-        dossier_id,
-        _CORRECTION_CODE,
-        {"errors": list(errors), "input_tokens": cost},
-        examined=1,
-        retained=0,
-    )
-
-
-def _save_stop(dossier_id, outcome: InvestigationOutcome) -> InvestigationOutcome:
-    _write(dossier_id, STOP_CODE, _stop_record(outcome), examined=outcome.semantic_readings)
+def _save_stop(dossier_id, outcome: InvestigationOutcome, correction=None) -> InvestigationOutcome:
+    with transaction.atomic():
+        if correction is not None:
+            _write_row(
+                dossier_id,
+                _CORRECTION_CODE,
+                correction,
+                examined=1,
+                retained=0,
+            )
+        _write_row(
+            dossier_id,
+            STOP_CODE,
+            _stop_record(outcome),
+            examined=outcome.semantic_readings,
+        )
     return outcome
 
 
@@ -668,36 +781,82 @@ def _load(dossier_id) -> dict:
         index += 1
     correction = rows.get(_CORRECTION_CODE)
     stop = rows.get(STOP_CODE)
+    correction_body = correction.criteria if correction is not None else {}
+    if not isinstance(correction_body, dict):
+        correction_body = {}
+    restored = _restore_reading(lectures, correction_body)
+    if restored is not None:
+        lectures.append(restored)
+    paired = _correction_paired(lectures, correction_body)
     tokens = sum(int(row.get("input_tokens") or 0) for row in lectures)
-    if correction is not None:
-        tokens += int(correction.criteria.get("input_tokens") or 0)
+    if paired:
+        tokens += int(correction_body.get("input_tokens") or 0)
     return {
         "lectures": lectures,
         "decisions": decisions,
         "readings": len(lectures),
-        "corrections": 1 if correction is not None else 0,
-        "calls": len(lectures) + (1 if correction is not None else 0),
+        "corrections": 1 if paired else 0,
+        "calls": len(lectures) + (1 if paired else 0),
         "tokens": tokens,
         "stop": None if stop is None else stop.criteria,
     }
+
+
+def _restore_reading(lectures: list[dict], correction: dict) -> dict | None:
+    """A corrected reading stored without its lecture row is still the same step."""
+    if not correction.get("accepted") or not isinstance(correction.get("reading"), dict):
+        return None
+    try:
+        index = int(correction.get("reading_index") or 0)
+    except (TypeError, ValueError):
+        return None
+    if index != len(lectures) + 1:
+        return None
+    return correction["reading"]
+
+
+def _correction_paired(lectures: list[dict], correction: dict) -> bool:
+    if not correction:
+        return False
+    if not correction.get("accepted"):
+        return False
+    try:
+        index = int(correction.get("reading_index") or 0)
+    except (TypeError, ValueError):
+        return False
+    return 0 < index <= len(lectures)
 
 
 def _write(
     dossier_id, code: str, criteria: dict, *, examined: int, retained: int | None = None
 ) -> None:
     with transaction.atomic():
-        BrainSearchRun.objects.update_or_create(
-            dossier_id=dossier_id,
-            code=code,
-            defaults={
-                "criteria": criteria,
-                "examined_count": examined,
-                "retained_count": examined if retained is None else retained,
-            },
-        )
+        _write_row(dossier_id, code, criteria, examined=examined, retained=retained)
 
 
-def _accepted_conclusion(state, snapshot, *, competing, code, withheld) -> InvestigationOutcome:
+def _write_row(
+    dossier_id, code: str, criteria: dict, *, examined: int, retained: int | None = None
+) -> None:
+    BrainSearchRun.objects.update_or_create(
+        dossier_id=dossier_id,
+        code=code,
+        defaults={
+            "criteria": criteria,
+            "examined_count": examined,
+            "retained_count": examined if retained is None else retained,
+        },
+    )
+
+
+def _accepted_conclusion(
+    state,
+    snapshot,
+    *,
+    competing,
+    code,
+    withheld,
+    unread: tuple[str, ...] = (),
+) -> InvestigationOutcome:
     last = state["lectures"][-1]
     withheld_ids = set(withheld)
     blocked_subjects = {
@@ -705,13 +864,17 @@ def _accepted_conclusion(state, snapshot, *, competing, code, withheld) -> Inves
         for row in _contradictions(state["lectures"])
         if row["item_id"] in withheld_ids
     }
+    discovered = _with_unread(last["discovered_not_examined"], unread, snapshot)
     facts = _facts(
         last["output"],
         snapshot,
         withheld=withheld,
         competing=competing,
-        discovered=last["discovered_not_examined"],
+        discovered=discovered,
         blocked_subjects=blocked_subjects,
+        modified_subjects=_modified_subjects(state),
+        unscoped_exclusion=_unscoped_exclusion(state),
+        coverage_incomplete=_coverage_incomplete(state, unread),
     )
     verdict = qualify(facts)
     return InvestigationOutcome(
@@ -723,10 +886,11 @@ def _accepted_conclusion(state, snapshot, *, competing, code, withheld) -> Inves
         provider_calls=state["calls"],
         corrections=state["corrections"],
         examined_ids=tuple(last["examined_ids"]),
-        discovered_not_examined=tuple(row["source_id"] for row in last["discovered_not_examined"]),
+        discovered_not_examined=tuple(row["source_id"] for row in discovered),
         contradictions=tuple(_contradictions(state["lectures"])),
         full_text_ids=tuple(last["full_text_ids"]),
         withheld_contradiction_ids=tuple(withheld),
+        limits=tuple(_limits(snapshot, state)),
     )
 
 
@@ -764,8 +928,11 @@ def _failed(state, code) -> InvestigationOutcome:
     )
 
 
-def _conclusion(state, *, treatment, code, qualification, succeeded) -> InvestigationOutcome:
+def _conclusion(
+    state, *, treatment, code, qualification, succeeded, snapshot=None
+) -> InvestigationOutcome:
     last = state["lectures"][-1] if state["lectures"] else None
+    limits = tuple(_limits(snapshot, state)) if snapshot is not None else ()
     return InvestigationOutcome(
         treatment=treatment,
         code=code,
@@ -781,6 +948,7 @@ def _conclusion(state, *, treatment, code, qualification, succeeded) -> Investig
         contradictions=tuple(_contradictions(state["lectures"])),
         full_text_ids=tuple(last["full_text_ids"]) if last else (),
         withheld_contradiction_ids=tuple(last["withheld_ids"]) if last else (),
+        limits=limits,
     )
 
 
@@ -817,44 +985,52 @@ def _facts(
     competing,
     discovered,
     blocked_subjects: set[str] | None = None,
+    modified_subjects: set[str] | None = None,
+    unscoped_exclusion: bool = False,
+    coverage_incomplete: bool = False,
 ) -> InvestigationFacts:
     withheld_ids = set(withheld)
     blocked_keys = blocked_subjects or set()
+    modified = modified_subjects or set()
     proposed = {row["key"] for row in _proposed(snapshot)}
     subjects = []
+    usable_arithmetic = False
     for subject in output.get("subjects") or []:
+        cause = subject.get("cause") == "established"
         blocked = subject["key"] in blocked_keys or bool(
             withheld_ids.intersection(subject.get("contradiction_ids") or [])
         )
+        if cause and (unscoped_exclusion or subject["key"] in modified or competing):
+            blocked = True
+        arithmetic = _arithmetic(subject) and not blocked
+        usable_arithmetic = usable_arithmetic or arithmetic
         subjects.append(
             SubjectFinding(
                 key=subject["key"],
                 significant=True,
                 examined=bool(subject.get("examined")),
-                cause_established=subject.get("cause") == "established",
-                verified_analytical=False,
-                affirmative=subject.get("cause") == "established",
+                cause_established=cause,
+                verified_analytical=arithmetic,
+                affirmative=cause,
                 unexamined_contradiction=blocked,
-                undermines_published=blocked,
+                undermines_published=False,
                 named=subject["key"] in proposed or bool(subject.get("examined")),
             )
         )
-    blocked = any(subject.undermines_published for subject in subjects)
-    reported_only = (
-        bool(subjects)
-        and not blocked
-        and all(
-            subject.get("cause") != "established" and subject.get("calculation") is None
-            for subject in output.get("subjects") or []
-        )
+    rows = [row for row in output.get("subjects") or [] if isinstance(row, dict)]
+    reported_only = bool(rows) and not usable_arithmetic
+    reported_only = reported_only and all(row.get("cause") != "established" for row in rows)
+    reported_only = reported_only and not any(
+        subject.unexamined_contradiction for subject in subjects
     )
     return InvestigationFacts(
         subjects=tuple(subjects),
         discovered_not_examined=tuple(row["source_id"] for row in discovered),
         competing_period_lead_excluded=competing,
         reported_only=reported_only,
-        accepted_decomposition=False,
+        accepted_decomposition=usable_arithmetic,
         treatment=TREATMENT_COMPLETED,
+        coverage_incomplete=coverage_incomplete,
     )
 
 
@@ -872,6 +1048,7 @@ def _stop_record(outcome: InvestigationOutcome) -> dict:
         "contradictions": list(outcome.contradictions),
         "full_text_ids": list(outcome.full_text_ids),
         "withheld_contradiction_ids": list(outcome.withheld_contradiction_ids),
+        "limits": list(outcome.limits),
         "published": False,
     }
 
@@ -890,8 +1067,117 @@ def _outcome_from(record: dict) -> InvestigationOutcome:
         contradictions=tuple(record.get("contradictions") or []),
         full_text_ids=tuple(record.get("full_text_ids") or []),
         withheld_contradiction_ids=tuple(record.get("withheld_contradiction_ids") or []),
+        limits=tuple(record.get("limits") or []),
         published=False,
     )
+
+
+def _last_withheld(state) -> tuple[str, ...]:
+    if not state["lectures"]:
+        return ()
+    return tuple(state["lectures"][-1].get("withheld_ids") or [])
+
+
+def _pending_request(state) -> bool:
+    if not state["lectures"]:
+        return False
+    if not state["lectures"][-1].get("output", {}).get("deepening"):
+        return False
+    return not any(
+        int(decision.get("after_reading") or 0) == state["readings"]
+        for decision in state["decisions"]
+    )
+
+
+def _needs_provider_call(state) -> bool:
+    if state["readings"] == 0:
+        return True
+    return any(
+        decision.get("accepted") and int(decision.get("after_reading") or 0) == state["readings"]
+        for decision in state["decisions"]
+    )
+
+
+def _stop_code(state, max_readings: int) -> str:
+    for decision in reversed(state["decisions"]):
+        if int(decision.get("after_reading") or 0) != state["readings"]:
+            continue
+        if not decision.get("accepted"):
+            return str(decision.get("code") or "")
+        return ""
+    lectures = state["lectures"]
+    if (
+        state["readings"] >= max_readings
+        and lectures
+        and lectures[-1].get("output", {}).get("deepening")
+    ):
+        return "deepen_budget_exhausted"
+    return ""
+
+
+def _parsed_output(state) -> InvestigationReading:
+    return InvestigationReading.model_validate(state["lectures"][-1]["output"])
+
+
+def _examined_ids(state) -> tuple[str, ...]:
+    if not state["lectures"]:
+        return ()
+    return _examined_after(state["lectures"][-1], state["decisions"])
+
+
+def _modified_subjects(state) -> set[str]:
+    found = set()
+    for decision in state["decisions"]:
+        if not _has_code(decision.get("exclusions"), "modified_after_capture"):
+            continue
+        key = str(decision.get("subject_key") or "")
+        if key:
+            found.add(key)
+    return found
+
+
+def _unscoped_exclusion(state) -> bool:
+    for decision in state["decisions"]:
+        if not _has_code(decision.get("exclusions"), "modified_after_capture"):
+            continue
+        if not str(decision.get("subject_key") or ""):
+            return True
+    return False
+
+
+def _coverage_incomplete(state, unread: tuple[str, ...]) -> bool:
+    if unread:
+        return True
+    for decision in state["decisions"]:
+        rows = list(decision.get("exclusions") or []) + list(decision.get("limits") or [])
+        if _has_code(rows, *_COVERAGE_CODES):
+            return True
+    return False
+
+
+def _has_code(rows, *codes: str) -> bool:
+    wanted = set(codes)
+    return any(isinstance(row, dict) and row.get("code") in wanted for row in rows or [])
+
+
+def _with_unread(discovered, unread: tuple[str, ...], snapshot: PeriodSnapshot) -> list[dict]:
+    rows = [dict(row) for row in discovered if isinstance(row, dict)]
+    known = {str(row.get("source_id") or "") for row in rows}
+    by_id = {item.source_id: item for item in snapshot.copies}
+    for source_id in unread:
+        if not source_id or source_id in known:
+            continue
+        item = by_id.get(source_id)
+        rows.append(
+            {
+                "source_id": source_id,
+                "pole": item.pole if item is not None else "",
+                "category": item.category if item is not None else "",
+                "disposition": DISCOVERED_NOT_EXAMINED,
+            }
+        )
+        known.add(source_id)
+    return rows
 
 
 def _examined_after(last: dict, decisions: list[dict]) -> tuple[str, ...]:
@@ -904,10 +1190,10 @@ def _examined_after(last: dict, decisions: list[dict]) -> tuple[str, ...]:
             continue
         if int(decision.get("after_reading") or 0) != reading_index:
             continue
-        source_id = str(decision.get("opened_source_id") or "")
-        if source_id and source_id not in known:
-            examined.append(source_id)
-            known.add(source_id)
+        for source_id in _decision_source_ids(decision):
+            if source_id and source_id not in known:
+                examined.append(source_id)
+                known.add(source_id)
     return tuple(examined)
 
 
@@ -915,9 +1201,13 @@ def _prior_evidence(lectures: list[dict]) -> set[str]:
     found: set[str] = set()
     for reading in lectures:
         for subject in reading.get("output", {}).get("subjects") or []:
-            found.update(subject.get("evidence_ids") or [])
-            found.update(subject.get("contradiction_ids") or [])
+            found.update(cited_item_ids(subject))
     return found
+
+
+def _arithmetic(subject: dict) -> bool:
+    """A figure the contract already recomputed. The model does not qualify it."""
+    return bool(subject.get("calculations") or subject.get("breakdowns"))
 
 
 def _contradictions(lectures: list[dict]) -> list[dict]:
@@ -934,11 +1224,21 @@ def _contradictions(lectures: list[dict]) -> list[dict]:
 
 
 def _opened_ids(decisions: list[dict]) -> set[str]:
-    return {
-        str(decision.get("opened_source_id") or "")
-        for decision in decisions
-        if decision.get("accepted") and decision.get("opened_source_id")
-    }
+    found = set()
+    for decision in decisions:
+        if not decision.get("accepted"):
+            continue
+        found.update(_decision_source_ids(decision))
+    found.discard("")
+    return found
+
+
+def _decision_source_ids(decision: dict) -> tuple[str, ...]:
+    identifiers = [str(item) for item in decision.get("opened_source_ids") or [] if item]
+    legacy = str(decision.get("opened_source_id") or "")
+    if legacy and legacy not in identifiers:
+        identifiers.append(legacy)
+    return tuple(identifiers)
 
 
 def _accepted_count(state) -> int:
@@ -969,12 +1269,26 @@ def _limits(snapshot: PeriodSnapshot, state) -> list[dict]:
             rows.append(
                 {"code": decision.get("code") or "", "source_id": decision.get("source_id") or ""}
             )
+        for exclusion in decision.get("exclusions") or []:
+            if isinstance(exclusion, dict):
+                rows.append(
+                    {
+                        "code": exclusion.get("code") or "",
+                        "source_id": exclusion.get("source_id") or "",
+                    }
+                )
+        for limit in decision.get("limits") or []:
+            if isinstance(limit, dict):
+                rows.append(
+                    {"code": limit.get("code") or "", "source_id": limit.get("source_id") or ""}
+                )
     return rows
 
 
 def _full_text(item: PeriodCopy) -> dict:
     payload = dict(item.payload)
     payload["pole"] = item.pole
+    payload["role"] = item.role
     payload["start"] = item.start.isoformat() if item.start else None
     payload["end"] = item.end.isoformat() if item.end else None
     return payload
