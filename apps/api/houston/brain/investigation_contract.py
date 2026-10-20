@@ -88,10 +88,9 @@ _PROMPT = (
     "Le statut vivant n'est pas le statut de la période. "
     "Une piste concurrente reste visible. "
     "Tu n'établis pas une cause tant qu'une explication plausible ou unresolved reste ouverte, "
-    "ni lorsqu'une autre explication supported reste en concurrence, "
     "ni si un autre pôle de la période n'a pas été lu. "
     "Deux explications utiles suffisent, quatre au plus. "
-    "Leur statut est supported, plausible, contradicted ou unresolved. "
+    "Leur statut est plausible, contradicted ou unresolved. "
     "supported ne se pose pas : un reporting, un Signal, une action ou une mesure "
     "ne le portent pas, et aucun autre identifiant du dossier non plus. "
     "contradicted cite la contradiction rattachée au sujet. "
@@ -277,6 +276,71 @@ def investigation_prompt() -> str:
     return _PROMPT
 
 
+_CORRECTION_RULES = {
+    "forbidden_material": "Aucun champ interdit n'est présent.",
+    "schema_invalid": "L'objet respecte exactement le schéma demandé.",
+    "subject_duplicated": "Chaque sujet n'apparaît qu'une fois.",
+    "subject_removed": "Les sujets chiffrés proposés restent.",
+    "contradiction_subject": "Une contradiction nomme un sujet de la lecture.",
+    "memory_not_evidence": "La mémoire d'analyses terminées n'est pas une preuve.",
+    "contradiction_not_examined": "Une contradiction cite un élément transmis.",
+    "contradiction_detached": "Une contradiction reste rattachée au sujet qui la cite.",
+    "unknown_citation": "Chaque identifiant cité appartient au dossier transmis.",
+    "cause_not_examined": "Une cause established suppose le sujet examiné.",
+    "cause_without_evidence": "Une cause established cite ses éléments.",
+    "signal_cause_refused": "Un propos tenu dans un Signal n'est pas une cause établie.",
+    "action_not_cause": "Une action exécutée ne prouve pas l'effet qu'on lui prête.",
+    "measurement_not_cause": "Un calcul n'est pas, à lui seul, une cause opérationnelle.",
+    "reporting_not_cause": "Le document de reporting n'établit pas une cause.",
+    "source_not_cause": "Aucun identifiant du dossier n'établit une cause opérationnelle.",
+    "examined_without_trace": "Un sujet examiné laisse un constat, une limite ou un calcul.",
+    "finding_without_source": "Un constat cite ses sources.",
+    "contradiction_not_marked": "Chaque contradiction du sujet est aussi marquée.",
+    "explanation_not_cause": (
+        "supported ne se pose pas : aucun identifiant du dossier ne le porte."
+    ),
+    "contradicted_without_source": (
+        "contradicted cite la contradiction rattachée au sujet."
+    ),
+    "competing_explanation_open": (
+        "Une cause ne s'établit pas tant qu'une explication plausible ou unresolved "
+        "reste ouverte, ni si plusieurs explications supported sont en concurrence."
+    ),
+    "check_not_done": "Une vérification checked cite un élément examiné.",
+    "missing_check_cited": "Une vérification missing ne cite rien et nomme le manque.",
+    "investigation_without_check": "INVESTIGATION nomme au moins une vérification missing.",
+    "action_promises_unknown_cause": (
+        "ACTION sans cause établie dit dans does_not_promise ce qu'elle ne promet pas."
+    ),
+    "movement_conflict": (
+        "stability ne porte pas d'écart non nul, et qualitative ne publie aucun chiffre."
+    ),
+    "comparison_refused": "Une comparaison not_comparable ne publie pas de chiffre.",
+    "comparison_mismatch": "Le type de comparaison correspond à l'opération.",
+    "signal_operand": "Un Signal n'est pas une mesure.",
+    "action_operand": "Une action n'est pas une mesure.",
+    "not_recomputed": "Le chiffre publié est le résultat recalculé.",
+    "invalid_calculation": "Une mesure ambiguë ne se combine pas.",
+    "unit_mismatch": "Les mesures combinées partagent l'unité et le traitement.",
+    "operand_not_measure": "Chaque opérande cite une mesure du dossier.",
+    "operand_value_mismatch": "La valeur d'un opérande est celle de sa mesure.",
+    "operand_unit_mismatch": "L'unité d'un opérande est celle de sa mesure.",
+}
+
+
+def correction_rules(codes) -> tuple[str, ...]:
+    """Gloss the refusal codes the single correction can apply.
+
+    A code without a written rule stays in the error list only.
+    """
+    rules = []
+    for code in dict.fromkeys(codes):
+        text = _CORRECTION_RULES.get(code)
+        if text:
+            rules.append(f"{code}: {text}")
+    return tuple(rules)
+
+
 def investigation_response_schema() -> dict:
     """Strict response schema counted in the call budget."""
     reported = _object(
@@ -328,20 +392,34 @@ def investigation_response_schema() -> dict:
             "text": {"type": "string"},
             "status": {
                 "type": "string",
-                "enum": ["supported", "plausible", "contradicted", "unresolved"],
+                "enum": ["plausible", "contradicted", "unresolved"],
             },
             "support_ids": {"type": "array", "items": {"type": "string"}},
             "contradiction_ids": {"type": "array", "items": {"type": "string"}},
         }
     )
-    check = _object(
-        {
+
+    def _check(status: str, *, cited: bool) -> dict:
+        properties = {
             "question": {"type": "string"},
-            "status": {"type": "string", "enum": ["checked", "missing"]},
-            "item_ids": {"type": "array", "items": {"type": "string"}},
+            "status": {"type": "string", "const": status},
             "finding": {"type": "string"},
         }
-    )
+        if cited:
+            properties = {
+                "question": properties["question"],
+                "status": properties["status"],
+                "item_ids": {"type": "array", "items": {"type": "string"}},
+                "finding": properties["finding"],
+            }
+        return _object(properties)
+
+    check = {
+        "anyOf": [
+            _check("checked", cited=True),
+            _check("missing", cited=False),
+        ]
+    }
     finding = _object(
         {
             "kind": {"type": "string", "enum": ["reporting", "field", "arithmetic"]},

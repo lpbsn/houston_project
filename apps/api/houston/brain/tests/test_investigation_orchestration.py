@@ -694,6 +694,64 @@ def test_a_second_invalid_schema_fails_without_a_result(settings):
     assert replay.provider_calls == 2
 
 
+def test_a_rejected_correction_keeps_both_refusal_codes(settings):
+    world = _world(settings, "double-rejet")
+
+    def handle(step, payload, analysis_id):
+        if step != "lecture:1":
+            return {"schema_version": "nope"}
+        reporting_id = payload["reporting"]["source_id"]
+        reading = _reading()
+        reading["subjects"][0]["explanations"] = [
+            {
+                "text": "Le document suffirait.",
+                "status": "supported",
+                "support_ids": [],
+                "contradiction_ids": [],
+            }
+        ]
+        reading["subjects"][0]["decisive_checks"] = [
+            {
+                "question": "Que manque-t-il ?",
+                "status": "missing",
+                "item_ids": [reporting_id],
+                "finding": "La vérification n'est pas dans le dossier.",
+            }
+        ]
+        return reading
+
+    provider = ScriptedProvider(handle)
+    outcome = _run(world["analysis"], provider)
+    correction = BrainSearchRun.objects.get(
+        dossier__analysis=world["analysis"],
+        code="correction:1",
+    )
+    sent = provider.calls[-1]["payload"]["correction"]
+    codes = set(
+        BrainSearchRun.objects.filter(dossier__analysis=world["analysis"]).values_list(
+            "code", flat=True
+        )
+    )
+
+    assert [call["step"] for call in provider.calls] == ["lecture:1", "correction:1"]
+    assert outcome.code == "response_invalid"
+    assert outcome.semantic_readings == 0
+    assert outcome.corrections == 1
+    assert sent["errors"] == ["explanation_not_cause", "missing_check_cited"]
+    assert sent["rules"][0].startswith("explanation_not_cause:")
+    assert sent["rules"][1].startswith("missing_check_cited:")
+    assert set(correction.criteria) == {
+        "accepted",
+        "errors",
+        "rejected_errors",
+        "input_tokens",
+    }
+    assert correction.criteria["accepted"] is False
+    assert correction.criteria["errors"] == sent["errors"]
+    assert correction.criteria["rejected_errors"] == ["schema_invalid"]
+    assert "lecture:1" not in codes
+
+
 def test_a_signal_cannot_be_accepted_as_an_established_cause(settings):
     world = _world(settings, "cause")
     signal_id = str(world["room"].id)
