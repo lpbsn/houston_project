@@ -650,6 +650,31 @@ def test_deepening_stays_inside_the_closed_menu_and_the_capture():
     assert late.code == "after_capture"
 
 
+def test_a_deepening_target_without_an_offset_is_not_placed_on_the_capture():
+    same = "establishment-1"
+    refused = accept_deepening(
+        kind="seasonal_window",
+        already_done=0,
+        establishment_id=same,
+        request_establishment_id=same,
+        target_at=datetime(2026, 4, 1, 12, 0),
+        capture_at=CAPTURE_AT,
+    )
+    earlier = accept_deepening(
+        kind="seasonal_window",
+        already_done=0,
+        establishment_id=same,
+        request_establishment_id=same,
+        target_at=CAPTURE_AT - timedelta(seconds=1),
+        capture_at=CAPTURE_AT,
+    )
+
+    assert refused.accepted is False
+    assert refused.code == "timestamp_unusable"
+    assert earlier.accepted is True
+    assert earlier.code == "accepted"
+
+
 def test_current_analyses_stay_on_the_existing_contract():
     ceilings = investigation_ceilings()
 

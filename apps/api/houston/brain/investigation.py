@@ -243,15 +243,26 @@ def accept_deepening(
     target_at: datetime | None = None,
     capture_at: datetime | None = None,
 ) -> DeepeningDecision:
-    """Decide a closed-menu deepening. This does not copy a row or call a provider."""
+    """Decide a closed-menu deepening. This does not copy a row or call a provider.
+
+    A target that cannot be ordered against the capture is refused. Its
+    offset is not invented.
+    """
     if already_done >= MAX_DEEPENINGS:
         return DeepeningDecision(False, "deepen_budget_exhausted")
     if kind not in DEEPENING_MENU:
         return DeepeningDecision(False, "outside_menu")
     if str(establishment_id) != str(request_establishment_id):
         return DeepeningDecision(False, "outside_establishment")
-    if target_at is not None and (capture_at is None or target_at > capture_at):
-        return DeepeningDecision(False, "after_capture")
+    if target_at is not None:
+        if capture_at is None:
+            return DeepeningDecision(False, "after_capture")
+        try:
+            after_capture = target_at > capture_at
+        except TypeError:
+            return DeepeningDecision(False, "timestamp_unusable")
+        if after_capture:
+            return DeepeningDecision(False, "after_capture")
     return DeepeningDecision(True, "accepted")
 
 
