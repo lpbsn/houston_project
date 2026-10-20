@@ -1675,6 +1675,44 @@ def test_an_unscoped_exclusion_still_qualifies_an_independent_gap(settings):
     assert outcome.investigation_succeeded is True
 
 
+def test_a_stored_naive_deepening_target_does_not_replay_its_reading(settings):
+    world = _world(settings, "cible-naive")
+    dossier = BrainDossier.objects.get(analysis=world["analysis"])
+    opening = _open("seasonal_window")
+    opening["target_at"] = "2026-04-01T12:00:00"
+    BrainSearchRun.objects.create(
+        dossier=dossier,
+        code="lecture:1",
+        criteria={
+            "input_hash": "stored",
+            "input_tokens": 10,
+            "payload": {},
+            "output": _reading(deepening=opening),
+            "examined_ids": [],
+            "full_text_ids": [],
+            "withheld_ids": [],
+            "omitted_ids": [],
+            "discovered_not_examined": [],
+            "representative_ids": [],
+        },
+        examined_count=0,
+        retained_count=0,
+    )
+    provider = ScriptedProvider(lambda step, payload, analysis_id: _reading())
+
+    outcome = _run(world["analysis"], provider)
+    resumed = _run(world["analysis"], provider)
+    decision = BrainSearchRun.objects.get(dossier=dossier, code="decision:1")
+
+    assert [call["step"] for call in provider.calls] == ["lecture:2"]
+    assert outcome.treatment == "completed"
+    assert outcome.semantic_readings == 2
+    assert outcome.provider_calls == 2
+    assert decision.criteria["accepted"] is True
+    assert resumed.provider_calls == 2
+    assert [call["step"] for call in provider.calls] == ["lecture:2"]
+
+
 def test_an_accepted_correction_without_its_lecture_row_resumes(settings):
     world = _world(settings, "reprise-correction")
     dossier = BrainDossier.objects.get(analysis=world["analysis"])

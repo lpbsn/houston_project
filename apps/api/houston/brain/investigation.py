@@ -240,18 +240,18 @@ def accept_deepening(
     already_done: int,
     establishment_id: str,
     request_establishment_id: str,
-    target_at: datetime | None = None,
-    capture_at: datetime | None = None,
 ) -> DeepeningDecision:
-    """Decide a closed-menu deepening. This does not copy a row or call a provider."""
+    """Decide a closed-menu deepening. This does not copy a row or call a provider.
+
+    The model's ``target_at`` is not a bound. Each search keeps rows that
+    already existed at the capture.
+    """
     if already_done >= MAX_DEEPENINGS:
         return DeepeningDecision(False, "deepen_budget_exhausted")
     if kind not in DEEPENING_MENU:
         return DeepeningDecision(False, "outside_menu")
     if str(establishment_id) != str(request_establishment_id):
         return DeepeningDecision(False, "outside_establishment")
-    if target_at is not None and (capture_at is None or target_at > capture_at):
-        return DeepeningDecision(False, "after_capture")
     return DeepeningDecision(True, "accepted")
 
 

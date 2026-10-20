@@ -9,7 +9,6 @@ analysis, writes the public result, or calls a paid provider.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 
 from django.db import transaction
 
@@ -661,15 +660,12 @@ def _deepen(snapshot, analysis, parsed, state, *, subject_start, subject_end):
     request = parsed.deepening
     if request is None:
         return None, None
-    target_at = _parse_target(request.target_at)
     requested_establishment = request.establishment_id or str(analysis.establishment_id)
     decision = accept_deepening(
         kind=request.kind,
         already_done=_accepted_count(state),
         establishment_id=str(analysis.establishment_id),
         request_establishment_id=requested_establishment,
-        target_at=target_at,
-        capture_at=snapshot.capture_at,
     )
     if not decision.accepted:
         return decision, None
@@ -1429,15 +1425,6 @@ def _copy_tokens(item: PeriodCopy) -> int:
             "structured_summary": str(item.payload.get("structured_summary") or ""),
         }
     )
-
-
-def _parse_target(value: str) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
 
 
 def _canceled(analysis_id) -> bool:

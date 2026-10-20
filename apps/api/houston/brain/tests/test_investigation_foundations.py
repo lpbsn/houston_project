@@ -607,7 +607,7 @@ def test_an_event_after_capture_is_not_historical_proof():
     assert accepted["events"] == [earlier]
 
 
-def test_deepening_stays_inside_the_closed_menu_and_the_capture():
+def test_deepening_stays_inside_the_closed_menu():
     same = "establishment-1"
     menu = accept_deepening(
         kind="seasonal_window",
@@ -633,21 +633,12 @@ def test_deepening_stays_inside_the_closed_menu_and_the_capture():
         establishment_id=same,
         request_establishment_id="establishment-2",
     )
-    late = accept_deepening(
-        kind="completed_analysis_memory",
-        already_done=0,
-        establishment_id=same,
-        request_establishment_id=same,
-        target_at=CAPTURE_AT + timedelta(seconds=1),
-        capture_at=CAPTURE_AT,
-    )
 
     assert menu.accepted is True
     assert outside.code == "outside_menu"
     assert outside.accepted is False
     assert exhausted.code == "deepen_budget_exhausted"
     assert other.code == "outside_establishment"
-    assert late.code == "after_capture"
 
 
 def test_current_analyses_stay_on_the_existing_contract():
