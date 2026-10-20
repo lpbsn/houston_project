@@ -79,11 +79,20 @@ _TERMINAL = (
 def publish_brain_analysis(analysis_id, attempt_token) -> bool:
     from django.conf import settings
 
-    from houston.brain.tasks import run_brain_analysis_task
+    from houston.brain.investigation import investigation_engine
+    from houston.brain.tasks import run_brain_analysis_task, run_brain_investigation_task
     from houston.core.celery_publish import publish_celery_task
 
+    configuration = (
+        BrainAnalysis.objects.filter(id=analysis_id).values_list("configuration", flat=True).first()
+    )
+    task = (
+        run_brain_investigation_task
+        if investigation_engine(configuration)
+        else run_brain_analysis_task
+    )
     published = publish_celery_task(
-        run_brain_analysis_task,
+        task,
         args=(str(analysis_id), str(attempt_token)),
         queue=settings.HOUSTON_BRAIN_ANALYSIS_QUEUE,
     )
@@ -477,6 +486,12 @@ def run_brain_analysis(
 def _execute(analysis_id, token, *, provider: BrainProvider | None, started: float) -> None:
     analysis = _running(analysis_id, token)
     if analysis is None:
+        return
+    from houston.brain.integration import execute_investigation
+    from houston.brain.investigation import investigation_engine
+
+    if investigation_engine(analysis.configuration):
+        execute_investigation(analysis_id, token, provider=provider, started=started)
         return
     if not _guard(analysis, token):
         return

@@ -1,9 +1,9 @@
 """Foundations of the bounded investigation engine.
 
-These rules are not wired into admission or the current executor. A frozen
-configuration without ``engine_version`` stays on ``brain_analysis_v1``.
-The model does not choose queries, declare the qualification, or read an
-observation. Field text that counts is the Signal title and structured summary.
+A frozen configuration without ``engine_version`` stays on ``brain_analysis_v1``.
+Admission stamps ``investigation_v3`` only when that engine is explicitly
+selected. The model does not choose queries, declare the qualification, or read
+an observation. Field text that counts is the Signal title and structured summary.
 """
 
 from __future__ import annotations

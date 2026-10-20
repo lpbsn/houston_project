@@ -145,7 +145,7 @@ def capture_period_dossier(
     _before_close=None,
     _before_commit=None,
 ) -> BrainDossier:
-    """Copy one period and close that dossier. The current executor does not call this.
+    """Copy one period and close that dossier. Only the V3 executor calls this.
 
     The transaction matches ``capture_dossier``: REPEATABLE READ, one timestamp,
     commit closes the dossier. Observations are not read. No provider call is made.

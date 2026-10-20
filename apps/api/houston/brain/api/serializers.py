@@ -63,6 +63,8 @@ class BrainAnalysisSummarySerializer(serializers.Serializer):
     author = BrainPersonSerializer()
     created_at = serializers.DateTimeField()
     reporting = BrainReportingRefSerializer()
+    qualification = serializers.CharField(allow_null=True)
+    investigation_succeeded = serializers.BooleanField(allow_null=True)
 
 
 class BrainAnalysisListSerializer(serializers.Serializer):

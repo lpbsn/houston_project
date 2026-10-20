@@ -26,6 +26,7 @@ from houston.brain.models import (
     BrainSlot,
     BrainSuggestion,
 )
+from houston.brain.orchestration import public_search_code
 from houston.establishments.permissions import resolve_establishment_admin_actor
 from houston.platform.selectors import is_active_platform_operator
 
@@ -59,6 +60,14 @@ _FAILURE_MESSAGES = {
     "provider_unavailable": "Le service d'analyse est indisponible.",
     "unknown_reference": "Une référence hors dossier a été refusée.",
     "response_invalid": "La réponse d'analyse n'a pas pu être validée.",
+    "timing_incoherent": (
+        "Le budget de temps figé ne couvre pas l'investigation. Aucun appel n'a été lancé."
+    ),
+    "attempt_exceeded": "Le temps de traitement est dépassé. Aucun résultat partiel n'est publié.",
+    "provider_output_rejected": (
+        "La réponse du fournisseur a été refusée. Aucun résultat partiel n'est publié."
+    ),
+    "provider_not_allowed": "Le fournisseur d'analyse n'est pas autorisé pour cette analyse.",
 }
 _FAILURE_GENERIC = (
     "Le traitement n'a pas abouti. Aucun résultat partiel n'est présenté comme une conclusion."
@@ -412,6 +421,20 @@ def analysis_page(*, user, establishment_id, limit, cursor: str | None) -> dict:
     return {"results": [_analysis_summary(row) for row in page], "next_cursor": next_cursor}
 
 
+def _qualification_fields(analysis: BrainAnalysis) -> dict:
+    """Public reading state. A lot result and a failed treatment leave both empty."""
+    if analysis.status != BrainAnalysis.Status.COMPLETED or not isinstance(analysis.result, dict):
+        return {"qualification": None, "investigation_succeeded": None}
+    qualification = analysis.result.get("qualification")
+    if qualification not in {"complete", "partial", "refused", "factual_reading"}:
+        return {"qualification": None, "investigation_succeeded": None}
+    succeeded = analysis.result.get("investigation_succeeded")
+    return {
+        "qualification": qualification,
+        "investigation_succeeded": succeeded if isinstance(succeeded, bool) else False,
+    }
+
+
 def _analysis_summary(analysis: BrainAnalysis) -> dict:
     reporting = analysis.reporting
     return {
@@ -429,6 +452,7 @@ def _analysis_summary(analysis: BrainAnalysis) -> dict:
             "period_start": reporting.period_start.isoformat() if reporting.period_start else None,
             "period_end": reporting.period_end.isoformat() if reporting.period_end else None,
         },
+        **_qualification_fields(analysis),
     }
 
 
@@ -523,6 +547,7 @@ def analysis_detail(*, user, establishment_id, analysis_id) -> dict:
                     "criteria": run.criteria if isinstance(run.criteria, dict) else {},
                 }
                 for run in searches
+                if public_search_code(run.code)
             ],
             "messages": [_message_dict(message) for message in messages],
             "older_message_count": max(hidden, 0),

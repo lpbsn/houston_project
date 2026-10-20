@@ -19,7 +19,7 @@ import {
   brainQueryKeys,
   type BrainReporting,
 } from '../api'
-import { errorDetail, workStatusLabel, type ReanalysisProposal } from '../display'
+import { analysisHistoryLabel, errorDetail, workStatusLabel, type ReanalysisProposal } from '../display'
 import { brainPollInterval } from '../polling'
 import { BrainAnalysisPanel } from './brain-analysis-panel'
 import { BrainDecisions } from './brain-decisions'
@@ -337,7 +337,13 @@ export function BrainWorkspace({ establishmentId, analysisId }: BrainWorkspacePr
           {(analyses.data?.pages.flatMap((page) => page.results) ?? []).map((item) => (
             <li key={item.id}>
               <button type="button" className="underline" onClick={() => openAnalysis(item.id)}>
-                {item.reporting.original_filename} — {workStatusLabel(item.status)} —{' '}
+                {item.reporting.original_filename} —{' '}
+                {analysisHistoryLabel(
+                  item.status,
+                  item.qualification,
+                  item.investigation_succeeded,
+                )}{' '}
+                —{' '}
                 {item.reporting.period_start ?? 'période non confirmée'}
               </button>
             </li>

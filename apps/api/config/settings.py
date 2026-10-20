@@ -759,6 +759,8 @@ HOUSTON_BRAIN_WORKER_BEAT_INTERVAL_SECONDS = env_int(
     30,
 )
 HOUSTON_BRAIN_SCHEMA_VERSION = env_str("HOUSTON_BRAIN_SCHEMA_VERSION", "brain_analysis_v1")
+# Empty keeps new admissions on the current executor. investigation_v3 opts in.
+HOUSTON_BRAIN_ENGINE_VERSION = env_str("HOUSTON_BRAIN_ENGINE_VERSION", "")
 HOUSTON_BRAIN_ANALYSIS_QUEUE = env_str("HOUSTON_BRAIN_ANALYSIS_QUEUE", "brain_analysis")
 HOUSTON_BRAIN_PROMPT_VERSION = env_str("HOUSTON_BRAIN_PROMPT_VERSION", "brain_orchestration_v1")
 HOUSTON_BRAIN_MODEL = env_str("HOUSTON_BRAIN_MODEL", "fake")

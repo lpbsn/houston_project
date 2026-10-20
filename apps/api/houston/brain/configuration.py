@@ -28,7 +28,7 @@ RUNTIME_CEILING_KEYS = (
 
 
 def admission_configuration(extraction: BrainExtraction) -> dict:
-    return {
+    configuration = {
         "extractor_id": extraction.extractor_id,
         "extractor_version": extraction.extractor_version,
         "source_sha256": extraction.source_sha256,
@@ -55,6 +55,14 @@ def admission_configuration(extraction: BrainExtraction) -> dict:
             "attempt_hard_seconds": int(settings.HOUSTON_BRAIN_ATTEMPT_HARD_SECONDS),
         },
     }
+    from houston.brain.integration import (
+        freeze_investigation_configuration,
+        investigation_admission_enabled,
+    )
+
+    if investigation_admission_enabled():
+        return freeze_investigation_configuration(configuration)
+    return configuration
 
 
 def empty_knowledge() -> dict:

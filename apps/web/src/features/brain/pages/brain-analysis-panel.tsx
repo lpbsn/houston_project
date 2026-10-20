@@ -12,6 +12,7 @@ import {
   type BrainFollowUpPurpose,
 } from '../api'
 import {
+  analysisHistoryLabel,
   declarationApplied,
   errorDetail,
   isDeclarationPurpose,
@@ -20,6 +21,7 @@ import {
   readAnalysisResult,
   readFollowUpResult,
   readFrozenSource,
+  readInvestigationResult,
   workStatusLabel,
   type FrozenSource,
   type ReanalysisProposal,
@@ -53,7 +55,9 @@ export function BrainAnalysisPanel({
   const pending = analysis.status === 'queued' || analysis.status === 'running'
   const failed = analysis.status === 'failed'
   const completed = analysis.status === 'completed'
-  const result = completed ? readAnalysisResult(analysis.result) : null
+  const investigation = completed ? readInvestigationResult(analysis.result) : null
+  const result = completed && !investigation ? readAnalysisResult(analysis.result) : null
+  const succeeded = investigation?.investigationSucceeded === true
   const frozenSources = sources.flatMap((item) => {
     const source = readFrozenSource(item)
     return source ? [source] : []
@@ -63,7 +67,13 @@ export function BrainAnalysisPanel({
     <div className="flex flex-col gap-4">
       <section className="rounded-xl border border-border p-4">
         <h2 className="text-base font-semibold">Suivi</h2>
-        <p className="mt-2 text-sm">{workStatusLabel(analysis.status)}</p>
+        <p className="mt-2 text-sm">
+          {analysisHistoryLabel(
+            analysis.status,
+            analysis.qualification,
+            analysis.investigation_succeeded,
+          )}
+        </p>
         {pending ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Aucune conclusion n&apos;est affichée tant que l&apos;analyse n&apos;est pas terminée.
@@ -85,7 +95,10 @@ export function BrainAnalysisPanel({
         ) : null}
       </section>
 
-      {completed ? (
+      {investigation ? (
+        <InvestigationSection view={investigation} succeeded={succeeded} />
+      ) : null}
+      {completed && !investigation ? (
         <ResultSection result={result} searches={analysis.searches} />
       ) : null}
 
@@ -102,6 +115,125 @@ export function BrainAnalysisPanel({
       />
     </div>
   )
+}
+
+function InvestigationSection({
+  view,
+  succeeded,
+}: {
+  view: NonNullable<ReturnType<typeof readInvestigationResult>>
+  succeeded: boolean
+}) {
+  const title =
+    view.qualification === 'factual_reading'
+      ? 'Lecture factuelle'
+      : view.qualification === 'refused'
+        ? 'Analyse refusée'
+        : view.qualification === 'partial'
+          ? 'Analyse partielle'
+          : 'Analyse complète'
+  return (
+    <section className="rounded-xl border border-border p-4">
+      <h2 className="text-base font-semibold">{title}</h2>
+      {view.qualification === 'factual_reading' ? (
+        <p className="mt-2 text-sm">
+          Cette lecture reprend des faits rapportés. Ce n&apos;est pas une analyse réussie.
+        </p>
+      ) : null}
+      {view.qualification === 'refused' ? (
+        <p className="mt-2 text-sm">
+          Aucun résultat fiable n&apos;est publié. Les éléments non examinés ne sont pas traités
+          comme examinés.
+        </p>
+      ) : null}
+      {succeeded ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          La qualification porte sur les éléments examinés. Un élément non examiné reste nommé
+          comme tel.
+        </p>
+      ) : null}
+      {view.limits.length > 0 ? (
+        <ul className="mt-3 list-disc pl-5 text-sm">
+          {view.limits.map((limit) => (
+            <li key={`${limit.code}-${limit.sourceId}`}>{limit.code}</li>
+          ))}
+        </ul>
+      ) : null}
+      <CoverageList title="Cités" items={view.cited} empty="Aucune donnée citée dans le résultat." />
+      <CoverageList
+        title="Examinés, non cités"
+        items={view.examinedNotCited}
+        empty="Aucune donnée examinée n'est restée hors citation."
+      />
+      <CoverageList
+        title="Découverts, non examinés"
+        items={view.discoveredNotExamined}
+        empty="Aucune donnée découverte n'est restée hors examen."
+      />
+      <div className="mt-4 flex flex-col gap-3">
+        {view.subjects.map((subject) => (
+          <article key={subject.key} className="rounded-lg bg-muted/40 p-3">
+            <h3 className="text-sm font-medium">{subject.statement || subject.key}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {subject.examined ? 'Examiné' : 'Non examiné'}
+              {subject.orientation ? ` — ${subject.orientation}` : ''}
+            </p>
+            {subject.justification ? <p className="mt-1 text-sm">{subject.justification}</p> : null}
+            {subject.limits.map((limit) => (
+              <p key={limit} className="mt-1 text-sm">
+                Limite : {limit}
+              </p>
+            ))}
+            {subject.calculations.map((calculation) => (
+              <p key={`${calculation.label}-${calculation.value}`} className="mt-1 text-sm">
+                Calcul vérifié : {calculation.label} = {calculation.value}
+              </p>
+            ))}
+            {subject.cited.map((item) => (
+              <p key={item.sourceId} className="mt-1 text-sm">
+                Cité : {coverageText(item)}
+              </p>
+            ))}
+            {subject.notExaminedIds.map((itemId) => (
+              <p key={itemId} className="mt-1 text-sm">
+                {itemId} — découvert, non examiné
+              </p>
+            ))}
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CoverageList({
+  title,
+  items,
+  empty,
+}: {
+  title: string
+  items: { sourceId: string; label: string; pole: string }[]
+  empty: string
+}) {
+  return (
+    <div className="mt-4">
+      <h3 className="text-sm font-medium">{title}</h3>
+      {items.length === 0 ? (
+        <p className="mt-1 text-sm text-muted-foreground">{empty}</p>
+      ) : (
+        <ul className="mt-1 list-disc pl-5 text-sm">
+          {items.map((item) => (
+            <li key={item.sourceId}>{coverageText(item)}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function coverageText(item: { sourceId: string; label: string; pole: string }): string {
+  const name = item.label || item.sourceId
+  return item.pole ? `${name} — ${item.pole}` : name
 }
 
 function ResultSection({

@@ -217,6 +217,94 @@ def test_the_schema_stops_before_plans_objectives_and_knowledge():
     assert "objectif" in prompt
 
 
+_OPENAI_FORBIDDEN_KEYWORDS = frozenset(
+    {
+        "allOf",
+        "oneOf",
+        "not",
+        "dependentRequired",
+        "dependentSchemas",
+        "if",
+        "then",
+        "else",
+        "patternProperties",
+        "unevaluatedProperties",
+        "propertyNames",
+        "minProperties",
+        "maxProperties",
+        "uniqueItems",
+        "contains",
+        "unevaluatedItems",
+    }
+)
+
+
+def test_the_strict_schema_stays_inside_the_openai_subset():
+    wrapped = investigation_response_schema()
+    spec = wrapped["json_schema"]
+    schema = spec["schema"]
+
+    assert wrapped["type"] == "json_schema"
+    assert spec["name"] == "brain_investigation_v3"
+    assert spec["strict"] is True
+    assert schema["type"] == "object"
+    assert "anyOf" not in schema
+
+    properties = 0
+    enums = 0
+    characters = 0
+
+    def walk(node: dict) -> None:
+        nonlocal properties, enums, characters
+        forbidden = _OPENAI_FORBIDDEN_KEYWORDS.intersection(node)
+        assert not forbidden
+        if "$ref" in node:
+            assert set(node) == {"$ref"}
+            return
+        if "properties" in node:
+            props = node["properties"]
+            assert node.get("type") == "object"
+            assert node.get("additionalProperties") is False
+            assert list(node.get("required", [])) == list(props)
+            properties += len(props)
+            characters += sum(len(key) for key in props)
+            for child in props.values():
+                walk(child)
+        if node.get("type") == "array":
+            assert "items" in node
+            walk(node["items"])
+        for branch in node.get("anyOf", ()):
+            walk(branch)
+        if "enum" in node:
+            enums += len(node["enum"])
+            characters += sum(len(item) for item in node["enum"] if isinstance(item, str))
+        if isinstance(node.get("const"), str):
+            characters += len(node["const"])
+        for name, child in node.get("$defs", {}).items():
+            characters += len(name)
+            walk(child)
+
+    def depth(node: dict, level: int, defs: dict) -> int:
+        if "$ref" in node:
+            name = str(node["$ref"]).rsplit("/", 1)[-1]
+            return depth(defs[name], level, defs)
+        found = level if node.get("type") == "object" else 0
+        if "properties" in node:
+            nested = [depth(child, level + 1, defs) for child in node["properties"].values()]
+            found = max(found, *nested) if nested else found
+        if node.get("type") == "array":
+            found = max(found, depth(node["items"], level, defs))
+        for branch in node.get("anyOf", ()):
+            found = max(found, depth(branch, level, defs))
+        return found
+
+    walk(schema)
+    assert properties <= 5_000
+    assert depth(schema, 1, schema["$defs"]) <= 10
+    assert enums <= 1_000
+    assert characters <= 120_000
+
+
 def test_positive_negative_and_stable_subjects_all_remain():
     cited = {"down", "down_now", "flat", "flat_now", "rise-a", "rise-b"}
     measures = _catalog(

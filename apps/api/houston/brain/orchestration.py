@@ -1,8 +1,9 @@
-"""Bounded investigation loop. The current executor does not call it.
+"""Bounded investigation loop.
 
-A reading sees frozen copies only. A deepening either opens an identifier
-already in the period index, or appends one closed-menu search. Nothing here
-admits an analysis, writes a published result, or calls a paid provider.
+The versioned executor calls this after the period dossier is closed. A reading
+sees frozen copies only. A deepening either opens an identifier already in the
+period index, or appends one closed-menu search. Nothing here admits an
+analysis, writes the public result, or calls a paid provider.
 """
 
 from __future__ import annotations
@@ -67,6 +68,13 @@ from houston.brain.provider import BrainProvider, BrainProviderUnavailable
 
 STOP_CODE = "investigation_stop"
 _CORRECTION_CODE = "correction:1"
+
+
+def public_search_code(code: str) -> bool:
+    """Searches the analysis API may show. Engine steps stay on the dossier."""
+    if code == STOP_CODE or code == _CORRECTION_CODE:
+        return False
+    return not code.startswith(("lecture:", "decision:"))
 _TREATMENT_INTERRUPTED = "interrupted"
 _COVERAGE_CODES = frozenset(
     {
