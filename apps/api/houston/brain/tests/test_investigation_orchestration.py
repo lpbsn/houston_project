@@ -1675,7 +1675,7 @@ def test_an_unscoped_exclusion_still_qualifies_an_independent_gap(settings):
     assert outcome.investigation_succeeded is True
 
 
-def test_a_stored_naive_deepening_target_resumes_without_another_call(settings):
+def test_a_stored_naive_deepening_target_does_not_replay_its_reading(settings):
     world = _world(settings, "cible-naive")
     dossier = BrainDossier.objects.get(analysis=world["analysis"])
     opening = _open("seasonal_window")
@@ -1704,15 +1704,13 @@ def test_a_stored_naive_deepening_target_resumes_without_another_call(settings):
     resumed = _run(world["analysis"], provider)
     decision = BrainSearchRun.objects.get(dossier=dossier, code="decision:1")
 
-    assert provider.calls == []
+    assert [call["step"] for call in provider.calls] == ["lecture:2"]
     assert outcome.treatment == "completed"
-    assert outcome.code == "timestamp_unusable"
-    assert outcome.semantic_readings == 1
-    assert outcome.provider_calls == 1
-    assert decision.criteria["accepted"] is False
-    assert decision.criteria["code"] == "timestamp_unusable"
-    assert resumed.code == "timestamp_unusable"
-    assert resumed.provider_calls == 1
+    assert outcome.semantic_readings == 2
+    assert outcome.provider_calls == 2
+    assert decision.criteria["accepted"] is True
+    assert resumed.provider_calls == 2
+    assert [call["step"] for call in provider.calls] == ["lecture:2"]
 
 
 def test_an_accepted_correction_without_its_lecture_row_resumes(settings):
