@@ -112,6 +112,47 @@ def test_mocked_openai_sends_the_fixture_payload_and_not_a_stored_file(monkeypat
     assert result.input_tokens == 4
 
 
+def test_openai_bad_request_fails_the_v1_attempt_without_retry(monkeypatch, settings, caplog):
+    import logging
+
+    import httpx
+    from openai import BadRequestError
+
+    secret = "V1_DOSSIER_SECRET_NOT_FOR_LOGS"
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    client = MagicMock()
+    client.chat.completions.create.side_effect = BadRequestError(
+        secret,
+        response=response,
+        body={"error": {"message": secret}},
+    )
+    monkeypatch.setattr("openai.OpenAI", MagicMock(return_value=client))
+    settings.HOUSTON_BRAIN_PROVIDER = "openai"
+    settings.HOUSTON_BRAIN_MODEL = "gpt-5-mini"
+    settings.OPENAI_API_KEY = "sk-lot4-secret"
+    settings.HOUSTON_BRAIN_ENGINE_VERSION = ""
+    _allow_publish(monkeypatch)
+    analysis = _prepare(settings, ["Service lent en salle."])
+    assert "engine_version" not in analysis.configuration
+    with caplog.at_level(logging.INFO):
+        run_brain_analysis(analysis.id, analysis.attempt_token, provider=None)
+    analysis.refresh_from_db()
+
+    assert client.chat.completions.create.call_count == 1
+    assert analysis.status == "failed"
+    assert analysis.failure_code == "response_invalid"
+    assert analysis.result is None
+    assert analysis.transient_retries_used == 0
+    assert analysis.provider_calls_used == 0
+    assert secret not in caplog.text
+    run_brain_analysis(analysis.id, analysis.attempt_token, provider=None)
+    analysis.refresh_from_db()
+    assert client.chat.completions.create.call_count == 1
+    assert analysis.status == "failed"
+    assert analysis.result is None
+
+
 def test_a_truncated_openai_response_is_not_a_result(monkeypatch):
     client = MagicMock()
     message = MagicMock(content="{", refusal=None)

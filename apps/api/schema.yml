@@ -13463,6 +13463,12 @@ components:
           format: date-time
         reporting:
           $ref: '#/components/schemas/BrainReportingRef'
+        qualification:
+          type: string
+          nullable: true
+        investigation_succeeded:
+          type: boolean
+          nullable: true
         claimed_at:
           type: string
           format: date-time
@@ -13504,9 +13510,11 @@ components:
       - failure_code
       - failure_message
       - id
+      - investigation_succeeded
       - mechanisms
       - messages
       - older_message_count
+      - qualification
       - reporting
       - result
       - searches
@@ -13544,12 +13552,20 @@ components:
           format: date-time
         reporting:
           $ref: '#/components/schemas/BrainReportingRef'
+        qualification:
+          type: string
+          nullable: true
+        investigation_succeeded:
+          type: boolean
+          nullable: true
       required:
       - author
       - created_at
       - failure_code
       - failure_message
       - id
+      - investigation_succeeded
+      - qualification
       - reporting
       - status
     BrainBilan:

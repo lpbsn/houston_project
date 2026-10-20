@@ -4397,6 +4397,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             reporting: components["schemas"]["BrainReportingRef"];
+            qualification: string | null;
+            investigation_succeeded: boolean | null;
             /** Format: date-time */
             claimed_at: string | null;
             result: unknown;
@@ -4422,6 +4424,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             reporting: components["schemas"]["BrainReportingRef"];
+            qualification: string | null;
+            investigation_succeeded: boolean | null;
         };
         BrainBilan: {
             /** Format: uuid */

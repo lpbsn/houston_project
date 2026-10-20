@@ -1,0 +1,603 @@
+"""KPI comparability for the investigation engine.
+
+A comparison is accepted only when its kind and its conditions are explicit.
+Nothing is normalized. A missing component is a gap, not a breakdown.
+The published figure is recomposed from its operands.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
+from dateutil.relativedelta import relativedelta
+
+from houston.brain.numbers import decimal_text, fold
+
+COMPARISON_TEMPORAL = "temporal"
+COMPARISON_ACTUAL_VS_REFERENCE = "actual_vs_reference"
+
+NATURE_ACTUAL = "actual"
+NATURE_BUDGET = "budget"
+NATURE_FORECAST = "forecast"
+_NATURES = frozenset({NATURE_ACTUAL, NATURE_BUDGET, NATURE_FORECAST})
+_REFERENCE_NATURES = frozenset({NATURE_BUDGET, NATURE_FORECAST})
+
+TAX_HT = "ht"
+TAX_TTC = "ttc"
+TAX_UNSPECIFIED = "unspecified"
+_TAX_TREATMENTS = frozenset({TAX_HT, TAX_TTC, TAX_UNSPECIFIED})
+
+_RATE_UNITS = frozenset({"%", "percent", "point", "points", "pt", "pts"})
+
+
+@dataclass(frozen=True)
+class KpiMeasure:
+    """One measure whose comparison conditions are already explicit.
+
+    ``period_end`` is exclusive, as on a confirmed reporting.
+    ``duration_days`` and ``opening_days`` are written bases. They are never derived
+    to rescale a value. Absent opening days stay absent.
+    """
+
+    value: Decimal
+    unit: str
+    definition: str
+    scope: str
+    nature: str
+    tax_treatment: str
+    period_start: date
+    period_end: date
+    duration_days: int | None = None
+    opening_days: int | None = None
+    ambiguities: tuple[str, ...] = ()
+    method: str | None = None
+
+
+@dataclass(frozen=True)
+class ComparisonVerdict:
+    accepted: bool
+    code: str
+    reserve: str | None = None
+    duration_bases: tuple[int, int] | None = None
+    opening_days: tuple[int | None, int | None] = (None, None)
+
+
+@dataclass(frozen=True)
+class ArithmeticVerdict:
+    accepted: bool
+    code: str
+    value: Decimal | None
+    unit: str | None = None
+    reserve: str | None = None
+    duration_bases: tuple[int, int] | None = None
+
+
+@dataclass(frozen=True)
+class IdentityVerdict:
+    accepted: bool
+    code: str
+    value: Decimal | None
+
+
+@dataclass(frozen=True)
+class VariationBreakdown:
+    accepted: bool
+    code: str
+    volume_effect: Decimal | None = None
+    price_effect: Decimal | None = None
+    amount_difference: Decimal | None = None
+
+
+def compare_measures(left: KpiMeasure, right: KpiMeasure, kind: str) -> ComparisonVerdict:
+    """Accept a temporal evolution or an actual-versus-reference comparison."""
+    opening = (left.opening_days, right.opening_days)
+    if kind not in {COMPARISON_TEMPORAL, COMPARISON_ACTUAL_VS_REFERENCE}:
+        return _refused("comparison_kind_invalid", opening)
+    code = _shared_code(left, right)
+    if code:
+        return _refused(code, opening)
+    if kind == COMPARISON_TEMPORAL:
+        code = _temporal_code(left, right)
+    else:
+        code = _reference_code(left, right)
+    if code:
+        return _refused(code, opening)
+    duration_code, bases = _duration_status(left, right)
+    if duration_code in {"duration_base_missing", "duration_base_conflict"}:
+        return _refused(duration_code, opening)
+    return ComparisonVerdict(
+        True,
+        "accepted",
+        reserve=duration_code,
+        duration_bases=bases,
+        opening_days=opening,
+    )
+
+
+def measured_difference(
+    left: KpiMeasure,
+    right: KpiMeasure,
+    *,
+    kind: str,
+) -> ArithmeticVerdict:
+    """Subtract two comparable measures. The result keeps their unit and is not rescaled."""
+    verdict = compare_measures(left, right, kind)
+    if not verdict.accepted:
+        return _arithmetic(verdict.code)
+    return ArithmeticVerdict(
+        True,
+        "accepted",
+        left.value - right.value,
+        unit=str(left.unit).strip(),
+        reserve=verdict.reserve,
+        duration_bases=verdict.duration_bases,
+    )
+
+
+def measured_variation(base: KpiMeasure, current: KpiMeasure) -> ArithmeticVerdict:
+    """Relative change of two temporal measures. A rate is not varied like an amount."""
+    verdict = compare_measures(base, current, COMPARISON_TEMPORAL)
+    if not verdict.accepted:
+        return _arithmetic(verdict.code)
+    if _is_rate(base.unit) or _is_rate(current.unit):
+        return _arithmetic("rate_variation")
+    if base.value == 0:
+        return _arithmetic("invalid_calculation")
+    change = (current.value - base.value) / base.value
+    return ArithmeticVerdict(
+        True,
+        "accepted",
+        change,
+        reserve=verdict.reserve,
+        duration_bases=verdict.duration_bases,
+    )
+
+
+def sum_measures(measures: tuple[KpiMeasure, ...]) -> ArithmeticVerdict:
+    """Sum components of one total.
+
+    Scopes and definitions may differ: a dining-room amount and a terrace amount
+    can form one total. Tax, nature, method and period may not. An ambiguous
+    measure is not a term of that total.
+    """
+    code = _same_total_code(measures)
+    if code:
+        return _arithmetic(code)
+    return sum_values(
+        tuple(measure.value for measure in measures),
+        tuple(measure.unit for measure in measures),
+    )
+
+
+def measured_product(left: KpiMeasure, right: KpiMeasure) -> ArithmeticVerdict:
+    """Recompute one period's product. Volume and price may use different units.
+
+    Two explicit taxes that differ are refused. A count with no tax written can
+    multiply a price. An ambiguous factor produces no identity.
+    """
+    code = _factor_code(left, right)
+    if code:
+        return _arithmetic(code)
+    return ArithmeticVerdict(True, "accepted", left.value * right.value)
+
+
+def measured_ratio(numerator: KpiMeasure, denominator: KpiMeasure) -> ArithmeticVerdict:
+    """Recompute one period's ratio. The denominator is not a missing zero.
+
+    The same tax, nature and ambiguity rules apply as for a product.
+    """
+    code = _factor_code(numerator, denominator)
+    if code:
+        return _arithmetic(code)
+    if denominator.value == 0:
+        return _arithmetic("invalid_calculation")
+    return ArithmeticVerdict(True, "accepted", numerator.value / denominator.value)
+
+
+def sum_values(
+    values: tuple[Decimal | None, ...],
+    units: tuple[str | None, ...],
+) -> ArithmeticVerdict:
+    """Sum amounts of one unit. A missing term or a rate produces no partial total."""
+    if len(values) < 2 or len(values) != len(units):
+        return _arithmetic("invalid_calculation")
+    present: list[Decimal] = []
+    for value in values:
+        if value is None:
+            return _arithmetic("component_missing")
+        present.append(value)
+    folded = [_unit_key(unit) for unit in units]
+    if any(not unit for unit in folded):
+        return _arithmetic("unit_missing")
+    if any(_is_rate(unit) for unit in folded):
+        return _arithmetic("rate_not_summable")
+    if len(set(folded)) != 1:
+        return _arithmetic("unit_mismatch")
+    return ArithmeticVerdict(
+        True,
+        "accepted",
+        sum(present, Decimal(0)),
+        unit=str(units[0]).strip(),
+    )
+
+
+def recompose_amount(
+    *,
+    volume: Decimal | None,
+    unit_price: Decimal | None,
+    published: Decimal | None,
+) -> IdentityVerdict:
+    """Accept ``amount = volume × unit price`` only when the product matches."""
+    if volume is None or unit_price is None or published is None:
+        return IdentityVerdict(False, "component_missing", None)
+    product = volume * unit_price
+    if decimal_text(product) != decimal_text(published):
+        return IdentityVerdict(False, "not_recomputed", None)
+    return IdentityVerdict(True, "accepted", product)
+
+
+def recompose_unit_price(
+    *,
+    amount: Decimal | None,
+    volume: Decimal | None,
+) -> IdentityVerdict:
+    """Recover a unit price from the two operands that exist."""
+    if amount is None or volume is None:
+        return IdentityVerdict(False, "component_missing", None)
+    if volume == 0:
+        return IdentityVerdict(False, "invalid_calculation", None)
+    return IdentityVerdict(True, "accepted", amount / volume)
+
+
+def recompose_volume(
+    *,
+    amount: Decimal | None,
+    unit_price: Decimal | None,
+) -> IdentityVerdict:
+    """Recover a volume from the two operands that exist."""
+    if amount is None or unit_price is None:
+        return IdentityVerdict(False, "component_missing", None)
+    if unit_price == 0:
+        return IdentityVerdict(False, "invalid_calculation", None)
+    return IdentityVerdict(True, "accepted", amount / unit_price)
+
+
+def decompose_variation(
+    *,
+    volume_before: Decimal | None,
+    volume_after: Decimal | None,
+    price_before: Decimal | None,
+    price_after: Decimal | None,
+    amount_before: Decimal | None,
+    amount_after: Decimal | None,
+) -> VariationBreakdown:
+    """Split a variation into volume and price effects when every operand exists.
+
+    A missing component returns no effect. The effects are published only when each
+    period's amount identity holds and the two effects recompose the amount change.
+    """
+    components = (
+        volume_before,
+        volume_after,
+        price_before,
+        price_after,
+        amount_before,
+        amount_after,
+    )
+    if any(component is None for component in components):
+        return VariationBreakdown(False, "component_missing")
+    assert volume_before is not None
+    assert volume_after is not None
+    assert price_before is not None
+    assert price_after is not None
+    assert amount_before is not None
+    assert amount_after is not None
+    if decimal_text(volume_before * price_before) != decimal_text(amount_before):
+        return VariationBreakdown(False, "not_recomputed")
+    if decimal_text(volume_after * price_after) != decimal_text(amount_after):
+        return VariationBreakdown(False, "not_recomputed")
+    volume_effect = (volume_after - volume_before) * price_before
+    price_effect = volume_after * (price_after - price_before)
+    amount_difference = amount_after - amount_before
+    if decimal_text(volume_effect + price_effect) != decimal_text(amount_difference):
+        return VariationBreakdown(False, "not_recomputed")
+    return VariationBreakdown(
+        True,
+        "accepted",
+        volume_effect=volume_effect,
+        price_effect=price_effect,
+        amount_difference=amount_difference,
+    )
+
+
+def _usable_code(measure: KpiMeasure) -> str | None:
+    if _span_days(measure) is None:
+        return "period_invalid"
+    if measure.ambiguities:
+        return "ambiguous"
+    if measure.nature not in _NATURES:
+        return "nature_invalid"
+    if measure.tax_treatment not in _TAX_TREATMENTS:
+        return "tax_invalid"
+    return None
+
+
+def _same_total_code(measures: tuple[KpiMeasure, ...]) -> str | None:
+    if len(measures) < 2:
+        return "invalid_calculation"
+    for measure in measures:
+        code = _usable_code(measure)
+        if code:
+            return code
+    if len({measure.tax_treatment for measure in measures}) != 1:
+        return "tax_mismatch"
+    if len({measure.nature for measure in measures}) != 1:
+        return "nature_mixed"
+    periods = {(measure.period_start, measure.period_end) for measure in measures}
+    if len(periods) != 1:
+        return "period_mismatch"
+    if len({_text(measure.method) for measure in measures}) != 1:
+        return "method_changed"
+    return None
+
+
+def _factor_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
+    for measure in (left, right):
+        code = _usable_code(measure)
+        if code:
+            return code
+        if _is_rate(measure.unit):
+            return "rate_not_factor"
+    if left.nature != right.nature:
+        return "nature_mixed"
+    if (left.period_start, left.period_end) != (right.period_start, right.period_end):
+        return "period_mismatch"
+    explicit = {left.tax_treatment, right.tax_treatment} & {TAX_HT, TAX_TTC}
+    if explicit == {TAX_HT, TAX_TTC}:
+        return "tax_mismatch"
+    return None
+
+
+def _shared_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
+    for measure in (left, right):
+        code = _usable_code(measure)
+        if code:
+            return code
+    if left.tax_treatment != right.tax_treatment:
+        return "tax_mismatch"
+    left_unit = _unit_key(left.unit)
+    right_unit = _unit_key(right.unit)
+    if not left_unit or not right_unit:
+        return "unit_missing"
+    if left_unit != right_unit:
+        return "unit_mismatch"
+    if not _text(left.definition) or not _text(right.definition):
+        return "definition_missing"
+    if _text(left.definition) != _text(right.definition):
+        return "definition_mismatch"
+    if not _text(left.scope) or not _text(right.scope):
+        return "scope_missing"
+    if _text(left.scope) != _text(right.scope):
+        return "scope_mismatch"
+    if _text(left.method) != _text(right.method):
+        return "method_changed"
+    return None
+
+
+def _temporal_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
+    if left.nature != right.nature:
+        return "nature_mixed"
+    if (left.period_start, left.period_end) == (right.period_start, right.period_end):
+        return "period_not_distinct"
+    return None
+
+
+def _reference_code(left: KpiMeasure, right: KpiMeasure) -> str | None:
+    natures = {left.nature, right.nature}
+    if NATURE_ACTUAL not in natures or not natures <= {NATURE_ACTUAL, *_REFERENCE_NATURES}:
+        return "nature_not_reference"
+    if len(natures) != 2:
+        return "nature_not_reference"
+    if (left.period_start, left.period_end) != (right.period_start, right.period_end):
+        return "period_mismatch"
+    return None
+
+
+def _duration_status(
+    left: KpiMeasure,
+    right: KpiMeasure,
+) -> tuple[str | None, tuple[int, int] | None]:
+    left_span = _span_days(left)
+    right_span = _span_days(right)
+    if left_span is None or right_span is None:
+        return "period_invalid", None
+    if _base_conflicts(left, left_span) or _base_conflicts(right, right_span):
+        return "duration_base_conflict", None
+    if left_span == right_span:
+        return None, None
+    if left.duration_days is None or right.duration_days is None:
+        return "duration_base_missing", None
+    return "unequal_duration_bases", (left.duration_days, right.duration_days)
+
+
+def _base_conflicts(measure: KpiMeasure, span: int) -> bool:
+    if measure.duration_days is None:
+        return False
+    return measure.duration_days != span
+
+
+def _span_days(measure: KpiMeasure) -> int | None:
+    span = (measure.period_end - measure.period_start).days
+    if span <= 0:
+        return None
+    return span
+
+
+def _text(value: str | None) -> str:
+    return fold(str(value or "")).strip()
+
+
+def _unit_key(unit: str | None) -> str:
+    return _text(unit)
+
+
+def rate_unit(unit: str | None) -> bool:
+    """True when this unit must not be summed or varied like an amount."""
+    return _is_rate(unit)
+
+
+def freeze_measure(
+    raw: dict,
+    *,
+    measure_id: str,
+    period_start: date,
+    period_end: date,
+) -> dict:
+    """Copy one extracted measure with only the comparison conditions it states.
+
+    An empty period uses the confirmed reporting period. ``N-1`` shifts that
+    period by one written year. A month name or any other unbound text stays
+    unresolved: no calendar is guessed. HT, TTC, budget and forecast are read
+    from the label. When neither tax is written, the treatment stays unspecified.
+    """
+    label = str(raw.get("label") or "").strip()
+    definition = str(raw.get("definition") or label).strip()
+    scope = str(raw.get("scope") or "").strip()
+    unit = str(raw.get("unit") or "").strip()
+    period_text = str(raw.get("period") or "").strip()
+    ambiguities = [str(flag) for flag in raw.get("ambiguities") or []]
+    tax = _tax_treatment(f"{label} {definition} {unit} {period_text}", ambiguities)
+    nature = _nature(f"{label} {definition} {period_text}")
+    start, end, unresolved = _measure_period(period_text, period_start, period_end)
+    return {
+        "measure_id": measure_id,
+        "label": label,
+        "value": raw.get("value"),
+        "value_kind": str(raw.get("value_kind") or ""),
+        "unit": unit,
+        "definition": definition,
+        "scope": scope,
+        "nature": nature,
+        "tax_treatment": tax,
+        "period_start": start.isoformat() if start else None,
+        "period_end": end.isoformat() if end else None,
+        "period_unresolved": unresolved,
+        "duration_days": _optional_int(raw.get("duration_days")),
+        "opening_days": _optional_int(raw.get("opening_days")),
+        "ambiguities": ambiguities,
+        "method": _text_or_none(raw.get("method")),
+    }
+
+
+def kpi_from_frozen(record: dict) -> tuple[str | None, KpiMeasure | None]:
+    """Build the measure the comparison code already knows how to judge."""
+    if record.get("period_unresolved"):
+        return "period_unresolved", None
+    try:
+        value = Decimal(str(record.get("value")))
+        start = date.fromisoformat(str(record.get("period_start")))
+        end = date.fromisoformat(str(record.get("period_end")))
+    except (InvalidOperation, TypeError, ValueError):
+        return "operand_unreadable", None
+    ambiguities = tuple(str(flag) for flag in record.get("ambiguities") or ())
+    return None, KpiMeasure(
+        value=value,
+        unit=str(record.get("unit") or ""),
+        definition=str(record.get("definition") or ""),
+        scope=str(record.get("scope") or ""),
+        nature=str(record.get("nature") or ""),
+        tax_treatment=str(record.get("tax_treatment") or ""),
+        period_start=start,
+        period_end=end,
+        duration_days=_optional_int(record.get("duration_days")),
+        opening_days=_optional_int(record.get("opening_days")),
+        ambiguities=ambiguities,
+        method=_text_or_none(record.get("method")),
+    )
+
+
+def _tax_treatment(text: str, ambiguities: list[str]) -> str:
+    if "ht_ttc" in ambiguities:
+        return TAX_UNSPECIFIED
+    folded = fold(text)
+    has_ht = bool(re.search(r"(?<![a-z])ht(?![a-z])", folded) or "hors taxe" in folded)
+    has_ttc = "ttc" in folded or "toutes taxes" in folded
+    if has_ht and has_ttc:
+        if "ht_ttc" not in ambiguities:
+            ambiguities.append("ht_ttc")
+        return TAX_UNSPECIFIED
+    if has_ht:
+        return TAX_HT
+    if has_ttc:
+        return TAX_TTC
+    return TAX_UNSPECIFIED
+
+
+def _nature(text: str) -> str:
+    folded = fold(text)
+    budget = "budget" in folded
+    forecast = "prevision" in folded or "forecast" in folded
+    if budget and forecast:
+        return ""
+    if budget:
+        return NATURE_BUDGET
+    if forecast:
+        return NATURE_FORECAST
+    return NATURE_ACTUAL
+
+
+def _measure_period(
+    period_text: str,
+    period_start: date,
+    period_end: date,
+) -> tuple[date | None, date | None, bool]:
+    if not period_text:
+        return period_start, period_end, False
+    folded = fold(period_text)
+    if re.search(r"n\s*-\s*1", folded) or "annee precedente" in folded:
+        return (
+            period_start - relativedelta(years=1),
+            period_end - relativedelta(years=1),
+            False,
+        )
+    found = re.findall(r"\d{4}-\d{2}-\d{2}", period_text)
+    if len(found) >= 2:
+        start = date.fromisoformat(found[0])
+        end = date.fromisoformat(found[1])
+        if end <= start:
+            return None, None, True
+        return start, end, False
+    return None, None, True
+
+
+def _optional_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _text_or_none(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _is_rate(unit: str | None) -> bool:
+    return _unit_key(unit) in _RATE_UNITS
+
+
+def _refused(
+    code: str,
+    opening: tuple[int | None, int | None],
+) -> ComparisonVerdict:
+    return ComparisonVerdict(False, code, opening_days=opening)
+
+
+def _arithmetic(code: str) -> ArithmeticVerdict:
+    return ArithmeticVerdict(False, code, None)

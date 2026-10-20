@@ -38,6 +38,33 @@ export function workStatusLabel(status: string): string {
   return WORK_STATUS_LABELS[status] ?? status
 }
 
+export const QUALIFICATION_LABELS: Record<string, string> = {
+  complete: 'Analyse complète',
+  partial: 'Analyse partielle',
+  factual_reading: 'Lecture factuelle',
+  refused: 'Analyse refusée',
+}
+
+export function analysisHistoryLabel(
+  status: string,
+  qualification?: string | null,
+  investigationSucceeded?: boolean | null,
+): string {
+  if (status !== 'completed' || !qualification) {
+    return workStatusLabel(status)
+  }
+  if (qualification === 'factual_reading' || qualification === 'refused') {
+    return QUALIFICATION_LABELS[qualification]
+  }
+  if (investigationSucceeded === true && QUALIFICATION_LABELS[qualification]) {
+    return QUALIFICATION_LABELS[qualification]
+  }
+  if (investigationSucceeded === false) {
+    return QUALIFICATION_LABELS[qualification] ?? workStatusLabel(status)
+  }
+  return workStatusLabel(status)
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null
@@ -56,6 +83,45 @@ function asStringList(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string')
 }
 
+function coverageItems(
+  rows: unknown,
+  identifiers: unknown,
+  disposition: string,
+): InvestigationCoverageItem[] {
+  if (Array.isArray(rows)) {
+    const parsed = rows.flatMap((item) => {
+      if (typeof item === 'string') {
+        return [{ sourceId: item, label: '', pole: '', disposition }]
+      }
+      const row = asRecord(item)
+      if (!row) {
+        return []
+      }
+      const sourceId = asString(row.source_id)
+      if (!sourceId) {
+        return []
+      }
+      return [
+        {
+          sourceId,
+          label: asString(row.label),
+          pole: asString(row.pole),
+          disposition: asString(row.disposition) || disposition,
+        },
+      ]
+    })
+    if (parsed.length > 0) {
+      return parsed
+    }
+  }
+  return asStringList(identifiers).map((sourceId) => ({
+    sourceId,
+    label: '',
+    pole: '',
+    disposition,
+  }))
+}
+
 export type AnalysisSubjectView = {
   key: string
   statement: string
@@ -72,9 +138,112 @@ export type AnalysisResultView = {
   limits: { code: string; message: string }[]
 }
 
+export type InvestigationSubjectView = {
+  key: string
+  statement: string
+  examined: boolean
+  orientation: string
+  justification: string
+  limits: string[]
+  gaps: string[]
+  calculations: { label: string; value: string; verified: boolean }[]
+  cited: InvestigationCoverageItem[]
+  notExaminedIds: string[]
+}
+
+export type InvestigationCoverageItem = {
+  sourceId: string
+  label: string
+  pole: string
+  disposition: string
+}
+
+export type InvestigationResultView = {
+  qualification: string
+  investigationSucceeded: boolean
+  subjects: InvestigationSubjectView[]
+  examinedIds: string[]
+  examinedNotCited: InvestigationCoverageItem[]
+  cited: InvestigationCoverageItem[]
+  discoveredNotExamined: InvestigationCoverageItem[]
+  limits: { code: string; sourceId: string }[]
+}
+
+export function readInvestigationResult(value: unknown): InvestigationResultView | null {
+  const record = asRecord(value)
+  if (!record || record.schema_version !== 'brain_investigation_v3') {
+    return null
+  }
+  const qualification = asString(record.qualification)
+  if (!qualification) {
+    return null
+  }
+  const subjects = Array.isArray(record.subjects)
+    ? record.subjects.flatMap((item) => {
+        const subject = asRecord(item)
+        if (!subject) {
+          return []
+        }
+        const calculations = Array.isArray(subject.calculations)
+          ? subject.calculations.flatMap((entry) => {
+              const calculation = asRecord(entry)
+              if (!calculation || calculation.verified !== true) {
+                return []
+              }
+              return [
+                {
+                  label: asString(calculation.label) || asString(calculation.operation),
+                  value: asString(calculation.published_value),
+                  verified: true,
+                },
+              ]
+            })
+          : []
+        return [
+          {
+            key: asString(subject.key),
+            statement: asString(subject.statement),
+            examined: subject.examined === true,
+            orientation: asString(subject.orientation),
+            justification: asString(subject.justification),
+            limits: asStringList(subject.limits),
+            gaps: asStringList(subject.gaps),
+            calculations,
+            cited: coverageItems(subject.cited, subject.cited_ids, 'cited'),
+            notExaminedIds: asStringList(subject.not_examined_ids),
+          },
+        ]
+      })
+    : []
+  const discovered = coverageItems(
+    record.discovered_not_examined,
+    undefined,
+    'discovered_not_examined',
+  )
+  const limits = Array.isArray(record.limits)
+    ? record.limits.flatMap((item) => {
+        const row = asRecord(item)
+        if (!row) {
+          return []
+        }
+        return [{ code: asString(row.code), sourceId: asString(row.source_id) }]
+      })
+    : []
+  return {
+    qualification,
+    investigationSucceeded: record.investigation_succeeded === true,
+    subjects,
+    examinedIds: asStringList(record.examined_ids),
+    examinedNotCited: coverageItems(record.examined_not_cited, undefined, 'examined_not_cited'),
+    cited: coverageItems(record.cited, record.cited_ids, 'cited'),
+    discoveredNotExamined: discovered,
+    limits,
+  }
+}
+
 export function readAnalysisResult(value: unknown): AnalysisResultView | null {
   const record = asRecord(value)
-  if (!record || !Array.isArray(record.subjects)) {
+  if (!record || record.schema_version === 'brain_investigation_v3' || !Array.isArray(record.subjects)) {
     return null
   }
   const subjects = record.subjects.flatMap((item) => {

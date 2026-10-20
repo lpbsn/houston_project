@@ -44,11 +44,17 @@ class OpenAIBrainProvider:
         model: str,
         timeout_seconds: int,
         max_output_tokens: int,
+        system_text: str | None = None,
+        response_format: dict | None = None,
+        accepted_schema: str | None = None,
     ):
         self.api_key = api_key
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.max_output_tokens = max_output_tokens
+        self._system_text = system_text or system_prompt()
+        self._response_format = response_format or openai_strict_response_format()
+        self._accepted_schema = accepted_schema or SCHEMA_VERSION
         self._client = None
 
     def complete(
@@ -74,10 +80,10 @@ class OpenAIBrainProvider:
             response = self._client_for(timeout).chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": system_prompt()},
+                    {"role": "system", "content": self._system_text},
                     {"role": "user", "content": canonical_json(payload)},
                 ],
-                response_format=openai_strict_response_format(),
+                response_format=self._response_format,
                 max_completion_tokens=self.max_output_tokens,
                 timeout=timeout,
             )
@@ -88,7 +94,7 @@ class OpenAIBrainProvider:
                 code="response_invalid",
                 message="Le fournisseur a refusé le contrat de réponse.",
             ) from exc
-        return _result(response)
+        return _result(response, self._accepted_schema)
 
     def _client_for(self, timeout: int):
         if self._client is not None:
@@ -99,7 +105,7 @@ class OpenAIBrainProvider:
         return self._client
 
 
-def _result(response) -> ProviderCallResult:
+def _result(response, accepted_schema: str) -> ProviderCallResult:
     usage = getattr(response, "usage", None)
     input_tokens = getattr(usage, "prompt_tokens", None) if usage is not None else None
     output_tokens = getattr(usage, "completion_tokens", None) if usage is not None else None
@@ -120,7 +126,7 @@ def _result(response) -> ProviderCallResult:
         output = json.loads(message.content or "")
     except json.JSONDecodeError:
         return empty
-    if not isinstance(output, dict) or output.get("schema_version") != SCHEMA_VERSION:
+    if not isinstance(output, dict) or output.get("schema_version") != accepted_schema:
         return ProviderCallResult(
             output=output if isinstance(output, dict) else {},
             truncated=True,
