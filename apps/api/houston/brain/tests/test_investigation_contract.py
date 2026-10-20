@@ -12,6 +12,7 @@ import pytest
 from houston.brain.investigation_contract import (
     assess_reading,
     causal_evidence_issue,
+    correction_rules,
     investigation_prompt,
     investigation_response_schema,
     subject_figures_verified,
@@ -303,6 +304,58 @@ def test_the_strict_schema_stays_inside_the_openai_subset():
     assert depth(schema, 1, schema["$defs"]) <= 10
     assert enums <= 1_000
     assert characters <= 120_000
+
+
+def test_the_provider_schema_cannot_state_a_refused_cause_or_a_cited_gap():
+    schema = investigation_response_schema()["json_schema"]["schema"]
+    explanation = schema["$defs"]["explanation"]["properties"]["status"]
+    cited, missing = schema["$defs"]["check"]["anyOf"]
+    prompt = investigation_prompt()
+    refused = _assess(
+        _reading(
+            [
+                _subject(
+                    "ca",
+                    explanations=[
+                        {
+                            "text": "Le document suffirait.",
+                            "status": "supported",
+                            "support_ids": [],
+                            "contradiction_ids": [],
+                        }
+                    ],
+                    decisive_checks=[
+                        {
+                            "question": "Que manque-t-il ?",
+                            "status": "missing",
+                            "item_ids": ["measure:0"],
+                            "finding": "La vérification n'est pas dans le dossier.",
+                        }
+                    ],
+                )
+            ]
+        ),
+        citable_ids={"measure:0"},
+        proposed_keys={"ca"},
+    )
+
+    assert explanation["enum"] == ["plausible", "contradicted", "unresolved"]
+    assert cited["properties"]["status"]["const"] == "checked"
+    assert "item_ids" in cited["properties"]
+    assert missing["properties"]["status"]["const"] == "missing"
+    assert "item_ids" not in missing["properties"]
+    assert "Leur statut est plausible, contradicted ou unresolved." in prompt
+    assert "supported ne se pose pas" in prompt
+    assert "supported, plausible" not in prompt
+    assert refused.errors == ("explanation_not_cause", "missing_check_cited")
+    assert correction_rules(refused.errors) == (
+        "explanation_not_cause: supported ne se pose pas : "
+        "aucun identifiant du dossier ne le porte.",
+        "missing_check_cited: Une vérification missing ne cite rien et nomme le manque.",
+    )
+    assert correction_rules(("duration_base_missing", "missing_check_cited")) == (
+        "missing_check_cited: Une vérification missing ne cite rien et nomme le manque.",
+    )
 
 
 def test_positive_negative_and_stable_subjects_all_remain():

@@ -44,6 +44,7 @@ from houston.brain.investigation_contract import (
     assess_reading,
     causal_evidence_issue,
     cited_item_ids,
+    correction_rules,
     investigation_call_tokens,
     investigation_prompt,
     investigation_response_schema,
@@ -579,6 +580,16 @@ def _payload(
     }
 
 
+def _rejected_correction(errors, cost, rejected) -> dict:
+    """Codes of both refusals. The rejected output itself is not stored."""
+    return {
+        "errors": list(errors),
+        "rejected_errors": list(rejected),
+        "input_tokens": cost,
+        "accepted": False,
+    }
+
+
 def _correct(
     provider,
     *,
@@ -599,7 +610,13 @@ def _correct(
         return _save_stop(dossier_id, _failed(state, "response_invalid"))
     if tick() - started + ceilings["provider_timeout_seconds"] > ceilings["attempt_hard_seconds"]:
         return _save_stop(dossier_id, _failed(state, "attempt_exceeded"))
-    payload = {**prepared.payload, "correction": {"errors": list(errors)}}
+    payload = {
+        **prepared.payload,
+        "correction": {
+            "errors": list(errors),
+            "rules": list(correction_rules(errors)),
+        },
+    }
     cost = investigation_call_tokens(payload)
     if (
         cost > ceilings["per_call_input_tokens"]
@@ -623,7 +640,7 @@ def _correct(
         return _save_stop(
             dossier_id,
             _failed(state, "provider_output_rejected"),
-            correction={"errors": list(errors), "input_tokens": cost, "accepted": False},
+            correction=_rejected_correction(errors, cost, ("provider_output_rejected",)),
         )
     assessment = _assess(result.output, snapshot, prepared)
     if not assessment.ok:
@@ -631,7 +648,7 @@ def _correct(
         return _save_stop(
             dossier_id,
             _failed(state, "response_invalid"),
-            correction={"errors": list(errors), "input_tokens": cost, "accepted": False},
+            correction=_rejected_correction(errors, cost, assessment.errors),
         )
     return assessment.parsed, {
         "errors": list(errors),
