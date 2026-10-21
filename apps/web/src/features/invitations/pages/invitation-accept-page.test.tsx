@@ -231,6 +231,32 @@ describe('InvitationAcceptPage', () => {
     expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
   })
 
+  it('shows a French validation message when the server sends no field error', async () => {
+    acceptDirectorInvitation.mockRejectedValueOnce(
+      new InvitationAcceptApiError(
+        'Les informations saisies ne sont pas valides. Corrigez-les puis réessayez.',
+        400,
+        'validation_error',
+      ),
+    )
+    renderPage('/invitations#invite-token')
+
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Les informations saisies ne sont pas valides. Corrigez-les puis réessayez.',
+    )
+    expect(screen.queryByText('Request validation failed.')).toBeNull()
+    expect(screen.queryByText(/Vérifiez votre connexion/)).toBeNull()
+  })
+
   it('does not show success after a rejected acceptance and permits retry', async () => {
     previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
     acceptDirectorInvitation.mockRejectedValueOnce(new Error('Network unavailable'))
