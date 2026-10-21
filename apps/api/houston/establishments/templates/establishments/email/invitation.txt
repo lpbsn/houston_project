@@ -1,4 +1,4 @@
-Bonjour{% if first_name %} {{ first_name }}{% endif %},
+{% autoescape off %}Bonjour{% if first_name %} {{ first_name }}{% endif %},
 
 Votre équipe vous attend.
 
@@ -17,4 +17,4 @@ Code d’invitation : {{ invitation_code }}
 Ce lien est personnel : ne le partagez pas.
 Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.
 
-— Spore
+— Spore{% endautoescape %}

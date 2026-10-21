@@ -199,6 +199,7 @@ describe('InvitationAcceptPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir mon espace Spore' }))
     expect(onAccepted).toHaveBeenCalledOnce()
   })
+
   it('shows an expired invitation without password fields or an active submit', async () => {
     previewDirectorInvitation.mockRejectedValue(new InvitationAcceptApiError('Expired', 400, 'invitation_expired'))
     renderPage('/invitations#expired-token')
@@ -208,12 +209,34 @@ describe('InvitationAcceptPage', () => {
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 
+  it('shows the server message when password validation fails', async () => {
+    acceptDirectorInvitation.mockRejectedValueOnce(
+      new InvitationAcceptApiError('Ce mot de passe est trop courant.', 400, 'validation_error'),
+    )
+    renderPage('/invitations#invite-token')
+
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Ce mot de passe est trop courant.',
+    )
+    expect(screen.queryByText(/Vérifiez votre connexion/)).toBeNull()
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
+  })
+
   it('does not show success after a rejected acceptance and permits retry', async () => {
     previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
     acceptDirectorInvitation.mockRejectedValueOnce(new Error('Network unavailable'))
     renderPage('/invitations#invite-token')
     fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
-    await screen.findByRole('alert')
+    expect((await screen.findByRole('alert')).textContent).toContain('Vérifiez votre connexion')
     expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
     await screen.findByText('Bienvenue dans votre équipe !')

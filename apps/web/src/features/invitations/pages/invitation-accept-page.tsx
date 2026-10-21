@@ -37,6 +37,7 @@ function getAcceptErrorMessage(error: unknown) {
     if (error.code === 'invitation_invalid') {
       return 'Cette invitation est invalide. Demandez un nouveau lien à votre responsable.'
     }
+    return error.message
   }
   return 'Impossible de valider votre invitation. Vérifiez votre connexion puis réessayez.'
 }
@@ -258,7 +259,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
   return (
     <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
       <CardHeader className="gap-2">
-          <InvitationBrand />
+        <InvitationBrand />
         <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
           Rejoindre mon équipe
         </CardTitle>
