@@ -810,12 +810,40 @@ def _in_dates(day: date, window: dict) -> bool:
 
 
 def _action_in_window(payload, window) -> bool:
-    for key in ("occurrence_date", "start_at", "end_at", "created_at"):
-        raw = payload.get(key)
-        as_date = _parse_date(str(raw)[:10]) if raw else None
-        if as_date is not None and _in_dates(as_date, window):
+    """Match a civil occurrence, a timestamp in the establishment zone, or a covering interval.
+
+    The UTC calendar date of an aware timestamp is not the establishment's day.
+    An execution that starts before the window and ends after it is in that window.
+    """
+    occurred = _parse_date(payload.get("occurrence_date"))
+    if occurred is not None and _in_dates(occurred, window):
+        return True
+    start = _parse_dt(payload.get("start_at"))
+    end = _parse_dt(payload.get("end_at"))
+    for moment in (start, end, _parse_dt(payload.get("created_at"))):
+        if moment is not None and _moment_in_window(moment, window):
             return True
+    if start is not None and end is not None and _interval_overlaps(start, end, window):
+        return True
     return False
+
+
+def _as_window_time(moment: datetime, window: dict) -> datetime:
+    zone = window["start_dt"].tzinfo
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=zone)
+    return moment.astimezone(zone)
+
+
+def _moment_in_window(moment: datetime, window: dict) -> bool:
+    local = _as_window_time(moment, window)
+    return window["start_dt"] <= local < window["end_dt"]
+
+
+def _interval_overlaps(start: datetime, end: datetime, window: dict) -> bool:
+    local_start = _as_window_time(start, window)
+    local_end = _as_window_time(end, window)
+    return local_start < window["end_dt"] and local_end > window["start_dt"]
 
 
 def _objective_overlaps(payload, window) -> bool:

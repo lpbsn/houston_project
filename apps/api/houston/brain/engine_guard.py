@@ -116,23 +116,31 @@ def _contribution_retained(raw, evidence_ids, view, compares) -> bool:
     if raw.get("contribution") is not True or not evidence_ids:
         return False
     items = [view.by_id[item_id] for item_id in evidence_ids if item_id in view.by_id]
-    if not items:
+    usable = [item for item in items if _copy_available(item)]
+    if not usable:
         return False
-    if any(item.category != "document" for item in items):
+    if any(item.category != "document" for item in usable):
         return True
-    return _cites_accepted_compare(raw, compares)
+    return _cites_accepted_compare(raw, compares, evidence_ids)
 
 
-def _cites_accepted_compare(raw, compares) -> bool:
+def _cites_accepted_compare(raw, compares, evidence_ids) -> bool:
+    """A document finding needs an accepted compare of the measures it cites."""
+    evidence = set(evidence_ids)
     for compare_id in _strings(raw.get("compare_ids")):
         compare = compares.get(compare_id)
         if not isinstance(compare, dict) or compare.get("accepted") is not True:
             continue
         left = str(compare.get("left_item_id") or "")
         right = str(compare.get("right_item_id") or "")
-        if left and right and left != right:
+        if left in evidence and right in evidence and left != right:
             return True
     return False
+
+
+def _copy_available(item) -> bool:
+    payload = item.payload if isinstance(item.payload, dict) else {}
+    return payload.get("availability") != "unavailable"
 
 
 def _figures(raw, view, examined, compares) -> list:

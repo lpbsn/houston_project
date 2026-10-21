@@ -769,6 +769,91 @@ def test_accepted_compare_keeps_a_neighbor_and_writes_drafts_from_sealed_measure
     assert result["proposals"]["objectives"][0]["target"] == "14"
 
 
+def test_a_compare_of_other_measures_does_not_support_the_finding():
+    period_start, period_end = _period()
+    establishment, owner, reporting = _reporting_bundle(
+        period_start,
+        period_end,
+        measures=[
+            _measure("Chiffre d'affaires salle", "80", "2024-01-01", "2024-02-01", scope="Salle"),
+            _measure("Chiffre d'affaires salle", "100", "2025-01-01", "2025-02-01", scope="Salle"),
+            _measure("Couvert", "10", "2024-01-01", "2024-02-01", scope="Salle"),
+            _measure("Couvert", "12", "2025-01-01", "2025-02-01", scope="Salle"),
+        ],
+    )
+    analysis = _analysis(owner, reporting)
+    state = {}
+
+    def handler(messages, tools):
+        del tools
+        anchors = messages[2]["content"]["reporting"]
+        revenue = [anchor for anchor in anchors if anchor["label"] == "Chiffre d'affaires salle"]
+        covers = [anchor for anchor in anchors if anchor["label"] == "Couvert"]
+        if len(provider.calls) == 1:
+            return EngineTurn(
+                tool_calls=(
+                    EngineToolCall(
+                        "compare",
+                        {
+                            "left_item_id": revenue[0]["item_id"],
+                            "right_item_id": revenue[1]["item_id"],
+                            "kind": "temporal",
+                        },
+                    ),
+                    EngineToolCall(
+                        "compare",
+                        {
+                            "left_item_id": covers[0]["item_id"],
+                            "right_item_id": covers[1]["item_id"],
+                            "kind": "temporal",
+                        },
+                    ),
+                )
+            )
+        compares = [
+            message["content"]["compare"]
+            for message in messages
+            if message.get("role") == "tool"
+            and isinstance(message.get("content"), dict)
+            and message["content"].get("compare")
+        ]
+        revenue_compare = next(
+            compare
+            for compare in compares
+            if {compare["left_item_id"], compare["right_item_id"]}
+            == {revenue[0]["item_id"], revenue[1]["item_id"]}
+        )
+        state["revenue_compare_id"] = revenue_compare["compare_id"]
+        return EngineTurn(
+            restitution={
+                "subjects": [
+                    _subject(
+                        "couvert",
+                        evidence=[anchor["anchor_id"] for anchor in covers],
+                        compare_ids=[revenue_compare["compare_id"]],
+                        figures=[
+                            {"source": "compare", "compare_id": revenue_compare["compare_id"]}
+                        ],
+                    )
+                ],
+                "anchors": [
+                    {
+                        "anchor_id": anchor["anchor_id"],
+                        "disposition": "not_significant",
+                    }
+                    for anchor in anchors
+                ],
+            }
+        )
+
+    provider = ScriptedProvider(handler)
+    result = run_engine(analysis.id, provider)
+    subject = result["subjects"][0]
+    assert subject["contribution"] is False
+    assert subject["figures"][0]["compare_id"] == state["revenue_compare_id"]
+    assert result["qualification"] == "not_publishable"
+
+
 def test_search_actions_filters_and_returns_sealed_evidence():
     period_start, period_end = _period()
     establishment, owner, reporting = _reporting_bundle(period_start, period_end)
@@ -875,6 +960,74 @@ def test_search_actions_filters_and_returns_sealed_evidence():
     run_engine(analysis.id, provider)
 
 
+def test_action_window_follows_establishment_time_and_an_open_interval():
+    period_start, period_end = _period()
+    establishment, owner, reporting = _reporting_bundle(period_start, period_end)
+    kitchen = create_business_unit(
+        establishment=establishment, key="cuisine_fenetre", label="Cuisine"
+    )
+    paris = ZoneInfo("Europe/Paris")
+    night = datetime(2026, 1, 15, 0, 30, tzinfo=paris)
+    night_plan = _plan(
+        establishment,
+        owner,
+        kitchen,
+        title="Plan de nuit",
+        description="Hors fenêtre.",
+        created_at=night - timedelta(days=3),
+    )
+    _execution(
+        night_plan,
+        owner,
+        title="Service après minuit",
+        description="Fermeture après minuit.",
+        created_at=night,
+        start_at=night,
+        end_at=night + timedelta(hours=1),
+    )
+    opened = _at(period_start - timedelta(days=20))
+    closed = _at(period_end + timedelta(days=5))
+    span_plan = _plan(
+        establishment,
+        owner,
+        kitchen,
+        title="Plan long",
+        description="Ouvert avant la période.",
+        created_at=opened,
+    )
+    _execution(
+        span_plan,
+        owner,
+        title="Exécution couvrante",
+        description="Commence avant et finit après.",
+        created_at=opened,
+        start_at=opened,
+        end_at=closed,
+    )
+    analysis = _analysis(owner, reporting)
+    night_start = night.date()
+    previous_day = night_start - timedelta(days=1)
+
+    def handler(messages, tools):
+        del tools
+        turn = len(provider.calls)
+        if turn == 1:
+            return _action_search(night_start, night_start + timedelta(days=1), kind="execution")
+        page = messages[-1]["content"]
+        if turn == 2:
+            assert [row["title"] for row in page["rows"]] == ["Service après minuit"]
+            return _action_search(previous_day, night_start, kind="execution")
+        if turn == 3:
+            assert page["rows"] == []
+            assert page["match_count"] == 0
+            return _action_search(period_start, period_end, kind="execution")
+        assert [row["title"] for row in page["rows"]] == ["Exécution couvrante"]
+        return EngineTurn(restitution={})
+
+    provider = ScriptedProvider(handler)
+    run_engine(analysis.id, provider)
+
+
 def test_search_objectives_keeps_accepted_revisions_and_measure_references():
     period_start, period_end = _period()
     establishment, owner, reporting = _reporting_bundle(
@@ -942,6 +1095,27 @@ def test_search_objectives_keeps_accepted_revisions_and_measure_references():
         indicator="Publicité",
         unit="EUR",
         target="1",
+        success_condition="gte",
+        decision="refused",
+        measurement_period_start=period_start,
+        measurement_period_end=period_end,
+    )
+    withdrawn = record_objective_revision(
+        establishment=establishment,
+        indicator="Menu retiré",
+        unit="EUR",
+        target="5",
+        success_condition="gte",
+        decision="accepted",
+        measurement_period_start=period_start,
+        measurement_period_end=period_end,
+    )
+    record_objective_revision(
+        establishment=establishment,
+        objective=withdrawn.objective,
+        indicator="Menu retiré",
+        unit="EUR",
+        target="5",
         success_condition="gte",
         decision="refused",
         measurement_period_start=period_start,

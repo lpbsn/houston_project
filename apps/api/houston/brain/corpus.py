@@ -291,17 +291,26 @@ def _plans(
 
 
 def _objectives(run, *, establishment_id, capture_at, ceiling: int):
+    """Keep the latest revision of each objective, and only when that revision is accepted.
+
+    A later refusal or draft replaces the previous acceptance. Selecting the latest
+    accepted row would put a superseded target back into the investigation.
+    """
     latest = (
         BrainObjectiveRevision.objects.filter(
             establishment_id=establishment_id,
             created_at__lte=capture_at,
-            decision__in=_ACCEPTED,
         )
         .order_by("objective_id", "-created_at", "-id")
         .distinct("objective_id")
     )
-    total = run(latest.count)
-    kept = run(lambda: list(latest[:ceiling]))
+    accepted = BrainObjectiveRevision.objects.filter(
+        pk__in=latest.values("pk"),
+        establishment_id=establishment_id,
+        decision__in=_ACCEPTED,
+    ).order_by("indicator", "id")
+    total = run(lambda: accepted.count())
+    kept = run(lambda: list(accepted[:ceiling]))
     items = []
     for revision in kept:
         items.append(
