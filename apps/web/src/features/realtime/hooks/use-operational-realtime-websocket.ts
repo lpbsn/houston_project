@@ -129,7 +129,13 @@ export function useOperationalRealtimeWebSocket({
   }, [setConnectionStatus])
 
   const connect = useCallback(async () => {
-    if (!establishmentId || !enabled || resumeBlockedRef.current || suspendedRef.current) {
+    if (
+      !establishmentId ||
+      !enabled ||
+      resumeBlockedRef.current ||
+      suspendedRef.current ||
+      intentionalCloseRef.current
+    ) {
       return
     }
 
@@ -265,7 +271,9 @@ export function useOperationalRealtimeWebSocket({
       if (
         generation === connectGenerationRef.current &&
         !suspendedRef.current &&
-        !resumeBlockedRef.current
+        !resumeBlockedRef.current &&
+        !intentionalCloseRef.current &&
+        enabledRef.current
       ) {
         scheduleReconnect()
       }
@@ -293,6 +301,7 @@ export function useOperationalRealtimeWebSocket({
 
     return () => {
       intentionalCloseRef.current = true
+      connectGenerationRef.current += 1
       clearReconnectTimer()
       closeSocket()
     }
