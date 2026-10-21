@@ -5837,6 +5837,14 @@ export interface components {
          * @enum {string}
          */
         OriginEnum: "signal" | "action_plan_execution";
+        OriginalObservation: {
+            /** Format: uuid */
+            id: string;
+            raw_text: string;
+            /** Format: date-time */
+            submitted_at: string;
+            reporter_display_name: string;
+        };
         PasswordChangeRequest: {
             current_password: string;
             password: string;
@@ -6263,6 +6271,9 @@ export interface components {
             /** Format: uuid */
             establishment_id?: string;
             establishment_name?: string;
+            /** @default false */
+            can_view_original_observation: boolean;
+            original_observation?: components["schemas"]["OriginalObservation"] | null;
             structured_summary: string;
             issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
@@ -6487,6 +6498,9 @@ export interface components {
             /** Format: uuid */
             establishment_id?: string;
             establishment_name?: string;
+            /** @default false */
+            can_view_original_observation: boolean;
+            original_observation?: components["schemas"]["OriginalObservation"] | null;
             structured_summary: string;
             issue_focus: string;
             source_context: components["schemas"]["SourceContext"];

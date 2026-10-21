@@ -17035,6 +17035,24 @@ components:
       description: |-
         * `signal` - signal
         * `action_plan_execution` - action_plan_execution
+    OriginalObservation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        raw_text:
+          type: string
+        submitted_at:
+          type: string
+          format: date-time
+        reporter_display_name:
+          type: string
+      required:
+      - id
+      - raw_text
+      - reporter_display_name
+      - submitted_at
     PasswordChangeRequest:
       type: object
       properties:
@@ -18020,6 +18038,13 @@ components:
           format: uuid
         establishment_name:
           type: string
+        can_view_original_observation:
+          type: boolean
+          default: false
+        original_observation:
+          allOf:
+          - $ref: '#/components/schemas/OriginalObservation'
+          nullable: true
         structured_summary:
           type: string
         issue_focus:
@@ -18606,6 +18631,13 @@ components:
           format: uuid
         establishment_name:
           type: string
+        can_view_original_observation:
+          type: boolean
+          default: false
+        original_observation:
+          allOf:
+          - $ref: '#/components/schemas/OriginalObservation'
+          nullable: true
         structured_summary:
           type: string
         issue_focus:
