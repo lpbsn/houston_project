@@ -28,10 +28,10 @@ _INVITATION_EMAIL_ROLES = frozenset(
 )
 
 _ROLE_LABELS_FR = {
-    EstablishmentMembership.Role.STAFF: "Staff",
+    EstablishmentMembership.Role.STAFF: "Collaborateur",
     EstablishmentMembership.Role.MANAGER: "Manager",
     EstablishmentMembership.Role.DIRECTOR: "Directeur",
-    EstablishmentMembership.Role.OWNER: "Owner",
+    EstablishmentMembership.Role.OWNER: "Propriétaire",
 }
 
 
@@ -155,6 +155,7 @@ def send_establishment_invitation_email(
     establishment_name = membership.establishment.name or ""
     context = {
         "first_name": user.first_name,
+        "logo_url": f"{settings.HOUSTON_PUBLIC_APP_URL.rstrip('/')}/spore-icon-v4-192.png",
         "establishment_name": establishment_name,
         "role_label": role_label,
         "accept_url": accept_url,
