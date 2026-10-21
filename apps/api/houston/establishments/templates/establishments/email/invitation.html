@@ -1,21 +1,21 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-  <body>
-    <p>Bonjour {{ first_name }},</p>
-    <p>
-      Vous êtes invité·e à rejoindre <strong>{{ establishment_name }}</strong> sur Spore
-      en tant que <strong>{{ role_label }}</strong>.
-    </p>
-    <p>
-      <a href="{{ accept_url }}">Accepter l'invitation</a>
-    </p>
-    <p>Acceptez votre invitation avant le {{ expires_at_label }}.</p>
-    <p>
-      Si le lien n'ouvre pas le formulaire, utilisez ce code d'invitation :
-      <strong>{{ invitation_code }}</strong>
-    </p>
-    <p>Ce lien est personnel — ne le partagez pas.</p>
-    <p>Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.</p>
-    <p>— Spore</p>
-  </body>
-</html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Votre invitation Spore</title></head>
+<body style="margin:0;background:#f2f6f3;color:#172e27;font-family:Arial,Helvetica,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;">Rejoignez {{ establishment_name }} et partagez le quotidien de votre équipe sur Spore.</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f2f6f3;"><tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #dce8e2;border-radius:24px;"><tr><td style="padding:32px;">
+<table role="presentation" cellspacing="0" cellpadding="0"><tr><td><img src="{{ logo_url }}" width="44" height="44" alt="" style="display:block;border:0;"></td><td style="padding-left:8px;font-size:32px;font-weight:bold;color:#004d3b;">spore</td></tr></table>
+<p style="margin-top:32px;font-size:16px;">Bonjour{% if first_name %} {{ first_name }}{% endif %},</p>
+<h1 style="font-size:28px;line-height:1.2;letter-spacing:-0.6px;margin:20px 0;color:#004d3b;">Votre équipe vous attend.</h1>
+<p style="font-size:16px;line-height:1.6;">Vous êtes invité·e à rejoindre <strong>{{ establishment_name }}</strong> sur Spore en tant que <strong>{{ role_label }}</strong>.</p>
+<p style="font-size:16px;line-height:1.6;">Spore vous permet de partager vos observations, d’échanger avec votre équipe et de suivre vos plans d’action, sur téléphone ou ordinateur.</p>
+<table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0;"><tr><td bgcolor="#004d3b" style="border-radius:14px;text-align:center;"><a href="{{ accept_url }}" style="display:inline-block;padding:17px 24px;color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;">Rejoindre {{ establishment_name }}</a></td></tr></table>
+<p style="font-size:14px;line-height:1.6;color:#40564d;">Invitation valable jusqu’au <strong>{{ expires_at_label }}</strong>.</p>
+<hr style="border:0;border-top:1px solid #dce8e2;margin:24px 0;">
+<p style="font-size:13px;line-height:1.6;">Le bouton ne fonctionne pas ? Copiez ce lien dans votre navigateur :<br><a href="{{ accept_url }}" style="color:#004d3b;word-break:break-all;">{{ accept_url }}</a></p>
+<p style="font-size:12px;line-height:1.6;word-break:break-all;">Code d’invitation : {{ invitation_code }}</p>
+<p style="font-size:12px;line-height:1.6;color:#40564d;">Ce lien est personnel : ne le partagez pas. Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.</p>
+</td></tr></table>
+</td></tr></table>
+</body></html>
