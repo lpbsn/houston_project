@@ -1,15 +1,20 @@
-Bonjour {{ first_name }},
+Bonjour{% if first_name %} {{ first_name }}{% endif %},
+
+Votre équipe vous attend.
 
 Vous êtes invité·e à rejoindre {{ establishment_name }} sur Spore en tant que {{ role_label }}.
 
-Acceptez votre invitation avant le {{ expires_at_label }} :
+Spore vous permet de partager vos observations, d’échanger avec votre équipe et de suivre vos plans d’action, sur téléphone ou ordinateur.
+
+Rejoindre {{ establishment_name }} :
 {{ accept_url }}
 
-Si le lien n'ouvre pas le formulaire, utilisez ce code d'invitation :
-{{ invitation_code }}
+Invitation valable jusqu’au {{ expires_at_label }}.
 
-Ce lien est personnel — ne le partagez pas.
+Si le bouton ne fonctionne pas, copiez le lien ci-dessus dans votre navigateur.
+Code d’invitation : {{ invitation_code }}
 
+Ce lien est personnel : ne le partagez pas.
 Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.
 
 — Spore
