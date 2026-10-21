@@ -18,6 +18,7 @@ import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 import { CommentSection } from '@/features/comments/components/comment-section'
 
+import { OriginalObservation } from '../components/original-observation'
 import { SignalDetailMainBlock } from '../components/signal-detail-main-block'
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
 import { SignalDetailStickyFooter } from '../components/signal-detail-sticky-footer'
@@ -336,6 +337,7 @@ export function SignalDetailPage({
                   <SignalDetailLabel>Description</SignalDetailLabel>
                   <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">{description}</p>
                 </TerrainCard>
+                <OriginalObservation key={signal.id} signal={signal} />
                 <SignalDetailPhotoSection
                   mediaItems={signal.media_items ?? []}
                   tileSize="comfortable"
@@ -384,6 +386,7 @@ export function SignalDetailPage({
                     reporterName={reporterName}
                     description={description}
                   />
+                  <OriginalObservation key={signal.id} signal={signal} />
                   {linkedPlans}
                   {classificationSection}
                   {resolutionSection}
