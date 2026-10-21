@@ -538,3 +538,14 @@ def can_reject_resolution_request(
 ) -> bool:
     return can_review_resolution_request(membership, request)
 
+
+
+def can_view_original_observation(membership, signal: Signal) -> bool:
+    """Original submitted text is restricted to active owners of this establishment."""
+    return bool(
+        membership is not None
+        and membership.role == EstablishmentMembership.Role.OWNER
+        and membership.status == EstablishmentMembership.Status.ACTIVE
+        and membership.establishment_id == signal.establishment_id
+        and can_view_signal_detail(membership, signal)
+    )

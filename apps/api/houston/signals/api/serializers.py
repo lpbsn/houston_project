@@ -203,7 +203,16 @@ class SignalLinkedActionPlanExecutionSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
 
 
+class OriginalObservationSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    raw_text = serializers.CharField(trim_whitespace=False)
+    submitted_at = serializers.DateTimeField()
+    reporter_display_name = serializers.CharField(allow_blank=True)
+
+
 class SignalDetailSerializer(SignalFeedItemSerializer):
+    can_view_original_observation = serializers.BooleanField(required=False, default=False)
+    original_observation = OriginalObservationSerializer(required=False, allow_null=True)
     structured_summary = serializers.CharField()
     issue_focus = serializers.CharField(allow_blank=True)
     source_context = SourceContextSerializer()
@@ -464,6 +473,7 @@ def serialize_signal_detail(
     *, signal: Signal, membership, request, read_only: bool = False
 ) -> dict:
     from houston.action_plans.selectors import linked_action_plan_executions_for_signal_detail
+    from houston.signals.permissions import can_view_original_observation
     from houston.signals.selectors import (
         build_resolution_request_events,
         list_resolution_requests_for_signal,
@@ -489,6 +499,10 @@ def serialize_signal_detail(
     payload["canceled_by_membership_id"] = signal.canceled_by_membership_id
     payload["canceled_at"] = signal.canceled_at
 
+    payload["can_view_original_observation"] = (
+        not read_only and can_view_original_observation(membership, signal)
+    )
+    payload["original_observation"] = None
     link = created_from_source_observation_link(signal)
     if link is None:
         payload["source_context"] = {
@@ -502,6 +516,16 @@ def serialize_signal_detail(
 
         observation = link.observation
         display = user_display_name(observation.submitted_by_membership.user)
+        if (
+            payload["can_view_original_observation"]
+            and observation.establishment_id == signal.establishment_id
+        ):
+            payload["original_observation"] = {
+                "id": observation.id,
+                "raw_text": observation.raw_text,
+                "submitted_at": observation.submitted_at,
+                "reporter_display_name": display,
+            }
         payload["source_context"] = {
             "submitted_at": observation.submitted_at,
             "reporter_display_name": display,

@@ -1399,3 +1399,41 @@ describe('SignalDetailPage desktop actions', () => {
     expect(screen.queryByTestId('signal-detail-comments-section')).toBeNull()
   })
 })
+
+describe('Original observation for owners', () => {
+  it.each([true, false])('opens and closes the verbatim source (desktop=%s)', (desktop) => {
+    mockLgViewport(desktop)
+    detailQueryMock.mockReturnValue({
+      isLoading: false, isError: false, refetch: vi.fn(),
+      data: buildSignal({
+        can_view_original_observation: true,
+        original_observation: {
+          id: 'original-1', raw_text: 'Déposer les chèques\nle 3 novembre.',
+          reporter_display_name: 'Jade Robin', submitted_at: '2026-10-21T10:00:00Z',
+        },
+      }),
+    })
+    renderPage()
+    expect(screen.queryByText(/Déposer les chèques/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation originale' }))
+    expect(screen.getByText(/Déposer les chèques/).textContent).toBe('Déposer les chèques\nle 3 novembre.')
+    expect(screen.getByText(/Jade Robin/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer l’observation originale' }))
+    expect(screen.queryByText(/Déposer les chèques/)).toBeNull()
+  })
+
+  it('does not offer the original without server permission', () => {
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Voir l’observation originale' })).toBeNull()
+  })
+
+  it('explains when an owner has no remaining source', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false, isError: false, refetch: vi.fn(),
+      data: buildSignal({ can_view_original_observation: true, original_observation: null }),
+    })
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation originale' }))
+    expect(screen.getByText('L’observation originale n’est plus disponible.')).toBeTruthy()
+  })
+})
