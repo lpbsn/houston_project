@@ -474,3 +474,25 @@ def test_schedule_apply_async_passes_ignore_result():
 
     _, kwargs = apply_async.call_args
     assert "ignore_result" not in kwargs
+
+
+@override_settings(
+    HOUSTON_PUBLIC_APP_URL=PUBLIC_APP_URL,
+    HOUSTON_INVITATION_EMAIL_FROM=INVITATION_FROM,
+    RESEND_API_KEY="re_test_key",
+)
+def test_invitation_email_welcomes_member_with_brand_and_safe_content(invitation_bundle):
+    invitation, raw_token, membership = invitation_bundle
+    membership.establishment.name = "Restaurant <Nord> & Sud"
+    membership.establishment.save(update_fields=["name"])
+    with patch("houston.establishments.resend_client.resend.Emails.send") as send:
+        send_establishment_invitation_email(
+            invitation_id=str(invitation.id), raw_token=raw_token,
+        )
+    params = send.call_args.args[0]
+    assert "Votre équipe vous attend." in params["html"]
+    assert "Collaborateur" in params["html"]
+    assert "Restaurant &lt;Nord&gt; &amp; Sud" in params["html"]
+    assert "Restaurant <Nord> & Sud" in params["text"]
+    assert f'{PUBLIC_APP_URL}/spore-icon-v4-192.png' in params["html"]
+    assert build_invitation_accept_url(raw_token=raw_token) in params["text"]
