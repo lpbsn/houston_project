@@ -373,4 +373,172 @@ describe('useOperationalRealtimeWebSocket', () => {
 
     expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
   })
+
+  it('retries a failed ticket while the hook stays enabled', async () => {
+    issueOperationalRealtimeWsTicket.mockRejectedValueOnce(new Error('ticket failed'))
+
+    renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    await flushMicrotasks()
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not open a socket or schedule a reconnect when the in-flight ticket resolves after unmount', async () => {
+    let resolveTicket: (value: { ticket: string; expires_in: number }) => void = () => {}
+    issueOperationalRealtimeWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveTicket = resolve
+        }),
+    )
+
+    const { unmount } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+
+    unmount()
+
+    await act(async () => {
+      resolveTicket({ ticket: 'ws-ticket-stale', expires_in: 60 })
+      await Promise.resolve()
+    })
+
+    expect(MockWebSocket.instances).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+  })
+
+  it('does not schedule a reconnect when the in-flight ticket rejects after unmount', async () => {
+    let rejectTicket: (reason?: unknown) => void = () => {}
+    issueOperationalRealtimeWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectTicket = reject
+        }),
+    )
+
+    const { unmount } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+
+    unmount()
+
+    await act(async () => {
+      rejectTicket(new Error('unauthorized'))
+      await Promise.resolve()
+    })
+
+    expect(MockWebSocket.instances).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+  })
+
+  it('does not open a socket or schedule a reconnect when the in-flight ticket resolves after disable', async () => {
+    let resolveTicket: (value: { ticket: string; expires_in: number }) => void = () => {}
+    issueOperationalRealtimeWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveTicket = resolve
+        }),
+    )
+
+    const { rerender } = renderHook(
+      ({ enabled }) =>
+        useOperationalRealtimeWebSocket({
+          establishmentId: 'est-1',
+          enabled,
+        }),
+      { initialProps: { enabled: true } },
+    )
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+
+    rerender({ enabled: false })
+
+    await act(async () => {
+      resolveTicket({ ticket: 'ws-ticket-stale', expires_in: 60 })
+      await Promise.resolve()
+    })
+
+    expect(MockWebSocket.instances).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+  })
+
+  it('does not schedule a reconnect when the in-flight ticket rejects after disable', async () => {
+    let rejectTicket: (reason?: unknown) => void = () => {}
+    issueOperationalRealtimeWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectTicket = reject
+        }),
+    )
+
+    const { rerender } = renderHook(
+      ({ enabled }) =>
+        useOperationalRealtimeWebSocket({
+          establishmentId: 'est-1',
+          enabled,
+        }),
+      { initialProps: { enabled: true } },
+    )
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+
+    rerender({ enabled: false })
+
+    await act(async () => {
+      rejectTicket(new Error('unauthorized'))
+      await Promise.resolve()
+    })
+
+    expect(MockWebSocket.instances).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+  })
 })
