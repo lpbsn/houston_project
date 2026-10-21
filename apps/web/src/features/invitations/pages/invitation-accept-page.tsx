@@ -1,5 +1,7 @@
-import { LoaderCircle } from 'lucide-react'
+import { CheckCircle2, LoaderCircle } from 'lucide-react'
 import { useLayoutEffect, useState } from 'react'
+
+import sporeIcon from '@/assets/brand/spore-icon-green.png'
 
 import { useAppRoute } from '@/app/app-routes'
 import { Button } from '@/components/ui/button'
@@ -26,14 +28,27 @@ type InvitationAcceptPageProps = {
 
 function getAcceptErrorMessage(error: unknown) {
   if (error instanceof InvitationAcceptApiError) {
+    if (error.code === 'invitation_expired') {
+      return 'Cette invitation a expiré. Demandez une nouvelle invitation à votre responsable.'
+    }
+    if (error.code === 'invitation_already_accepted') {
+      return 'Cette invitation a déjà été acceptée. Connectez-vous avec votre compte Spore.'
+    }
+    if (error.code === 'invitation_invalid') {
+      return 'Cette invitation est invalide. Demandez un nouveau lien à votre responsable.'
+    }
     return error.message
   }
+  return 'Impossible de valider votre invitation. Vérifiez votre connexion puis réessayez.'
+}
 
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-
-  return 'Invitation could not be accepted.'
+function InvitationBrand() {
+  return (
+    <div className="mb-4 flex items-center gap-2 text-[#004d3b]">
+      <img src={sporeIcon} alt="" className="size-10 object-contain" />
+      <span className="text-3xl font-bold tracking-tight">spore</span>
+    </div>
+  )
 }
 
 export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) {
@@ -47,6 +62,8 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requiresPassword, setRequiresPassword] = useState<boolean | null>(null)
+  const [accepted, setAccepted] = useState(false)
+  const [needsLogin, setNeedsLogin] = useState(false)
   const [needsAccountSwitch, setNeedsAccountSwitch] = useState(false)
 
   useLayoutEffect(() => {
@@ -87,7 +104,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     setSubmitError(null)
 
     const invitationToken = token.trim()
-    if (!invitationToken || requiresPassword === null) {
+    if (!invitationToken || requiresPassword === null || isSubmitting || accepted) {
       return
     }
 
@@ -95,7 +112,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
       setFieldError(
         passwordCreationBlockerMessage(
           evaluatePasswordCreation(password, passwordConfirmation),
-        ) ?? 'Password and confirmation are required.',
+        ) ?? 'Saisissez et confirmez votre mot de passe.',
       )
       return
     }
@@ -118,11 +135,12 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
           setNeedsAccountSwitch(true)
           return
         }
-        navigate('/login', { replace: true })
+        setNeedsLogin(true)
+        setAccepted(true)
         return
       }
 
-      onAccepted()
+      setAccepted(true)
     } catch (error) {
       setSubmitError(getAcceptErrorMessage(error))
     } finally {
@@ -144,33 +162,61 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     navigate('/login', { replace: true })
   }
 
+  if (accepted) {
+    return (
+      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-xl">
+        <CardHeader className="gap-3">
+          <InvitationBrand />
+          <CheckCircle2 aria-hidden="true" className="size-12 rounded-full bg-[#edf6f0] p-2 text-[#004d3b]" />
+          <CardTitle className="text-2xl font-bold">Bienvenue dans votre équipe !</CardTitle>
+          <CardDescription className="text-sm leading-6 text-[#40564d]">
+            Votre invitation est acceptée. {needsLogin
+              ? 'Connectez-vous avec l’adresse qui a reçu l’invitation pour accéder à votre établissement.'
+              : 'Votre espace Spore est prêt.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="rounded-2xl bg-[#edf6f0] p-4 text-sm leading-6">
+            <p className="font-semibold">Votre première observation compte.</p>
+            <p>Une idée, un problème ou un retour client ? Partagez-le avec votre équipe, en texte, photo ou vocal.</p>
+          </div>
+          <Button className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]"
+            onClick={() => needsLogin ? navigate('/login', { replace: true }) : onAccepted()}>
+            {needsLogin ? 'Se connecter à Spore' : 'Ouvrir mon espace Spore'}
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (needsAccountSwitch) {
     return (
-      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
         <CardHeader className="gap-2">
+          <InvitationBrand />
           <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-            Accept invitation
+            Rejoindre mon équipe
           </CardTitle>
-          <CardDescription className="text-sm leading-6">
-            This invitation was accepted for another account. Sign out of the current session to
-            sign in as that person.
+          <CardDescription className="text-sm leading-6 text-[#40564d]">
+            Votre invitation est acceptée pour un autre compte. Déconnectez-vous de la session actuelle
+            puis connectez-vous avec l’adresse qui a reçu l’invitation.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
+          {submitError ? <p role="alert" className="text-sm text-destructive">{submitError}</p> : null}
           <Button
             type="button"
-            className="h-11 w-full rounded-[1rem] sm:w-auto"
+            className="h-12 w-full rounded-[1rem] bg-[#004d3b] text-white hover:bg-[#003b2d]"
             disabled={isSubmitting}
             onClick={() => void switchToInvitedAccount()}
           >
             {isSubmitting ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                Signing out...
+                Déconnexion…
               </>
             ) : (
-              'Sign out and continue'
+              'Changer de compte et continuer'
             )}
           </Button>
         </CardContent>
@@ -180,22 +226,23 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
 
   if (!token) {
     return (
-      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
         <CardHeader className="gap-2">
+          <InvitationBrand />
           <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-            Accept invitation
+            Rejoindre mon équipe
           </CardTitle>
-          <CardDescription className="text-sm leading-6">
-            This invitation link is missing or invalid. Open the link from your email to continue.
+          <CardDescription className="text-sm leading-6 text-[#40564d]">
+            Ce lien est absent ou invalide. Ouvrez le lien reçu par e-mail pour rejoindre votre équipe.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button
             type="button"
-            className="h-11 w-full rounded-[1rem] sm:w-auto"
+            className="h-12 w-full rounded-[1rem] bg-[#004d3b] text-white hover:bg-[#003b2d]"
             onClick={() => navigate('/login')}
           >
-            Sign in
+            Se connecter
           </Button>
         </CardContent>
       </Card>
@@ -204,20 +251,21 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
 
   const description =
     requiresPassword === false
-      ? 'Your account already exists. Accepting joins this establishment with your current password.'
+      ? 'Vous avez déjà un compte Spore. Rejoignez votre équipe en conservant votre mot de passe habituel.'
       : requiresPassword
-        ? 'Set a password to activate your account and join this establishment.'
-        : 'This invitation could not be checked.'
+        ? 'Choisissez votre mot de passe pour activer votre compte et rejoindre votre équipe.'
+        : 'Votre invitation n’a pas pu être vérifiée.'
 
   return (
-    <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+    <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
       <CardHeader className="gap-2">
+        <InvitationBrand />
         <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-          Accept invitation
+          Rejoindre mon équipe
         </CardTitle>
-        <CardDescription className="text-sm leading-6">
+        <CardDescription className="text-sm leading-6 text-[#40564d]">
           {requiresPassword === null && !submitError
-            ? 'Checking this invitation…'
+            ? 'Vérification de votre invitation…'
             : description}
         </CardDescription>
       </CardHeader>
@@ -230,6 +278,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
             {requiresPassword ? (
               <>
                 <PasswordCreationFields
+                  disabled={isSubmitting}
                   password={password}
                   confirmation={passwordConfirmation}
                   onPasswordChange={(value) => {
@@ -250,20 +299,20 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
             ) : null}
 
             {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
-            {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
+            {submitError ? <p role="alert" className="text-sm text-destructive">{submitError}</p> : null}
 
             <Button
               type="submit"
               disabled={isSubmitting || requiresPassword === null}
-              className="h-11 w-full rounded-[1rem] sm:w-auto"
+              className="h-12 w-full rounded-[1rem] bg-[#004d3b] text-white hover:bg-[#003b2d]"
             >
               {isSubmitting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Activating account...
+                  Activation en cours…
                 </>
               ) : (
-                'Accept invitation'
+                'Rejoindre mon équipe'
               )}
             </Button>
           </form>
