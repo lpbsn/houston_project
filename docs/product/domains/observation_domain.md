@@ -1,7 +1,7 @@
 # Observation Domain
 
 Status: authoritative
-Last reviewed: 2026-09-21
+Last reviewed: 2026-10-21
 Implementation status: implemented (submit + processing queued; pipeline produces Signals)
 
 ## 1. Purpose
@@ -45,7 +45,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - User-declared urgency.
 - Photo-only Observation submit.
 - Observation detail page in normal product UI.
-- Raw Observation display in feeds, Signal detail, notifications, or realtime payloads.
+- Raw Observation display in feeds, notifications, or realtime payloads. The owner signal-detail read is the RBAC rule in [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 - AI image analysis.
 - Persistent audio as Observation media.
 - Observation-as-ticket behavior.
@@ -62,8 +62,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - Images are not sent to AI in MVP.
 - Observation enters the AI pipeline only after persistence.
 - Only structured Signals enter operational feeds.
-- Raw Observation text may be used internally by the authorized backend processing pipeline, but must not leak into normal product UI, feeds, notifications, realtime payloads, technical logs, or durable frontend storage.
-- Raw Observation text must not appear in normal product UI, feeds, notifications, realtime payloads, technical logs, or durable frontend storage.
+- Raw Observation text may be used by the authorized backend processing pipeline. Feeds, notifications, realtime payloads, technical logs, and durable frontend storage do not include it. The only product read is the active Owner signal-detail rule in [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 - Processing failure must not delete the submitted Observation.
 - **One Observation may yield zero, one, or many Signals** after backend validation of AI pipeline output; each Signal carries **one** primary module/domain/subject categorization (see [`signal_domain.md`](signal_domain.md), [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
 - Distinct problems described in one Observation must produce **multiple CandidateSignals**, never multiple categorizations on a single Signal.
@@ -106,7 +105,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 
 - Active authorized establishment members may submit Observations if RBAC allows.
 - Observation creation must be validated as an establishment-scoped backend permission; current permission helpers must be inspected before assuming the exact rule.
-- Raw Observation text is not visible in normal product UI.
+- Raw Observation text is not a general product surface. The only read is the active Owner signal-detail rule in [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 - Resulting Signals, not raw Observations, are the normal supervised product surface.
 - Any exceptional raw Observation access must remain backend-authorized and follow Security / RGPD constraints.
 - No anonymous Observation submission is allowed.
@@ -128,7 +127,7 @@ Direct report: `POST .../observations/` (`CanSubmitObservation` → `can_create_
 - Backend draft does not exist in MVP.
 - Submit success means the Observation was persisted, not that a Signal is already ready.
 - UI should show simplified analysis feedback rather than backend technical statuses.
-- UI must not expose raw Observation text in feeds, Signal detail, notifications, realtime payloads, or durable frontend storage.
+- Feeds, notifications, realtime payloads, and durable frontend storage do not expose raw Observation text. Signal detail shows it only for the authorized Owner read above.
 - TanStack Query owns server state for implemented APIs.
 - Frontend must use generated OpenAPI clients only for endpoints present in `apps/api/schema.yml`.
 
@@ -145,5 +144,5 @@ Direct report: `POST .../observations/` (`CanSubmitObservation` → `can_create_
 - Keep the photo limit aligned with `upload_media_domain.md`.
 - Do not make Observation a ticket, a Signal, or a visible operational feed object.
 - Do not invent backend drafts, urgency input, anonymous reporting, image-to-AI behavior, or persistent audio media.
-- Do not expose raw Observation text in normal product UI, feeds, notifications, realtime payloads, or persistent frontend storage.
+- Do not expose raw Observation text in feeds, notifications, realtime payloads, or persistent frontend storage. Signal detail exposes it only for the authorized Owner read.
 - When Observation APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.

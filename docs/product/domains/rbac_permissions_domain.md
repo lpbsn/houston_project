@@ -1,7 +1,7 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-09-21
+Last reviewed: 2026-10-21
 Implementation status: live (tenant RBAC; Platform is a separate context)
 
 Tenant authorization after identity and membership are resolved. Root: active `EstablishmentMembership`. Identity/lifecycle: [`identity_membership_domain.md`](identity_membership_domain.md). Action Plan matrices: [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py) and [`action_plan_domain.md`](action_plan_domain.md). HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml).
@@ -28,10 +28,10 @@ Helpers live in `apps/api/houston/establishments/permissions.py` unless a domain
 
 - **Non-member / inactive** — no product access for the establishment.
 - **Active member** — app access, signal feed, observation create (when helpers allow).
-- **Owner** — organization-level authority: settings, memberships, runtime, action create/validate. May invite `owner`, `director`, `manager`, `staff`. Owner invite fans out across draft/active establishments. `PATCH` cannot assign destination `owner`/`director` and cannot modify an existing owner. Director may be demoted to manager/staff with required scopes.
-- **Director** — establishment-level operational authority. Invite `director`, `manager`, `staff` on an **active** establishment (multi-director allowed post-activation). Cannot invite `owner`. May manage manager and staff only; not owner or peer director memberships.
-- **Manager** — authority mainly inside assigned BusinessUnit scopes. Action create/validate; invite **staff** within BU coverage. Not establishment settings. Scope coverage required (or owner/director broad access).
-- **Staff** — reporting and execution. Cannot invite. Action plan create follows `can_create_action_plan` / `can_create_action`. Cannot create **signal-linked** plans when role denies it. Cannot validate executions when `can_validate_action` excludes them. Scope coverage required for visibility and free-action create (or owner/director broad access).
+- **Owner** — organization-level authority: settings, memberships, runtime, action create/validate. May invite `owner`, `director`, `manager`, `staff`. Owner invite fans out across draft/active establishments. `PATCH` cannot assign destination `owner`/`director` and cannot modify an existing owner. Director may be demoted to manager/staff with required scopes. An active Owner of the signal’s establishment who passes `can_view_signal_detail` may read the original observation text on that detail: the earliest `CREATED_FROM` source only, and only when that observation belongs to the same establishment. Signal mutations that return this detail include the same text for that caller. Cross read-only views do not. Disclosure: [`data_inventory.md`](../data_inventory.md).
+- **Director** — establishment-level operational authority. Invite `director`, `manager`, `staff` on an **active** establishment (multi-director allowed post-activation). Cannot invite `owner`. May manage manager and staff only; not owner or peer director memberships. Does not receive original observation text.
+- **Manager** — authority mainly inside assigned BusinessUnit scopes. Action create/validate; invite **staff** within BU coverage. Not establishment settings. Scope coverage required (or owner/director broad access). Does not receive original observation text.
+- **Staff** — reporting and execution. Cannot invite. Action plan create follows `can_create_action_plan` / `can_create_action`. Cannot create **signal-linked** plans when role denies it. Cannot validate executions when `can_validate_action` excludes them. Scope coverage required for visibility and free-action create (or owner/director broad access). Does not receive original observation text.
 
 ## Signal Feed — list vs detail
 
@@ -39,7 +39,7 @@ Validated product decision (keep unless explicitly reopened):
 
 - **Ma vue** (`view_mode=personal`): Manager/Staff see Signals where affected **or** responsible BusinessUnit is in `MembershipScope`. Owner/Director see all feed-visible establishment Signals.
 - **Vue générale** (`view_mode=general`): all feed-visible establishment Signals for every role — no BU filter on the list.
-- **Detail**: any member passing `can_view_signal_feed` may read feed-visible Signal detail by ID, including deep-links outside Ma vue BU scope (`get_signal_for_detail` / `_can_view_signal_detail`).
+- **Detail**: any member passing `can_view_signal_feed` may read feed-visible Signal detail by ID, including deep-links outside Ma vue BU scope (`get_signal_for_detail` / `_can_view_signal_detail`). Original observation text is not part of that shared detail; the Owner rule above is the only read.
 - Command authorization (pin, urgency, cancel, resolve, create linked action) remains scope-aware for Manager/Staff.
 
 Seeing a resource does not imply acting on it.
