@@ -1162,9 +1162,9 @@ function App() {
     route.kind === 'invitation'
       ? {
           headingBadge: 'Invitation',
-          title: 'Accept invitation',
-          description: 'Create your password to join this establishment in Houston.',
-          actions: auth.isAuthenticated ? signOutAction : signInAction,
+          title: 'Rejoignez votre équipe',
+          description: 'Partagez vos observations et avancez ensemble avec Spore.',
+          actions: null,
         }
       : route.kind === 'email-change'
         ? {

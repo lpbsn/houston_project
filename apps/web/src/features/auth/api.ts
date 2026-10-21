@@ -230,6 +230,63 @@ function buildAuthError(
   )
 }
 
+const INVITATION_VALIDATION_MESSAGE =
+  'Les informations saisies ne sont pas valides. Corrigez-les puis réessayez.'
+
+function readInvitationFieldMessages(value: unknown): string[] {
+  if (typeof value === 'string') {
+    const message = value.trim()
+    return message ? [message] : []
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => readInvitationFieldMessages(item))
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap((item) => readInvitationFieldMessages(item))
+  }
+  return []
+}
+
+function invitationValidationFieldMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object' || !('errors' in error)) {
+    return null
+  }
+  const errors = (error as { errors?: unknown }).errors
+  if (!errors || typeof errors !== 'object' || Array.isArray(errors)) {
+    return null
+  }
+  const fields = errors as Record<string, unknown>
+  const messages = [
+    ...readInvitationFieldMessages(fields.password),
+    ...Object.entries(fields)
+      .filter(([field]) => field !== 'password')
+      .flatMap(([, fieldError]) => readInvitationFieldMessages(fieldError)),
+  ]
+  return messages.length > 0 ? messages.join(' ') : null
+}
+
+function isInvitationValidationError(response: Response, error: unknown): boolean {
+  return (
+    getErrorCode(error) === 'validation_error' ||
+    (response.status === 400 && getErrorDetail(error) === 'Request validation failed.')
+  )
+}
+
+function buildInvitationAcceptError(response: Response, error: unknown) {
+  const fieldMessage = invitationValidationFieldMessage(error)
+  if (fieldMessage) {
+    return new AuthApiError(fieldMessage, response.status, getErrorCode(error))
+  }
+  if (isInvitationValidationError(response, error)) {
+    return new AuthApiError(
+      INVITATION_VALIDATION_MESSAGE,
+      response.status,
+      getErrorCode(error),
+    )
+  }
+  return buildAuthError(response, error, 'Invitation could not be accepted.')
+}
+
 let refreshPromise: Promise<string | null> | null = null
 let restorePromise: Promise<string | null> | null = null
 let authGeneration = 0
@@ -608,7 +665,7 @@ export async function previewInvitation(token: string) {
   })
 
   if (error || !data) {
-    throw buildAuthError(response, error, 'Invitation could not be accepted.')
+    throw buildInvitationAcceptError(response, error)
   }
 
   return data
@@ -699,7 +756,7 @@ async function settleInvitationAccept(
   }
 
   if (error || !data) {
-    throw buildAuthError(response, error, 'Invitation could not be accepted.')
+    throw buildInvitationAcceptError(response, error)
   }
 
   if (isMembershipOnlyAcceptPayload(data)) {
@@ -730,7 +787,7 @@ async function refreshBearerAfterUnauthorized(
 ) {
   const refreshed = await refreshAccessToken()
   if (!refreshed) {
-    throw buildAuthError(attempt.response, attempt.error, 'Invitation could not be accepted.')
+    throw buildInvitationAcceptError(attempt.response, attempt.error)
   }
   return refreshed
 }
@@ -750,7 +807,7 @@ async function acceptInvitationRecoveringBearer(
       commitDirectly: false,
     })
     if (attempt.kind === 'retry_auth') {
-      throw buildAuthError(attempt.response, attempt.error, 'Invitation could not be accepted.')
+      throw buildInvitationAcceptError(attempt.response, attempt.error)
     }
   }
   return attempt.outcome
@@ -778,7 +835,7 @@ async function acceptCookieSessionInvitation(
       return attempt.outcome
     }
     if (attemptIndex > 0) {
-      throw buildAuthError(attempt.response, attempt.error, 'Invitation could not be accepted.')
+      throw buildInvitationAcceptError(attempt.response, attempt.error)
     }
 
     accessToken = await refreshBearerAfterUnauthorized(attempt)
