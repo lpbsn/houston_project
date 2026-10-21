@@ -82,6 +82,7 @@ def selected_knowledge() -> dict:
     version = (
         BrainKnowledgeVersion.objects.filter(is_active=True)
         .only("id", "global_formulation", "conditions", "limits", "uncertainty")
+        .order_by("identifier", "id")
         .first()
     )
     if version is None:

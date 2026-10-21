@@ -98,6 +98,18 @@ def _collect(text: str, field: str) -> list[DateMention]:
     return found
 
 
+def first_explicit_mention(*, title: str, structured_summary: str) -> DateMention | None:
+    """First explicit civil date in the title, otherwise in the summary.
+
+    The recording timestamp is never used. A date outside the reporting period stays a date.
+    """
+    for field, text in (("title", title or ""), ("structured_summary", structured_summary or "")):
+        found = _collect(text, field)
+        if found:
+            return found[0]
+    return None
+
+
 def first_period_mention(
     *,
     title: str,

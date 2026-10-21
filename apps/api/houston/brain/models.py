@@ -150,6 +150,8 @@ class BrainAnalysis(BaseModel):
     provider_calls_used = models.PositiveIntegerField(default=0)
     configuration = models.JSONField()
     result = models.JSONField(null=True, blank=True)
+    # Tool name, arguments, and returned copy ids, in order. Texts stay on the dossier.
+    trace = models.JSONField(default=list, blank=True)
 
     class Meta:
         constraints = [
@@ -763,8 +765,12 @@ class BrainObjectiveEvaluation(BaseModel):
 
 
 class BrainKnowledgeVersion(BaseModel):
-    """Platform formulation. Approval does not activate it."""
+    """Platform formulation. Approval does not activate it.
 
+    Several versions may be active. Only one active row is allowed per identifier.
+    """
+
+    identifier = models.CharField(max_length=80, blank=True, default="")
     global_formulation = models.TextField()
     conditions = models.TextField(blank=True, default="")
     limits = models.TextField(blank=True, default="")
@@ -776,9 +782,9 @@ class BrainKnowledgeVersion(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["is_active"],
+                fields=["identifier"],
                 condition=Q(is_active=True),
-                name="brain_know_one_active",
+                name="brain_know_active_ident_uniq",
             ),
             models.CheckConstraint(
                 condition=~Q(is_active=True) | Q(approved_at__isnull=False),
