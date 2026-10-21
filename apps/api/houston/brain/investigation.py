@@ -1,9 +1,8 @@
-"""Foundations of the bounded investigation engine.
+"""Visibility and copy rules still used by the sealed period capture.
 
-A frozen configuration without ``engine_version`` stays on ``brain_analysis_v1``.
-Admission stamps ``investigation_v3`` only when that engine is explicitly
-selected. The model does not choose queries, declare the qualification, or read
-an observation. Field text that counts is the Signal title and structured summary.
+The autonomous investigator does not call this module. ``capture_dossier`` and
+``capture_period_dossier`` still do. Field text that counts is the Signal title
+and structured summary.
 """
 
 from __future__ import annotations

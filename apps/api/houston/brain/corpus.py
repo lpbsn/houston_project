@@ -35,7 +35,6 @@ from houston.brain.mentions import first_explicit_mention
 from houston.brain.models import (
     BrainAnalysis,
     BrainExtraction,
-    BrainKnowledgeVersion,
     BrainObjectiveRevision,
     BrainReporting,
 )
@@ -137,7 +136,7 @@ def assemble_investigation_corpus(
     )
     rows.append(_organization(run, establishment))
     rows.append(_activity(run, establishment))
-    rows.extend(_knowledge(run, capture_at))
+    rows.extend(_knowledge(analysis))
     rows.extend(signal_rows)
     rows.extend(plan_rows)
     rows.extend(execution_rows)
@@ -564,35 +563,36 @@ def _activity(run, establishment) -> DossierRow:
     )
 
 
-def _knowledge(run, capture_at) -> list[DossierRow]:
-    versions = run(
-        lambda: list(
-            BrainKnowledgeVersion.objects.filter(
-                is_active=True,
-                approved_at__isnull=False,
-                approved_at__lte=capture_at,
-            ).order_by("identifier", "id")
+def _knowledge(analysis: BrainAnalysis) -> list[DossierRow]:
+    """Seal the mechanisms copied at admission. A later activation is not reread."""
+    config = analysis.configuration if isinstance(analysis.configuration, dict) else {}
+    mechanisms = config.get("mechanisms")
+    if not isinstance(mechanisms, list):
+        return []
+    rows = []
+    for mechanism in mechanisms:
+        if not isinstance(mechanism, dict):
+            continue
+        version_id = str(mechanism.get("version_id") or "").strip()
+        if not version_id:
+            continue
+        rows.append(
+            DossierRow(
+                CATEGORY_KNOWLEDGE,
+                f"knowledge:{version_id}",
+                "actif",
+                {
+                    "source_id": version_id,
+                    "identifier": mechanism.get("identifier") or "",
+                    "formulation": mechanism.get("formulation") or "",
+                    "conditions": mechanism.get("conditions") or "",
+                    "limits": mechanism.get("limits") or "",
+                    "uncertainty": mechanism.get("uncertainty") or "",
+                },
+                "knowledge_actif",
+            )
         )
-    )
-    return [
-        DossierRow(
-            CATEGORY_KNOWLEDGE,
-            f"knowledge:{version.id}",
-            "actif",
-            {
-                "source_id": str(version.id),
-                "identifier": version.identifier,
-                "formulation": version.global_formulation,
-                "conditions": version.conditions,
-                "limits": version.limits,
-                "uncertainty": version.uncertainty,
-                "approved_at": version.approved_at.isoformat() if version.approved_at else None,
-                "activated_at": version.activated_at.isoformat() if version.activated_at else None,
-            },
-            "knowledge_actif",
-        )
-        for version in versions
-    ]
+    return rows
 
 
 def _measure_payloads(payload, *, period_start, period_end) -> list[dict]:

@@ -55,6 +55,10 @@ def qualify_restitution(
         qualification = "complete"
     else:
         qualification = "not_publishable"
+    if _capture_incomplete(view):
+        limits.append({"code": "capture_incomplete"})
+        if qualification == "complete":
+            qualification = "partial" if contribution else "not_publishable"
     proposals = body.get("proposals") if isinstance(body.get("proposals"), dict) else {}
     return {
         "schema_version": SCHEMA_VERSION,
@@ -64,6 +68,17 @@ def qualify_restitution(
         "limits": limits,
         "proposals": proposals,
     }
+
+
+def _capture_incomplete(view: SealedView) -> bool:
+    """A family left outside the sealed dossier is not an exhaustive reading."""
+    families = view.coverage.get("families") if isinstance(view.coverage, dict) else None
+    if not isinstance(families, dict) or not families:
+        return True
+    for family in families.values():
+        if not isinstance(family, dict) or family.get("complete") is not True:
+            return True
+    return False
 
 
 def _subject_decision(raw, key, view, examined, compares) -> dict:

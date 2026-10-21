@@ -11,11 +11,11 @@ from django.utils import timezone
 
 from houston.brain.models import BrainAnalysis, BrainMessage, BrainSlot, BrainWorkerBeat
 from houston.brain.runtime import (
-    _retarget_slot,
     _rotate_queued_attempt,
     publish_brain_analysis,
     publish_brain_follow_up,
     requeue_message,
+    schedule_next_analysis,
 )
 
 _QUEUED = BrainAnalysis.Status.QUEUED
@@ -107,12 +107,17 @@ def _recover_transport(now) -> tuple[int, int]:
 
 
 def _queued_works():
+    """Queued analyses waiting behind a running sibling are not transport heads."""
+    busy = set(
+        BrainAnalysis.objects.filter(status=_RUNNING).values_list("establishment_id", flat=True)
+    )
     analyses = [
         ("analysis", row)
         for row in BrainAnalysis.objects.filter(
             status=_QUEUED,
             cancel_requested_at__isnull=True,
         )
+        if row.establishment_id not in busy
     ]
     messages = [
         ("follow_up", row)
@@ -158,6 +163,8 @@ def _transport_head(kind, work_id, token, now) -> str:
                 update_fields=["status", "failure_code", "lease_expires_at", "updated_at"]
             )
             _release_slot(model, row)
+            if model is BrainAnalysis:
+                schedule_next_analysis(row.establishment_id)
             return "lost"
         row.transport_republish_count += 1
         row.transport_stall_since = None
@@ -175,10 +182,15 @@ def _transport_head(kind, work_id, token, now) -> str:
 def _head_is_free(row, now) -> bool:
     if row.claimed_at is not None:
         return False
-    older_analysis = BrainAnalysis.objects.filter(
-        status=_QUEUED,
-        created_at__lt=row.created_at,
-    ).exclude(id=row.id)
+    busy = BrainAnalysis.objects.filter(status=_RUNNING).values("establishment_id")
+    older_analysis = (
+        BrainAnalysis.objects.filter(
+            status=_QUEUED,
+            created_at__lt=row.created_at,
+        )
+        .exclude(id=row.id)
+        .exclude(establishment_id__in=busy)
+    )
     older_message = BrainMessage.objects.filter(
         status=_QUEUED,
         created_at__lt=row.created_at,
@@ -226,7 +238,6 @@ def _requeue_attempt(analysis_id, token) -> bool:
         if row is None:
             return False
         _rotate_queued_attempt(row, new_token)
-        _retarget_slot(row, new_token)
     publish_brain_analysis(analysis_id, new_token)
     return True
 
@@ -247,8 +258,14 @@ def _fail_running(model, work_id, token, failure_code: str) -> bool:
             return False
         if model is BrainMessage:
             BrainSlot.objects.filter(message_id=work_id).delete()
-        else:
-            BrainSlot.objects.filter(analysis_id=work_id).delete()
+            return True
+        BrainSlot.objects.filter(analysis_id=work_id).delete()
+        establishment_id = BrainAnalysis.objects.filter(id=work_id).values_list(
+            "establishment_id",
+            flat=True,
+        ).first()
+        if establishment_id is not None:
+            schedule_next_analysis(establishment_id)
         return True
 
 
@@ -266,6 +283,8 @@ def _terminal_cancel(model, work_id, token) -> bool:
         row.lease_expires_at = None
         row.save(update_fields=["status", "failure_code", "lease_expires_at", "updated_at"])
         _release_slot(model, row)
+        if model is BrainAnalysis:
+            schedule_next_analysis(row.establishment_id)
         return True
 
 

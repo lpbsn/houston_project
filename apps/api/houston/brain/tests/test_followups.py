@@ -13,8 +13,7 @@ from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.brain.admission import admit_brain_work
-from houston.brain.configuration import admission_configuration
-from houston.brain.contract import minimal_analysis
+from houston.brain.configuration import admission_configuration, context_fingerprint
 from houston.brain.errors import BrainAccessDenied, BrainCapacityUnavailable, BrainWorkError
 from houston.brain.followups import run_brain_follow_up, write_follow_up_lot
 from houston.brain.models import (
@@ -72,7 +71,7 @@ def _completed(*, knowledge: str = "k-figee"):
         idempotency_key=f"analyse-{uuid.uuid4().hex[:8]}",
         status=BrainAnalysis.Status.COMPLETED,
         configuration=admission_configuration(extraction),
-        result=minimal_analysis(["s0000"]),
+        result={"schema_version": "brain_engine_v1", "qualification": "partial", "subjects": []},
     )
     configuration = dict(analysis.configuration)
     configuration["knowledge"] = {
@@ -84,7 +83,12 @@ def _completed(*, knowledge: str = "k-figee"):
         "uncertainty": "Incertitude figée.",
     }
     analysis.configuration = configuration
-    analysis.save(update_fields=["configuration", "updated_at"])
+    analysis.context_fingerprint = context_fingerprint(
+        reporting=reporting,
+        mechanisms=configuration.get("mechanisms") or [],
+        contributions=configuration.get("contributions") or [],
+    )
+    analysis.save(update_fields=["configuration", "context_fingerprint", "updated_at"])
     dossier = BrainDossier.objects.create(
         analysis=analysis,
         establishment=establishment,
@@ -229,7 +233,7 @@ def test_same_request_is_returned_before_a_capacity_refusal(settings):
     assert BrainMessage.objects.filter(analysis=analysis).count() == 1
 
 
-def test_a_queued_analysis_is_returned_instead_of_a_follow_up():
+def test_a_follow_up_on_a_queued_analysis_is_refused():
     establishment = create_establishment(name="Brain slot suivi")
     owner = create_membership(
         establishment=establishment,
@@ -237,24 +241,25 @@ def test_a_queued_analysis_is_returned_instead_of_a_follow_up():
     )
     reporting = _reporting(establishment, owner.user)
     queued = _admit(owner.user, establishment, reporting, key="analyse-active")
-    refused = admit_brain_work(
-        user=owner.user,
-        establishment_id=establishment.id,
-        analysis_id=queued.id,
-        request_id="trop-tot",
-        body="Déjà en cours.",
-        purpose="explain",
-    )
-    assert refused.id == queued.id
-    assert isinstance(refused, BrainAnalysis)
+    with pytest.raises(BrainWorkError) as refused:
+        admit_brain_work(
+            user=owner.user,
+            establishment_id=establishment.id,
+            analysis_id=queued.id,
+            request_id="trop-tot",
+            body="Déjà en cours.",
+            purpose="explain",
+        )
+    assert refused.value.code == "follow_up_unavailable"
     assert BrainMessage.objects.count() == 0
+    assert BrainAnalysis.objects.get().id == queued.id
 
 
-def test_follow_up_slot_blocks_a_second_analysis():
+def test_a_follow_up_does_not_block_the_same_completed_analysis():
     _establishment, owner, analysis, item = _completed()
-    message = _ask(owner, analysis, "en-cours", cited=[str(item.id)])
+    _ask(owner, analysis, "en-cours", cited=[str(item.id)])
     again = _admit(owner.user, analysis.establishment, analysis.reporting, key="nouvelle-analyse")
-    assert again.id == message.id
+    assert again.id == analysis.id
     assert BrainAnalysis.objects.filter(establishment=analysis.establishment).count() == 1
     assert BrainSlot.objects.get().kind == BrainSlot.Kind.FOLLOW_UP
 

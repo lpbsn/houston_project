@@ -16,7 +16,6 @@ from houston.action_plans.models import ActionPlan, ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.brain.admission import admit_brain_work
 from houston.brain.capture import capture_dossier
-from houston.brain.contract import assess, minimal_analysis
 from houston.brain.errors import BrainAccessDenied, BrainWorkError
 from houston.brain.knowledge import (
     activate_knowledge_version,
@@ -47,6 +46,13 @@ from houston.testing.taxonomy import (
 )
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+_STORED_RESULT = {
+    "schema_version": "brain_engine_v1",
+    "qualification": "partial",
+    "subjects": [],
+    "proposals": {"suggestions": [], "mechanisms": []},
+}
 
 EXCERPT = "La salle du restaurant a servi quarante couverts le mardi soir."
 PRIVATE = "PREUVE-PRIVEE-CLIENT-NE-DOIT-PAS-SORTIR"
@@ -110,12 +116,6 @@ def _pole(establishment):
     )
     create_membership_with_business_unit_scope(membership=staff, business_unit=unit)
     return unit, staff
-
-
-def test_a_proposal_cannot_invent_a_kpi_target():
-    payload = minimal_analysis(["s0000"])
-    payload["proposals"] = {"suggestions": [], "mechanisms": [], "objectives": [{"target": "12"}]}
-    assert assess(payload, pieces=["s0000"], items=[]).ok is False
 
 
 def test_cancel_and_a_stale_token_publish_no_decision_object():
@@ -874,7 +874,7 @@ def test_a_publication_error_rolls_back_and_is_not_retried(monkeypatch):
     finished = _complete(
         analysis.id,
         analysis.attempt_token,
-        result=minimal_analysis(["s0000"]),
+        result=_STORED_RESULT,
     )
     assert finished is False
     assert len(inserted) == 1
@@ -893,7 +893,7 @@ def test_a_publication_error_rolls_back_and_is_not_retried(monkeypatch):
         _complete(
             analysis.id,
             analysis.attempt_token,
-            result=minimal_analysis(["s0000"]),
+            result=_STORED_RESULT,
         )
         is False
     )

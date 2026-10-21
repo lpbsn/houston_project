@@ -45,6 +45,7 @@ from houston.brain.models import (
 )
 from houston.brain.objectives import record_objective_revision
 from houston.brain.records import EXTRACTOR_ID, EXTRACTOR_VERSION
+from houston.brain.runtime import _complete, claim_analysis
 from houston.establishments.models import EstablishmentActivityDescription, EstablishmentMembership
 from houston.observations.models import Observation
 from houston.signals.models import Signal, SignalSourceObservation
@@ -748,7 +749,12 @@ def test_accepted_compare_keeps_a_neighbor_and_writes_drafts_from_sealed_measure
         )
 
     provider = ScriptedProvider(handler)
+    token = analysis.attempt_token
+    assert claim_analysis(analysis.id, token)
     result = run_engine(analysis.id, provider)
+    assert _complete(analysis.id, token, result)
+    analysis.refresh_from_db()
+    assert analysis.status == BrainAnalysis.Status.COMPLETED
     assert result["qualification"] == "complete"
     subject = result["subjects"][0]
     assert subject["contribution"] is True

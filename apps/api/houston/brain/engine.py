@@ -23,7 +23,6 @@ from houston.brain.engine_tools import (
 )
 from houston.brain.errors import BrainWorkError
 from houston.brain.models import BrainAnalysis, BrainDossier, BrainDossierItem
-from houston.brain.publication import persist_completed_analysis
 
 _PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "metier_v7_1.md"
 MAX_TOOL_CALLS = 8
@@ -67,8 +66,12 @@ def metier_prompt() -> str:
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def run_engine(analysis_id, provider) -> dict:
-    """Seal the dossier if needed, then investigate until a restitution or the tool budget."""
+def run_engine(analysis_id, provider, *, before_turn=None) -> dict:
+    """Seal the dossier if needed, then investigate until a restitution or the tool budget.
+
+    ``before_turn`` may return ``handoff``, ``impossible`` or ``stop``. A handoff
+    leaves the committed trace in place and does not call the provider.
+    """
     dossier = _ensure_dossier(analysis_id)
     view = _load_view(dossier)
     analysis = _load_analysis(analysis_id)
@@ -82,6 +85,9 @@ def run_engine(analysis_id, provider) -> dict:
     if _restitution(trace) is not None:
         return _finish(analysis, view, trace)
     while True:
+        directive = before_turn() if before_turn is not None else "continue"
+        if directive in {"handoff", "impossible", "stop"}:
+            return {directive: True}
         if _tool_count(trace) >= MAX_TOOL_CALLS and not _instruction_sent(trace):
             trace.append({"kind": "instruction", "text": RESTITUTION_SENTENCE})
             _save_trace(analysis, trace)
@@ -179,10 +185,17 @@ def _finish(analysis: BrainAnalysis, view: SealedView, trace: list) -> dict:
     examined = _examined_ids(view, trace)
     result = qualify_restitution(_restitution(trace) or {}, view, trace, examined)
     with transaction.atomic():
+        row = BrainAnalysis.objects.select_for_update().filter(pk=analysis.id).first()
+        if row is None or row.status not in {
+            BrainAnalysis.Status.QUEUED,
+            BrainAnalysis.Status.RUNNING,
+        }:
+            return {"stopped": True}
+        row.result = result
+        row.trace = trace
+        row.save(update_fields=["result", "trace", "updated_at"])
         analysis.result = result
         analysis.trace = trace
-        analysis.save(update_fields=["result", "trace", "updated_at"])
-        persist_completed_analysis(analysis, result)
     return result
 
 

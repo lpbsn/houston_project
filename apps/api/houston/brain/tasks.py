@@ -6,16 +6,12 @@ from celery import shared_task
 from django.conf import settings
 
 from houston.brain.followups import run_brain_follow_up
-from houston.brain.investigation import retained_execution_budget
 from houston.brain.recovery import recover_brain_works
 from houston.brain.runtime import run_brain_analysis
 from houston.brain.services import cleanup_abandoned_reporting_drafts
 from houston.core.observability import build_celery_task_failure_log_context
 
 logger = logging.getLogger(__name__)
-
-_INVESTIGATION_BUDGET = retained_execution_budget()
-
 
 @shared_task(
     max_retries=0,
@@ -51,16 +47,6 @@ def cleanup_abandoned_reporting_drafts_task() -> int:
     time_limit=settings.HOUSTON_BRAIN_ATTEMPT_HARD_SECONDS,
 )
 def run_brain_analysis_task(analysis_id: str, attempt_token: str) -> None:
-    run_brain_analysis(analysis_id, attempt_token)
-
-
-@shared_task(
-    max_retries=0,
-    soft_time_limit=_INVESTIGATION_BUDGET["attempt_soft_seconds"],
-    time_limit=_INVESTIGATION_BUDGET["attempt_hard_seconds"],
-)
-def run_brain_investigation_task(analysis_id: str, attempt_token: str) -> None:
-    """V3 attempt. The lot task keeps the shipped limits."""
     run_brain_analysis(analysis_id, attempt_token)
 
 

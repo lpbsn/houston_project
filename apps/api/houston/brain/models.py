@@ -152,12 +152,26 @@ class BrainAnalysis(BaseModel):
     result = models.JSONField(null=True, blank=True)
     # Tool name, arguments, and returned copy ids, in order. Texts stay on the dossier.
     trace = models.JSONField(default=list, blank=True)
+    # Reporting, period, copied mechanisms, and joined contributions. Blank on rows
+    # admitted before this identity existed; those rows do not block a new launch.
+    context_fingerprint = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["establishment", "idempotency_key"],
                 name="brain_an_est_idem_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "context_fingerprint"],
+                condition=Q(status__in=["queued", "running", "completed"])
+                & ~Q(context_fingerprint=""),
+                name="brain_an_ctx_live_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment"],
+                condition=Q(status="running"),
+                name="brain_an_one_running",
             ),
             models.CheckConstraint(
                 condition=Q(
@@ -175,6 +189,10 @@ class BrainAnalysis(BaseModel):
         indexes = [
             models.Index(fields=["author"], name="brain_an_author_idx"),
             models.Index(fields=["status", "created_at"], name="brain_an_stat_cr_idx"),
+            models.Index(
+                fields=["establishment", "status", "created_at"],
+                name="brain_an_est_stat_cr_idx",
+            ),
         ]
 
     def __str__(self) -> str:

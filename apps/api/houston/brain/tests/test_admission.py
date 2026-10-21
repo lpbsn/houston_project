@@ -70,11 +70,9 @@ def test_owner_admission_inserts_one_queued_analysis_and_slot():
     assert analysis.configuration["knowledge"]["selection"] == "none"
     assert analysis.configuration["knowledge"]["version_id"] is None
     assert analysis.configuration["knowledge"]["formulation"] == ""
-    slot = BrainSlot.objects.get(analysis=analysis)
-    assert slot.kind == BrainSlot.Kind.ANALYSIS
-    assert slot.status == BrainSlot.Status.QUEUED
-    assert slot.token == analysis.attempt_token
-    assert slot.establishment_id == establishment.id
+    assert analysis.configuration["schema_version"] == "brain_engine_v1"
+    assert analysis.context_fingerprint
+    assert not BrainSlot.objects.filter(analysis=analysis).exists()
 
 
 def test_same_key_at_full_capacity_returns_the_analysis_and_a_new_key_is_refused(settings):
@@ -95,7 +93,7 @@ def test_same_key_at_full_capacity_returns_the_analysis_and_a_new_key_is_refused
     again = _admit(owner.user, establishment, reporting, key="meme-demande")
     assert again.id == first.id
     assert BrainAnalysis.objects.count() == 1
-    assert BrainSlot.objects.count() == 1
+    assert BrainSlot.objects.count() == 0
     active = _admit(owner.user, establishment, reporting, key="autre-demande")
     assert active.id == first.id
     with pytest.raises(BrainCapacityUnavailable):
@@ -137,7 +135,8 @@ def test_two_establishments_can_each_hold_a_slot(settings):
     reporting_b = _reporting(second, owner_b.user)
     _admit(owner_a.user, first, reporting_a, key="a")
     _admit(owner_b.user, second, reporting_b, key="a")
-    assert BrainSlot.objects.filter(status=BrainSlot.Status.QUEUED).count() == 2
+    assert BrainAnalysis.objects.filter(status=BrainAnalysis.Status.QUEUED).count() == 2
+    assert BrainSlot.objects.count() == 0
 
 
 def test_admitted_configuration_does_not_follow_later_setting_changes(settings):
@@ -182,7 +181,7 @@ def test_concurrent_admissions_for_one_establishment_insert_one_analysis():
         results = list(executor.map(admit, ("course-a", "course-b")))
     assert results[0] == results[1]
     assert BrainAnalysis.objects.filter(establishment=establishment).count() == 1
-    assert BrainSlot.objects.filter(establishment=establishment).count() == 1
+    assert BrainSlot.objects.filter(establishment=establishment).count() == 0
 
 
 @pytest.mark.django_db(transaction=True)
@@ -224,7 +223,7 @@ def test_two_establishments_racing_for_the_last_slot_admit_one(settings):
     assert len(admitted) == 1
     assert results.count(None) == 1
     assert BrainAnalysis.objects.count() == 1
-    assert BrainSlot.objects.count() == 1
+    assert BrainSlot.objects.count() == 0
     assert admitted[0] == BrainAnalysis.objects.get().id
 
 
