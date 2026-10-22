@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from django.core.exceptions import ValidationError
+
 from houston.accounts.models import User
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MAX_LENGTH,
@@ -10,6 +12,7 @@ from houston.establishments.models import (
     CatalogActivitySubject,
     CatalogBusinessUnit,
     EstablishmentMembership,
+    validate_instance_description,
 )
 from houston.establishments.taxonomy_normalization import slugify_label
 
@@ -369,7 +372,18 @@ def _normalize_business_units_section(
 
         catalog_key = catalog_key.strip()
         specific_name = specific_name.strip()
-        instance_description = instance_description.strip()
+        try:
+            instance_description = validate_instance_description(instance_description)
+        except ValidationError:
+            errors.append(
+                draft_error(
+                    "invalid_instance_description_length",
+                    section="business_units",
+                    field="instance_description",
+                    key=client_key or None,
+                )
+            )
+            instance_description = instance_description.strip()
 
         if client_key:
             if client_key in seen_client_keys:

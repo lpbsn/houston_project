@@ -7,7 +7,9 @@ import pytest
 from houston.accounts.models import User
 from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MAX_LENGTH,
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    INSTANCE_DESCRIPTION_MAX_LENGTH,
     Establishment,
     EstablishmentMembership,
     OnboardingDraft,
@@ -325,3 +327,61 @@ def test_complete_does_not_invite_blank_member_rows():
     assert member_email in emails
     assert "" not in emails
     assert EstablishmentMembership.objects.filter(establishment=establishment).count() == 3
+
+
+def test_draft_description_ceilings_keep_soft_text_and_block_final():
+    sync_catalog_from_normalized_rows()
+    payload = _valid_payload(establishment_name="Plafonds description")
+    payload["establishment"]["description"] = "D" * ACTIVITY_DESCRIPTION_MAX_LENGTH
+    payload["business_units"][0]["instance_description"] = "P" * INSTANCE_DESCRIPTION_MAX_LENGTH
+    normalized, errors, _warnings = validate_onboarding_draft_payload(
+        payload,
+        mode=DRAFT_VALIDATION_MODE_FINAL,
+    )
+    assert errors == []
+    assert normalized["establishment"]["description"] == "D" * ACTIVITY_DESCRIPTION_MAX_LENGTH
+    assert (
+        normalized["business_units"][0]["instance_description"]
+        == "P" * INSTANCE_DESCRIPTION_MAX_LENGTH
+    )
+
+    payload["establishment"]["description"] = (
+        f"  {'😀' * ACTIVITY_DESCRIPTION_MAX_LENGTH}  "
+    )
+    payload["business_units"][0]["instance_description"] = (
+        f"  {'é' * INSTANCE_DESCRIPTION_MAX_LENGTH}"
+    )
+    normalized, errors, _warnings = validate_onboarding_draft_payload(
+        payload,
+        mode=DRAFT_VALIDATION_MODE_FINAL,
+    )
+    assert errors == []
+    assert normalized["establishment"]["description"] == "😀" * ACTIVITY_DESCRIPTION_MAX_LENGTH
+    assert (
+        normalized["business_units"][0]["instance_description"]
+        == "é" * INSTANCE_DESCRIPTION_MAX_LENGTH
+    )
+
+    payload["establishment"]["description"] = "D" * (ACTIVITY_DESCRIPTION_MAX_LENGTH + 1)
+    payload["business_units"][0]["instance_description"] = "P" * (
+        INSTANCE_DESCRIPTION_MAX_LENGTH + 1
+    )
+    normalized, errors, _warnings = validate_onboarding_draft_payload(
+        payload,
+        mode=DRAFT_VALIDATION_MODE_SOFT,
+    )
+    assert normalized["establishment"]["description"] == "D" * (
+        ACTIVITY_DESCRIPTION_MAX_LENGTH + 1
+    )
+    assert normalized["business_units"][0]["instance_description"] == "P" * (
+        INSTANCE_DESCRIPTION_MAX_LENGTH + 1
+    )
+    codes = {error["code"] for error in errors}
+    assert "invalid_activity_description_length" in codes
+    assert "invalid_instance_description_length" in codes
+
+    with pytest.raises(OnboardingDraftValidationError) as exc_info:
+        validate_onboarding_draft_payload(payload, mode=DRAFT_VALIDATION_MODE_FINAL)
+    refused = {error["code"] for error in exc_info.value.errors}
+    assert "invalid_activity_description_length" in refused
+    assert "invalid_instance_description_length" in refused

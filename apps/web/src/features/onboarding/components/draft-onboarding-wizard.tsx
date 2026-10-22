@@ -46,7 +46,9 @@ import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   DRAFT_STEP_STRUCTURE,
   DRAFT_STEP_TEAM,
+  INSTANCE_DESCRIPTION_MAX_LENGTH,
   OnboardingDraftPayloadParseError,
+  countedTextLength,
   isMemberRowEmpty,
   parseOnboardingDraftPayload,
   withCurrentStep,
@@ -261,7 +263,12 @@ function isDraftErrorPlaced(
     const matchesUnit = draft.business_units.some((unit) => unit.client_key === error.key)
     return (
       matchesUnit &&
-      isRenderedDraftField(error, ['specific_name', 'catalog_key', null])
+      isRenderedDraftField(error, [
+        'specific_name',
+        'catalog_key',
+        'instance_description',
+        null,
+      ])
     )
   }
   if (error.section !== 'team') {
@@ -400,13 +407,18 @@ function StructureStep({
               <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
                 Description
               </span>
-              <span className="text-xs text-spore-muted">
-                {draft.establishment.description.length} / {ACTIVITY_DESCRIPTION_MAX_LENGTH}
+              <span
+                className={
+                  countedTextLength(draft.establishment.description) > ACTIVITY_DESCRIPTION_MAX_LENGTH
+                    ? 'text-xs text-red-700'
+                    : 'text-xs text-spore-muted'
+                }
+              >
+                {countedTextLength(draft.establishment.description)} / {ACTIVITY_DESCRIPTION_MAX_LENGTH}
               </span>
             </div>
             <Textarea
               value={draft.establishment.description}
-              maxLength={ACTIVITY_DESCRIPTION_MAX_LENGTH}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
@@ -606,9 +618,20 @@ function StructureStep({
                   </div>
 
                   <label className="block space-y-1.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-                      Description
-                    </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+                        Description
+                      </span>
+                      <span
+                        className={
+                          countedTextLength(unit.instance_description) > INSTANCE_DESCRIPTION_MAX_LENGTH
+                            ? 'text-xs text-red-700'
+                            : 'text-xs text-spore-muted'
+                        }
+                      >
+                        {countedTextLength(unit.instance_description)} / {INSTANCE_DESCRIPTION_MAX_LENGTH}
+                      </span>
+                    </div>
                     <Textarea
                       value={unit.instance_description}
                       onChange={(event) =>
@@ -623,6 +646,13 @@ function StructureStep({
                       }
                       placeholder="Résumé court du périmètre de ce pôle..."
                       className="min-h-20 rounded-xl border-spore-forest/15"
+                    />
+                    <FieldMessages
+                      messages={messagesForDraftField(errors, {
+                        section: 'business_units',
+                        field: 'instance_description',
+                        key: unit.client_key,
+                      })}
                     />
                   </label>
 

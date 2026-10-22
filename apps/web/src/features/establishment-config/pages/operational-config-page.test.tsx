@@ -2,11 +2,13 @@
 
 import { createElement, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { OperationalConfigPage } from './operational-config-page'
+import type { BusinessUnitTreeItem } from '@/features/establishment-config/api'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
+
+import { OperationalConfigPage } from './operational-config-page'
 
 const { authState, treeState } = vi.hoisted(() => ({
   authState: {
@@ -17,6 +19,7 @@ const { authState, treeState } = vi.hoisted(() => ({
   },
   treeState: {
     fetchCount: 0,
+    businessUnits: [] as BusinessUnitTreeItem[],
   },
 }))
 
@@ -31,7 +34,7 @@ vi.mock('@/features/establishment-config/hooks', () => ({
       data: {
         establishment_name: 'Spore Paris',
         establishment_id: establishmentId,
-        business_units: [],
+        business_units: treeState.businessUnits,
       },
       isPending: false,
       error: null,
@@ -39,6 +42,22 @@ vi.mock('@/features/establishment-config/hooks', () => ({
     }
   },
   useCreateRuntimeBusinessUnit: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+  useUpdateRuntimeBusinessUnit: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useDeactivateRuntimeBusinessUnit: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useReactivateRuntimeBusinessUnit: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateRuntimeActivitySubject: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useDeactivateRuntimeActivitySubject: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useReactivateRuntimeActivitySubject: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useActivityDescription: () => ({
+    data: { description: 'Description déjà enregistrée pour cet établissement.' },
+    isPending: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+  useUpdateActivityDescription: () => ({
     isPending: false,
     mutateAsync: vi.fn(),
   }),
@@ -109,9 +128,36 @@ function wrap(node: ReactNode) {
   return createElement(QueryClientProvider, { client }, node)
 }
 
+function pole(overrides: Partial<BusinessUnitTreeItem> = {}): BusinessUnitTreeItem {
+  return {
+    id: 'bu-1',
+    specific_name: 'Hôtel',
+    instance_description: 'Description du pôle.',
+    active: true,
+    generic: {
+      key: 'hotel',
+      label: 'Hôtel',
+      description: '',
+      unit_type: 'dedicated',
+    },
+    activity_subjects: [
+      {
+        id: 'subject-1',
+        label: 'Accueil',
+        description: '',
+        source: 'manual',
+        active: true,
+        is_generic: true,
+      },
+    ],
+    ...overrides,
+  }
+}
+
 afterEach(() => {
   cleanup()
   treeState.fetchCount = 0
+  treeState.businessUnits = []
 })
 
 describe('OperationalConfigPage', () => {
@@ -157,8 +203,78 @@ describe('OperationalConfigPage', () => {
 
     render(wrap(createElement(OperationalConfigPage, { establishmentId: 'est-1' })))
 
+    expect(screen.getByText('Description de l’établissement')).toBeTruthy()
     expect(screen.getByText('Ajouter un pôle')).toBeTruthy()
     expect(screen.queryByText('Retour')).toBeNull()
     expect(treeState.fetchCount).toBe(1)
+  })
+
+  it('keeps an unsaved pole draft when its subject list changes', () => {
+    const director = membership({ role: 'director' })
+    const lyon = membership({
+      id: 'membership-2',
+      establishment_id: 'est-2',
+      establishment_name: 'Lyon',
+      role: 'director',
+    })
+    authState.current = {
+      activeMembership: director,
+      bootstrap: bootstrap([director, lyon], director),
+    }
+    treeState.businessUnits = [pole()]
+
+    const view = render(wrap(createElement(OperationalConfigPage, { establishmentId: 'est-1' })))
+    fireEvent.change(screen.getByLabelText('Nom d’instance'), { target: { value: 'Hôtel patio' } })
+    fireEvent.change(screen.getByLabelText('Description d’instance'), {
+      target: { value: 'Brouillon local du pôle.' },
+    })
+
+    treeState.businessUnits = [
+      pole({
+        activity_subjects: [
+          {
+            id: 'subject-1',
+            label: 'Accueil',
+            description: '',
+            source: 'manual',
+            active: true,
+            is_generic: true,
+          },
+          {
+            id: 'subject-2',
+            label: 'Réservation',
+            description: '',
+            source: 'manual',
+            active: true,
+            is_generic: false,
+          },
+        ],
+      }),
+    ]
+    view.rerender(wrap(createElement(OperationalConfigPage, { establishmentId: 'est-1' })))
+
+    expect((screen.getByLabelText('Nom d’instance') as HTMLInputElement).value).toBe('Hôtel patio')
+    expect((screen.getByLabelText('Description d’instance') as HTMLTextAreaElement).value).toBe(
+      'Brouillon local du pôle.',
+    )
+    expect(screen.getByText('Réservation')).toBeTruthy()
+
+    authState.current = {
+      activeMembership: lyon,
+      bootstrap: bootstrap([director, lyon], lyon),
+    }
+    treeState.businessUnits = [
+      pole({
+        id: 'bu-lyon',
+        specific_name: 'Cuisine',
+        instance_description: 'Pôle de Lyon.',
+      }),
+    ]
+    view.rerender(wrap(createElement(OperationalConfigPage, { establishmentId: 'est-2' })))
+
+    expect((screen.getByLabelText('Nom d’instance') as HTMLInputElement).value).toBe('Cuisine')
+    expect((screen.getByLabelText('Description d’instance') as HTMLTextAreaElement).value).toBe(
+      'Pôle de Lyon.',
+    )
   })
 })

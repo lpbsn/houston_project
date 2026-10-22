@@ -20,7 +20,8 @@ DEFAULT_ESTABLISHMENT_TIMEZONE = "Europe/Paris"
 ESTABLISHMENT_TIMEZONE_MAX_LENGTH = 63
 
 ACTIVITY_DESCRIPTION_MIN_LENGTH = 10
-ACTIVITY_DESCRIPTION_MAX_LENGTH = 5000
+ACTIVITY_DESCRIPTION_MAX_LENGTH = 10000
+INSTANCE_DESCRIPTION_MAX_LENGTH = 5000
 ONBOARDING_TERMINAL_STATUSES = (
     "activated",
     "failed",
@@ -34,6 +35,26 @@ ONBOARDING_NON_TERMINAL_STATUSES = (
     "validating_sections",
     "ready_for_activation",
 )
+def validate_instance_description(value: str) -> str:
+    """Return the stripped pole description, or reject text over the ceiling.
+
+    Length is ``len`` of the stripped value: Unicode code points, including
+    characters outside the BMP. A longer value already stored stays readable
+    when the caller does not submit a new description.
+    """
+    normalized = value.strip()
+    if len(normalized) > INSTANCE_DESCRIPTION_MAX_LENGTH:
+        raise ValidationError(
+            {
+                "instance_description": (
+                    "Instance description must be at most "
+                    f"{INSTANCE_DESCRIPTION_MAX_LENGTH} characters."
+                )
+            }
+        )
+    return normalized
+
+
 def _validate_nonblank(value: str, field_name: str, errors: dict[str, str]) -> None:
     if not isinstance(value, str) or not value.strip():
         errors[field_name] = "This field cannot be blank."
