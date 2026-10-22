@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
@@ -32,7 +34,7 @@ function enableDesktopWeb() {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes('1024') || query.includes('1280'),
+      matches: testMediaMatches(query, query.includes('1024') || query.includes('1280')),
       media: query,
       onchange: null,
       addListener: vi.fn(),
@@ -454,7 +456,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       configurable: true,
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
-        matches: query.includes('1024'),
+        matches: testMediaMatches(query, query.includes('1024')),
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -532,7 +534,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       configurable: true,
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
-        matches: query.includes('1024'),
+        matches: testMediaMatches(query, query.includes('1024')),
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -579,7 +581,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       value: vi.fn().mockImplementation((query: string) => {
         const minWidth = /min-width:\s*(\d+)px/.exec(query)
         return {
-          matches: minWidth ? 1280 >= Number(minWidth[1]) : false,
+          matches: testMediaMatches(query, minWidth ? 1280 >= Number(minWidth[1]) : false),
           media: query,
           onchange: null,
           addListener: vi.fn(),
@@ -611,7 +613,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       value: vi.fn().mockImplementation((query: string) => {
         const minWidth = /min-width:\s*(\d+)px/.exec(query)
         return {
-          matches: minWidth ? 1024 >= Number(minWidth[1]) : false,
+          matches: testMediaMatches(query, minWidth ? 1024 >= Number(minWidth[1]) : false),
           media: query,
           onchange: null,
           addListener: vi.fn(),
@@ -644,8 +646,8 @@ describe('ActionPlanTemplateDetailPage', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
-      value: vi.fn().mockImplementation(() => ({
-        matches: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: testMediaMatches(query, true, 'fine'),
         media: '',
         onchange: null,
         addListener: vi.fn(),

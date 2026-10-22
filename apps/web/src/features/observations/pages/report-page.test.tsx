@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { TerrainShellLayoutProvider } from '@/components/layout/terrain-shell-layout'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
@@ -602,8 +604,8 @@ describe('ReportPage', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
-      value: vi.fn().mockImplementation(() => ({
-        matches: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: testMediaMatches(query, true),
         media: '',
         onchange: null,
         addListener: vi.fn(),

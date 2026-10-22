@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { notifySuccess } from '@/lib/success-toast'
 
 import { ACTION_PLAN_DESKTOP_PILOT_LABEL } from '../lib/action-plan-desktop-form'
@@ -271,9 +273,8 @@ function mockPlanFormViewport(width: number) {
     writable: true,
     value: vi.fn().mockImplementation((query: string) => {
       const minWidth = /min-width:\s*(\d+)px/.exec(query)
-      const matches = minWidth ? width >= Number(minWidth[1]) : false
       return {
-        matches,
+        matches: testMediaMatches(query, minWidth ? width >= Number(minWidth[1]) : false),
         media: query,
         onchange: null,
         addListener: vi.fn(),

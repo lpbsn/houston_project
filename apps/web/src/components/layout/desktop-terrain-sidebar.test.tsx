@@ -3,7 +3,9 @@
 import { createElement, type ComponentProps, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { installTestMatchMedia } from '@/test/viewport-match-media'
 
 import type { AppRoute } from '@/app/app-routes'
 import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
@@ -106,10 +108,15 @@ function sidebarProps(
   }
 }
 
+beforeEach(() => {
+  installTestMatchMedia(false)
+})
+
 afterEach(() => {
   cleanup()
   lgViewportState.current = false
   vi.unstubAllEnvs()
+  Reflect.deleteProperty(window, 'matchMedia')
 })
 
 const crossSignalsRoute: AppRoute = {

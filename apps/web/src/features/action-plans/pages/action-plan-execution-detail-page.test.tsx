@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { ActionPlansApiError } from '@/features/action-plans/api'
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
@@ -254,7 +256,7 @@ function mockLgViewport(matches: boolean) {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches,
+      matches: testMediaMatches(query, matches),
       media: query,
       onchange: null,
       addListener: vi.fn(),

@@ -2,7 +2,9 @@
 
 import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { installTestMatchMedia } from '@/test/viewport-match-media'
 
 import type { BootstrapResponse } from '@/features/auth/types'
 import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
@@ -217,6 +219,10 @@ vi.mock('@/features/gamification/hooks', () => ({
     refetch: vi.fn(),
   }),
 }))
+
+beforeEach(() => {
+  installTestMatchMedia(false)
+})
 
 afterEach(() => {
   cleanup()

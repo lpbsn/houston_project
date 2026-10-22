@@ -3,13 +3,14 @@
 import { createElement, type ComponentProps } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { useTerrainShellLayout } from '@/components/layout/terrain-shell-layout'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
+import { testMediaMatches, type TestPointer } from '@/test/viewport-match-media'
 
 const mockNativeKeyboardOpen = vi.hoisted(() => ({ current: false }))
 const { lgViewportState } = vi.hoisted(() => ({
@@ -19,6 +20,23 @@ const { lgViewportState } = vi.hoisted(() => ({
 vi.mock('@/lib/lg-viewport', () => ({
   useLgViewport: () => lgViewportState.current,
 }))
+
+function stubPointer(pointer: TestPointer) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: testMediaMatches(query, false, pointer),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
 
 vi.mock('@/components/layout/network-status-banner', () => ({
   NetworkStatusBanner: () => null,
@@ -135,11 +153,16 @@ function renderTerrainShell(
   )
 }
 
+beforeEach(() => {
+  stubPointer('coarse')
+})
+
 afterEach(() => {
   cleanup()
   mockNativeKeyboardOpen.current = false
   lgViewportState.current = false
   vi.unstubAllEnvs()
+  Reflect.deleteProperty(window, 'matchMedia')
 })
 
 describe('TerrainShell', () => {
@@ -332,6 +355,63 @@ describe('TerrainShell', () => {
       'true',
     )
     expect(screen.getByText('execution')).toBeTruthy()
+  })
+
+  it('keeps the bottom bar and the shell layout context together', () => {
+    function Probe() {
+      const { showBottomNav } = useTerrainShellLayout()
+      return createElement('div', { 'data-testid': 'layout-probe' }, String(showBottomNav))
+    }
+
+    const shellProps = {
+      contentKey: 'test',
+      topbar: createElement('div', { 'data-testid': 'terrain-topbar' }, 'Topbar'),
+      showBottomNav: true,
+      activeNavPath: '/signals' as const,
+      mainScroll: 'auto' as const,
+      route: { kind: 'static', path: '/general' } satisfies AppRoute,
+      navigate: () => undefined,
+      bootstrap: bootstrap([membership({ role: 'staff' })]),
+    }
+
+    function renderProbe() {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      })
+      return render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(TerrainShell, shellProps, createElement(Probe)),
+        ),
+      )
+    }
+
+    stubPointer('fine')
+    lgViewportState.current = false
+    const fineNarrow = renderProbe()
+    expect(screen.queryByRole('navigation', { name: 'Navigation terrain' })).toBeNull()
+    expect(screen.getByLabelText('Navigation principale')).toBeTruthy()
+    expect(screen.getByTestId('layout-probe').textContent).toBe('false')
+    expect(screen.getByRole('main').closest('[data-terrain-shell-root]')?.className).toContain(
+      'max-w-none',
+    )
+    fineNarrow.unmount()
+
+    stubPointer('coarse')
+    lgViewportState.current = false
+    const coarseNarrow = renderProbe()
+    expect(screen.getByRole('navigation', { name: 'Navigation terrain' })).toBeTruthy()
+    expect(screen.queryByLabelText('Navigation principale')).toBeNull()
+    expect(screen.getByTestId('layout-probe').textContent).toBe('true')
+    coarseNarrow.unmount()
+
+    stubPointer('coarse')
+    lgViewportState.current = true
+    renderProbe()
+    expect(screen.queryByRole('navigation', { name: 'Navigation terrain' })).toBeNull()
+    expect(screen.getByLabelText('Navigation principale')).toBeTruthy()
+    expect(screen.getByTestId('layout-probe').textContent).toBe('false')
   })
 
   it('publishes showBottomNav through the shell layout context', () => {

@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { installTestMatchMedia } from '@/test/viewport-match-media'
+
 import type { ChatConversationListItem } from '../types'
 import {
   collectOverflowYScrollElements,
@@ -225,6 +227,7 @@ describe('ChatPage flat conversation list', () => {
   beforeEach(() => {
     runtimeState.current = 'web'
     lgViewportState.current = false
+    installTestMatchMedia(false)
     statusQueryMock.mockReturnValue(buildStatusQueryState())
     conversationsQueryMock.mockReturnValue(buildConversationsQueryState())
     pinMutationState.isPending = false
@@ -1022,6 +1025,7 @@ describe('ChatPage scroll layout', () => {
   beforeEach(() => {
     runtimeState.current = 'web'
     lgViewportState.current = false
+    installTestMatchMedia(false)
     statusQueryMock.mockReturnValue(buildStatusQueryState())
     conversationsQueryMock.mockReturnValue(buildConversationsQueryState())
   })
