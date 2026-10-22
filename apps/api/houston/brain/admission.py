@@ -1,7 +1,9 @@
 """Atomic admission of one Brain analysis or follow-up.
 
-Access, then the existing work, then the establishment slot, then capacity.
-A follow-up uses this function. It does not open a second lock.
+The idempotency key absorbs a technical double send. The context fingerprint
+returns the queued, running, or completed analysis of the same reporting,
+period, mechanisms, and contributions. A follow-up does not take the
+one-running analysis lock.
 """
 
 from __future__ import annotations
@@ -12,7 +14,11 @@ import uuid
 from django.conf import settings
 from django.db import IntegrityError, transaction
 
-from houston.brain.configuration import admission_configuration
+from houston.brain.configuration import (
+    admission_configuration,
+    context_fingerprint,
+    copied_mechanisms,
+)
 from houston.brain.errors import (
     BrainAccessDenied,
     BrainCapacityUnavailable,
@@ -32,6 +38,11 @@ from houston.establishments.permissions import resolve_establishment_admin_actor
 logger = logging.getLogger(__name__)
 
 _ACTIVE = (BrainSlot.Status.QUEUED, BrainSlot.Status.RUNNING)
+_OPEN_ANALYSIS = (
+    BrainAnalysis.Status.QUEUED,
+    BrainAnalysis.Status.RUNNING,
+    BrainAnalysis.Status.COMPLETED,
+)
 _KEY_MAX = 128
 _PURPOSES = {choice.value for choice in BrainMessage.Purpose}
 _DECLARATIONS = {
@@ -52,6 +63,7 @@ def admit_brain_work(
     body: str | None = None,
     purpose: str | None = None,
     cited_item_ids: list[str] | None = None,
+    contributions: list | None = None,
 ) -> BrainAnalysis | BrainMessage:
     """Insert one queued analysis or follow-up, or return the work already admitted.
 
@@ -67,6 +79,7 @@ def admit_brain_work(
         text = body.strip()
     else:
         key = _clean_key(idempotency_key)
+        joined = _contributions(contributions)
     try:
         with transaction.atomic():
             BrainCapacity.objects.select_for_update().get(pk=1)
@@ -83,9 +96,14 @@ def admit_brain_work(
             existing = _analysis_for_key(establishment_id, key)
             if existing is not None:
                 return existing
-            active = _active_work(establishment_id)
-            if active is not None:
-                return active
+            fingerprint, mechanisms = _fingerprint_for(
+                establishment_id=establishment_id,
+                reporting_id=reporting_id,
+                contributions=joined,
+            )
+            same_context = _analysis_for_fingerprint(establishment_id, fingerprint)
+            if same_context is not None:
+                return same_context
             _require_capacity()
             try:
                 with transaction.atomic():
@@ -94,10 +112,14 @@ def admit_brain_work(
                         establishment_id=establishment_id,
                         reporting_id=reporting_id,
                         idempotency_key=key,
+                        contributions=joined,
+                        fingerprint=fingerprint,
+                        mechanisms=mechanisms,
                     )
             except IntegrityError:
-                raced = _analysis_for_key(establishment_id, key) or _active_work(
-                    establishment_id
+                raced = _analysis_for_key(establishment_id, key) or _analysis_for_fingerprint(
+                    establishment_id,
+                    fingerprint,
                 )
                 if raced is None:
                     raise
@@ -131,17 +153,33 @@ def _analysis_for_key(establishment_id, idempotency_key: str) -> BrainAnalysis |
     ).first()
 
 
-def _active_work(establishment_id) -> BrainAnalysis | BrainMessage | None:
-    slot = (
-        BrainSlot.objects.select_related("analysis", "message")
-        .filter(establishment_id=establishment_id, status__in=_ACTIVE)
+def _analysis_for_fingerprint(establishment_id, fingerprint: str) -> BrainAnalysis | None:
+    if not fingerprint:
+        return None
+    return (
+        BrainAnalysis.objects.filter(
+            establishment_id=establishment_id,
+            context_fingerprint=fingerprint,
+            status__in=_OPEN_ANALYSIS,
+        )
+        .order_by("created_at", "id")
         .first()
     )
-    if slot is None:
+
+
+def _active_follow_up(establishment_id) -> BrainMessage | None:
+    slot = (
+        BrainSlot.objects.select_related("message")
+        .filter(
+            establishment_id=establishment_id,
+            status__in=_ACTIVE,
+            kind=BrainSlot.Kind.FOLLOW_UP,
+        )
+        .first()
+    )
+    if slot is None or slot.message_id is None:
         return None
-    if slot.kind == BrainSlot.Kind.FOLLOW_UP and slot.message_id is not None:
-        return slot.message
-    return slot.analysis
+    return slot.message
 
 
 def _clean_follow_up(body, purpose, cited_item_ids) -> list[str]:
@@ -197,7 +235,7 @@ def _admit_follow_up(
     existing = BrainMessage.objects.filter(analysis=analysis, request_id=request_id).first()
     if existing is not None:
         return existing
-    active = _active_work(establishment_id)
+    active = _active_follow_up(establishment_id)
     if active is not None:
         return active
     closed = BrainDossier.objects.filter(
@@ -224,7 +262,7 @@ def _admit_follow_up(
         raced = BrainMessage.objects.filter(
             analysis=analysis,
             request_id=request_id,
-        ).first() or _active_work(analysis.establishment_id)
+        ).first() or _active_follow_up(analysis.establishment_id)
         if raced is None:
             raise
         return raced
@@ -286,14 +324,59 @@ def _insert_follow_up(
 
 def _require_capacity() -> None:
     limit = int(settings.HOUSTON_BRAIN_MAX_QUEUED_AND_RUNNING)
-    active = BrainSlot.objects.filter(status__in=_ACTIVE).count()
-    if active >= limit:
+    analyses = BrainAnalysis.objects.filter(
+        status__in=(BrainAnalysis.Status.QUEUED, BrainAnalysis.Status.RUNNING)
+    ).count()
+    messages = BrainMessage.objects.filter(
+        status__in=(BrainMessage.Status.QUEUED, BrainMessage.Status.RUNNING)
+    ).count()
+    if analyses + messages >= limit:
         raise BrainCapacityUnavailable()
 
 
-def _insert_analysis(
-    *, actor, establishment_id, reporting_id, idempotency_key: str
-) -> BrainAnalysis:
+def _contributions(value) -> list[dict]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise BrainWorkError(
+            code="invalid_contribution",
+            message="L'apport joint n'est pas reconnu.",
+        )
+    rows = []
+    seen = set()
+    for item in value:
+        if isinstance(item, str):
+            kind, text = "apport", item.strip()
+        elif isinstance(item, dict):
+            kind = str(item.get("kind") or "apport").strip() or "apport"
+            text = str(item.get("text") or "").strip()
+        else:
+            raise BrainWorkError(
+                code="invalid_contribution",
+                message="L'apport joint n'est pas reconnu.",
+            )
+        if not text or (kind, text) in seen:
+            continue
+        seen.add((kind, text))
+        rows.append({"kind": kind, "text": text})
+    rows.sort(key=lambda row: (row["kind"], row["text"]))
+    return rows
+
+
+def _fingerprint_for(*, establishment_id, reporting_id, contributions: list[dict]):
+    reporting = _ready_reporting(establishment_id, reporting_id)
+    mechanisms = copied_mechanisms()
+    return (
+        context_fingerprint(
+            reporting=reporting,
+            mechanisms=mechanisms,
+            contributions=contributions,
+        ),
+        mechanisms,
+    )
+
+
+def _ready_reporting(establishment_id, reporting_id) -> BrainReporting:
     reporting = BrainReporting.objects.filter(
         id=reporting_id,
         establishment_id=establishment_id,
@@ -309,6 +392,20 @@ def _insert_analysis(
             code="reporting_not_ready",
             message="Le reporting n'est pas prêt pour une analyse.",
         )
+    return reporting
+
+
+def _insert_analysis(
+    *,
+    actor,
+    establishment_id,
+    reporting_id,
+    idempotency_key: str,
+    contributions: list[dict],
+    fingerprint: str,
+    mechanisms: list[dict],
+) -> BrainAnalysis:
+    reporting = _ready_reporting(establishment_id, reporting_id)
     extraction = (
         BrainExtraction.objects.filter(
             reporting_id=reporting.id,
@@ -330,18 +427,21 @@ def _insert_analysis(
         idempotency_key=idempotency_key,
         status=BrainAnalysis.Status.QUEUED,
         attempt_token=token,
-        configuration=admission_configuration(extraction),
+        context_fingerprint=fingerprint,
+        configuration=admission_configuration(
+            extraction,
+            mechanisms=mechanisms,
+            contributions=contributions,
+        ),
     )
-    BrainSlot.objects.create(
+    running = BrainAnalysis.objects.filter(
         establishment_id=establishment_id,
-        analysis=analysis,
-        kind=BrainSlot.Kind.ANALYSIS,
-        status=BrainSlot.Status.QUEUED,
-        token=token,
-    )
-    from houston.brain.runtime import schedule_analysis_publish
+        status=BrainAnalysis.Status.RUNNING,
+    ).exists()
+    if not running:
+        from houston.brain.runtime import schedule_analysis_publish
 
-    schedule_analysis_publish(analysis.id, token)
+        schedule_analysis_publish(analysis.id, token)
     logger.info(
         "brain_analysis_admitted",
         extra={

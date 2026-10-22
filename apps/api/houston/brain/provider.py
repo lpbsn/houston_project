@@ -7,7 +7,6 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
-from houston.brain.contract import minimal_analysis
 from houston.brain.errors import BrainWorkError
 
 
@@ -78,15 +77,8 @@ class FakeBrainProvider:
                 input_tokens=1,
                 output_tokens=None,
             )
-        if mode == "omit_input_usage":
-            return ProviderCallResult(
-                output=minimal_analysis(_piece_ids(payload)),
-                truncated=False,
-                input_tokens=None,
-                output_tokens=1,
-            )
         return ProviderCallResult(
-            output=minimal_analysis(_piece_ids(payload)),
+            output={"lot_key": lot_key},
             truncated=False,
             input_tokens=None,
             output_tokens=1,
@@ -130,14 +122,25 @@ def _follow_up_result(payload: dict, mode: str) -> ProviderCallResult:
     )
 
 
-def _piece_ids(payload: dict) -> list[str]:
-    if isinstance(payload, dict) and isinstance(payload.get("required_piece_ids"), list):
-        return [str(item) for item in payload["required_piece_ids"] if item]
-    found = []
-    for section in payload.get("sections") or []:
-        if isinstance(section, dict) and section.get("piece_id"):
-            found.append(str(section["piece_id"]))
-    return found or ["s0000"]
+class EngineFakeProvider:
+    """Local stand-in for the investigator. It does not open a socket."""
+
+    def complete(self, *, analysis_id: str, messages: list, tools: list, timeout_seconds: int):
+        from houston.brain.engine import EngineTurn
+
+        del analysis_id, messages, tools, timeout_seconds
+        hold = _env_int("HOUSTON_BRAIN_FAKE_HOLD_SECONDS")
+        if hold > 0:
+            time.sleep(hold)
+        mode = os.environ.get("HOUSTON_BRAIN_FAKE_MODE", "ok").strip() or "ok"
+        if mode == "unavailable":
+            raise BrainProviderUnavailable()
+        if mode == "truncated":
+            raise BrainWorkError(
+                code="response_invalid",
+                message="La réponse du fournisseur est tronquée.",
+            )
+        return EngineTurn(restitution={}, input_tokens=1, output_tokens=1)
 
 
 def _env_int(name: str) -> int:

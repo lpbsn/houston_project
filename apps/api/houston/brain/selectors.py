@@ -9,7 +9,6 @@ from django.db.models import Q
 from django.utils import timezone
 
 from houston.action_plans.models import ActionPlan
-from houston.brain.contract import public_sources
 from houston.brain.errors import BrainAccessDenied, BrainWorkError
 from houston.brain.models import (
     BrainAnalysis,
@@ -22,11 +21,9 @@ from houston.brain.models import (
     BrainObjective,
     BrainObjectiveEvaluation,
     BrainReporting,
-    BrainSearchRun,
     BrainSlot,
     BrainSuggestion,
 )
-from houston.brain.orchestration import public_search_code
 from houston.establishments.permissions import resolve_establishment_admin_actor
 from houston.platform.selectors import is_active_platform_operator
 
@@ -37,6 +34,36 @@ _PAGE_MAX = 50
 _MESSAGE_PAGE = 50
 _WARNING_LIMIT = 40
 _NOT_FOUND = "Not found."
+_LOCATOR_FIELDS = (
+    "format",
+    "sheet",
+    "page",
+    "fragment",
+    "block",
+    "table",
+    "row",
+    "column",
+    "cell",
+    "header",
+    "column_span",
+    "row_span",
+    "source_id",
+)
+_PUBLIC_FIELDS = (
+    "label",
+    "value",
+    "value_kind",
+    "unit",
+    "period",
+    "scope",
+    "definition",
+    "ambiguities",
+    "title",
+    "structured_summary",
+    "issue_focus",
+    "location_text",
+    "expected_action",
+)
 
 _FAILURE_MESSAGES = {
     "cancel_requested": "L'analyse a été annulée.",
@@ -388,22 +415,40 @@ def reporting_detail(*, user, establishment_id, reporting_id) -> dict:
 
 
 def active_brain_work(*, user, establishment_id) -> dict | None:
+    """The running analysis, otherwise the oldest queued one, otherwise a follow-up."""
     _admin(user, establishment_id)
+    running = (
+        BrainAnalysis.objects.filter(
+            establishment_id=establishment_id,
+            status=BrainAnalysis.Status.RUNNING,
+        )
+        .order_by("created_at", "id")
+        .first()
+    )
+    if running is not None:
+        return _analysis_work(running)
+    queued = (
+        BrainAnalysis.objects.filter(
+            establishment_id=establishment_id,
+            status=BrainAnalysis.Status.QUEUED,
+        )
+        .order_by("created_at", "id")
+        .first()
+    )
+    if queued is not None:
+        return _analysis_work(queued)
     slot = (
-        BrainSlot.objects.select_related("analysis", "message", "message__analysis")
+        BrainSlot.objects.select_related("message", "message__analysis")
         .filter(
             establishment_id=establishment_id,
             status__in=(BrainSlot.Status.QUEUED, BrainSlot.Status.RUNNING),
+            kind=BrainSlot.Kind.FOLLOW_UP,
         )
         .first()
     )
-    if slot is None:
+    if slot is None or slot.message_id is None:
         return None
-    if slot.kind == BrainSlot.Kind.FOLLOW_UP and slot.message_id is not None:
-        return _message_work(slot.message)
-    if slot.analysis_id is None:
-        return None
-    return _analysis_work(slot.analysis)
+    return _message_work(slot.message)
 
 
 def analysis_page(*, user, establishment_id, limit, cursor: str | None) -> dict:
@@ -422,16 +467,15 @@ def analysis_page(*, user, establishment_id, limit, cursor: str | None) -> dict:
 
 
 def _qualification_fields(analysis: BrainAnalysis) -> dict:
-    """Public reading state. A lot result and a failed treatment leave both empty."""
+    """Public reading. A failed or canceled treatment has no qualification."""
     if analysis.status != BrainAnalysis.Status.COMPLETED or not isinstance(analysis.result, dict):
         return {"qualification": None, "investigation_succeeded": None}
     qualification = analysis.result.get("qualification")
-    if qualification not in {"complete", "partial", "refused", "factual_reading"}:
+    if qualification not in {"complete", "partial", "not_publishable"}:
         return {"qualification": None, "investigation_succeeded": None}
-    succeeded = analysis.result.get("investigation_succeeded")
     return {
         "qualification": qualification,
-        "investigation_succeeded": succeeded if isinstance(succeeded, bool) else False,
+        "investigation_succeeded": qualification in {"complete", "partial"},
     }
 
 
@@ -515,11 +559,6 @@ def analysis_detail(*, user, establishment_id, analysis_id) -> dict:
             establishment_id=establishment_id,
         ).order_by("created_at", "id")[:20]
     )
-    searches = []
-    if dossier is not None:
-        searches = list(
-            BrainSearchRun.objects.filter(dossier_id=dossier.id).order_by("code")
-        )
     result = (
         analysis.result
         if analysis.status == BrainAnalysis.Status.COMPLETED and isinstance(analysis.result, dict)
@@ -539,16 +578,7 @@ def analysis_detail(*, user, establishment_id, analysis_id) -> dict:
                 "capture_started_at": dossier.capture_started_at.isoformat(),
                 "closed_at": dossier.closed_at.isoformat() if dossier.closed_at else None,
             },
-            "searches": [
-                {
-                    "code": run.code,
-                    "examined_count": run.examined_count,
-                    "retained_count": run.retained_count,
-                    "criteria": run.criteria if isinstance(run.criteria, dict) else {},
-                }
-                for run in searches
-                if public_search_code(run.code)
-            ],
+            "searches": [],
             "messages": [_message_dict(message) for message in messages],
             "older_message_count": max(hidden, 0),
             "suggestions": [_suggestion_dict(row) for row in suggestions],
@@ -780,3 +810,55 @@ def platform_mechanism_candidates(*, user) -> list[dict]:
             }
         )
     return listed
+
+
+def public_sources(items) -> list[dict]:
+    """Citation index. Qualitative text stays in the section payload."""
+    sources = []
+    for item in items:
+        payload = item.payload if isinstance(item.payload, dict) else {}
+        entry = {
+            "item_id": str(item.id),
+            "category": item.category,
+            "role": item.role,
+            "locators": _item_locators(payload),
+        }
+        for key in _PUBLIC_FIELDS:
+            if key in payload and payload[key] not in (None, "", []):
+                entry[key] = payload[key]
+        sources.append(entry)
+    return sources
+
+
+def _item_locators(payload: dict) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+
+    def add(locator) -> None:
+        if not isinstance(locator, dict):
+            return
+        norm = {}
+        for key in _LOCATOR_FIELDS:
+            if key not in locator or locator[key] is None:
+                continue
+            text = str(locator[key]).strip()
+            if text:
+                norm[key] = text
+        if norm and norm not in found:
+            found.append(norm)
+
+    def walk(value) -> None:
+        if isinstance(value, dict):
+            if isinstance(value.get("locator"), dict):
+                add(value["locator"])
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    if isinstance(payload, dict):
+        walk(payload)
+        source_id = payload.get("source_id")
+        if source_id:
+            add({"source_id": source_id})
+    return found

@@ -16,7 +16,7 @@ from django.conf import settings
 
 from houston.brain.capture import capture_dossier
 from houston.brain.extract import extract_document
-from houston.brain.tests.test_runtime import _allow_publish, _prepare
+from houston.brain.tests.test_support import allow_publish, prepare
 from houston.signals.services import run_observation_pipeline
 from houston.testing.factories import create_membership
 from houston.testing.pipeline import create_observation
@@ -33,12 +33,12 @@ class _StopAfterStart:
 
 
 def test_observation_start_stays_on_its_queue_and_within_the_local_gate(monkeypatch):
-    _allow_publish(monkeypatch)
+    allow_publish(monkeypatch)
     route = settings.CELERY_TASK_ROUTES["houston.signals.tasks.process_observation_task"]["queue"]
     assert route == "ai_interactive"
     assert route != "brain_analysis"
 
-    analysis = _prepare(settings, ["Charge locale."])
+    analysis = prepare(settings, ["Charge locale."])
     membership = create_membership(establishment=analysis.establishment)
     baseline = _samples(membership, 5)
     provider_wait = _during(_provider_hold, membership)

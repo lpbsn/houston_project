@@ -15,12 +15,10 @@ from django.conf import settings
 from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
-from houston.brain.configuration import digest
-from houston.brain.contract import minimal_analysis
-from houston.brain.models import BrainAnalysis, BrainLot, BrainWorkerBeat
+from houston.brain.models import BrainAnalysis, BrainWorkerBeat
 from houston.brain.recovery import recover_brain_works
-from houston.brain.runtime import publish_brain_analysis, write_validated_lot
-from houston.brain.tests.test_runtime import _budgeted_envelopes, _prepare
+from houston.brain.runtime import claim_analysis, publish_brain_analysis
+from houston.brain.tests.test_support import prepare
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.slow]
 
@@ -129,7 +127,7 @@ def test_saturated_workers_leave_the_next_analysis_queued():
             worker.tail(),
         )
         _purge(worker.queue)
-        analyses = [_prepare(settings, [f"occupe {index} " * 5]) for index in range(3)]
+        analyses = [prepare(settings, [f"occupe {index} " * 5]) for index in range(3)]
         _wait_until(
             lambda: BrainAnalysis.objects.filter(
                 id__in=[item.id for item in analyses],
@@ -219,15 +217,7 @@ def test_killing_the_worker_retries_once_and_the_old_token_cannot_write(settings
         assert analysis.transient_retries_used == 1
         assert analysis.attempt_token != original
         assert analysis.status == BrainAnalysis.Status.QUEUED
-        assert write_validated_lot(
-            analysis_id=analysis.id,
-            attempt_token=original,
-            stable_key="lot-stolen",
-            input_hash="a" * 64,
-            configuration_hash="b" * 64,
-            output={"stolen": True},
-            reserved_input_tokens=1,
-        ) is False
+        assert claim_analysis(analysis.id, original) is False
         follower = BrainWorker(concurrency=1, hold_seconds=0)
         follower.start()
         try:
@@ -241,43 +231,9 @@ def test_killing_the_worker_retries_once_and_the_old_token_cannot_write(settings
             follower.stop()
         analysis.refresh_from_db()
         assert analysis.transient_retries_used == 1
-        lot = BrainLot.objects.get(analysis=analysis)
-        assert lot.attempt_token == analysis.attempt_token
-        assert lot.attempt_token != original
-    finally:
-        worker.stop()
-
-
-def test_a_live_worker_reuses_a_validated_lot_without_calling_the_provider(settings):
-    analysis = _prepare_without_publish(settings)
-    lot = _budgeted_envelopes(analysis)[0]
-    writer = uuid.uuid4()
-    output = minimal_analysis([lot.payload["sections"][0]["piece_id"]])
-    BrainLot.objects.create(
-        analysis=analysis,
-        stable_key=lot.stable_key,
-        input_hash=lot.input_hash,
-        configuration_hash=digest(analysis.configuration),
-        status=BrainLot.Status.VALIDATED,
-        output=output,
-        attempt_token=writer,
-        reserved_input_tokens=lot.reserved_input_tokens,
-    )
-    worker = BrainWorker(concurrency=1, hold_seconds=0)
-    worker.start()
-    try:
-        _wait_until(lambda: BrainWorkerBeat.objects.exists(), 25, worker.tail())
-        _purge(worker.queue)
-        assert publish_brain_analysis(analysis.id, analysis.attempt_token) is True
-        _wait_until(
-            lambda: _status(analysis) == BrainAnalysis.Status.COMPLETED,
-            25,
-            worker.tail(),
-        )
-        stored = BrainLot.objects.get(analysis=analysis)
-        assert stored.output == output
-        assert stored.attempt_token == writer
-        assert AIUsageLog.objects.filter(correlation_id=analysis.id).count() == 0
+        assert analysis.failure_code == ""
+        assert analysis.result["qualification"] == "not_publishable"
+        assert claim_analysis(analysis.id, original) is False
     finally:
         worker.stop()
 
@@ -298,7 +254,6 @@ def test_double_delivery_claims_once(settings):
         )
         analysis.refresh_from_db()
         assert analysis.attempt_count == 1
-        assert BrainLot.objects.filter(analysis=analysis).count() == 1
         assert AIUsageLog.objects.filter(correlation_id=analysis.id).count() == 1
     finally:
         worker.stop()
@@ -317,7 +272,7 @@ def _prepare_without_publish(settings):
     original = runtime.publish_brain_analysis
     runtime.publish_brain_analysis = _publish
     try:
-        analysis = _prepare(settings, ["worker lot"])
+        analysis = prepare(settings, ["worker lot"])
     finally:
         runtime.publish_brain_analysis = original
     analysis.refresh_from_db()

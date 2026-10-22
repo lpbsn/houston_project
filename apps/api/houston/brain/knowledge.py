@@ -161,6 +161,7 @@ def decide_mechanism(*, user, candidate_id, decision: str) -> None:
                 message="L'approbation exige une formulation globale déjà préparée.",
             )
         version = BrainKnowledgeVersion.objects.create(
+            identifier=candidate.stable_key[:80],
             global_formulation=representation["formulation"],
             conditions=representation["conditions"],
             limits=representation["limits"],
@@ -193,7 +194,10 @@ def activate_knowledge_version(*, user, version_id) -> BrainKnowledgeVersion:
                 code="knowledge_not_approved",
                 message="Une version non approuvée ne s'active pas.",
             )
-        BrainKnowledgeVersion.objects.filter(is_active=True).exclude(pk=version.id).update(
+        BrainKnowledgeVersion.objects.filter(
+            is_active=True,
+            identifier=version.identifier,
+        ).exclude(pk=version.id).update(
             is_active=False,
             updated_at=timezone.now(),
         )

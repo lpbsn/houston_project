@@ -72,7 +72,6 @@ CELERY_TASK_ROUTES = {
         "queue": QUEUE_MAINTENANCE
     },
     "houston.brain.tasks.run_brain_analysis_task": {"queue": QUEUE_BRAIN_ANALYSIS},
-    "houston.brain.tasks.run_brain_investigation_task": {"queue": QUEUE_BRAIN_ANALYSIS},
     "houston.brain.tasks.run_brain_follow_up_task": {"queue": QUEUE_BRAIN_ANALYSIS},
     "houston.brain.tasks.recover_brain_analysis_task": {"queue": QUEUE_OPERATIONAL},
     "houston.gamification.tasks.rollover_gamification_seasons_task": {

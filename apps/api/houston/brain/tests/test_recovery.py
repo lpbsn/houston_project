@@ -8,15 +8,16 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from houston.brain.admission import admit_brain_work
 from houston.brain.models import (
     BrainAnalysis,
-    BrainLot,
     BrainSlot,
     BrainWorkerBeat,
 )
 from houston.brain.recovery import recover_brain_works
-from houston.brain.runtime import write_validated_lot
-from houston.brain.tests.test_runtime import _allow_publish, _prepare
+from houston.brain.runtime import claim_analysis
+from houston.brain.tests.test_admission import _reporting
+from houston.brain.tests.test_support import allow_publish, prepare
 
 pytestmark = pytest.mark.django_db
 
@@ -29,8 +30,8 @@ def _beat(name: str, *, in_flight: int, concurrency: int, at):
 
 
 def _queued(monkeypatch, settings, name: str) -> BrainAnalysis:
-    _allow_publish(monkeypatch)
-    return _prepare(settings, [name])
+    allow_publish(monkeypatch)
+    return prepare(settings, [name])
 
 
 def test_a_queued_analysis_behind_full_processes_stays_queued(monkeypatch, settings):
@@ -89,6 +90,51 @@ def test_a_free_beat_that_disappears_before_the_stall_does_not_republish(monkeyp
     assert waiting.transient_retries_used == 0
 
 
+def test_a_waiter_behind_a_running_analysis_does_not_block_another_establishment(
+    monkeypatch, settings
+):
+    settings.HOUSTON_BRAIN_TRANSPORT_STALL_SECONDS = 120
+    settings.HOUSTON_BRAIN_WORKER_BEAT_STALE_SECONDS = 1_000
+    published = []
+
+    def _publish(analysis_id, attempt_token):
+        published.append(str(analysis_id))
+        return True
+
+    monkeypatch.setattr("houston.brain.recovery.publish_brain_analysis", _publish)
+    waiter = prepare(settings, ["file interne"])
+    reporting = _reporting(waiter.establishment, waiter.author)
+    reporting.storage_key = f"{reporting.storage_key}-cours"
+    reporting.content_sha256 = "c" * 64
+    reporting.save(update_fields=["storage_key", "content_sha256", "updated_at"])
+    reporting.extractions.update(source_sha256="c" * 64)
+    running = admit_brain_work(
+        user=waiter.author,
+        establishment_id=waiter.establishment_id,
+        reporting_id=reporting.id,
+        idempotency_key="en-cours",
+    )
+    now = timezone.now()
+    running.status = BrainAnalysis.Status.RUNNING
+    running.claimed_at = now
+    running.lease_expires_at = now + timedelta(seconds=900)
+    running.save()
+    victim = prepare(settings, ["autre hotel"])
+    published.clear()
+    start = timezone.now()
+    _beat("child-a", in_flight=0, concurrency=1, at=start)
+    recover_brain_works(now=start)
+    result = recover_brain_works(now=start + timedelta(seconds=120))
+    victim.refresh_from_db()
+    waiter.refresh_from_db()
+    assert result["transport_republished"] == 1
+    assert published == [str(victim.id)]
+    assert victim.transport_republish_count == 1
+    assert waiter.status == BrainAnalysis.Status.QUEUED
+    assert waiter.transport_republish_count == 0
+    assert waiter.failure_code == ""
+
+
 def test_continuous_free_beat_republishes_once(monkeypatch, settings):
     settings.HOUSTON_BRAIN_TRANSPORT_STALL_SECONDS = 120
     settings.HOUSTON_BRAIN_WORKER_BEAT_STALE_SECONDS = 1_000
@@ -99,7 +145,7 @@ def test_continuous_free_beat_republishes_once(monkeypatch, settings):
         return True
 
     monkeypatch.setattr("houston.brain.recovery.publish_brain_analysis", _publish)
-    waiting = _prepare(settings, ["perte prouvee"])
+    waiting = prepare(settings, ["perte prouvee"])
     published.clear()
     start = timezone.now()
     _beat("child-a", in_flight=0, concurrency=1, at=start)
@@ -117,8 +163,8 @@ def test_transport_loss_does_not_change_the_execution_retry_counter(monkeypatch,
     settings.HOUSTON_BRAIN_TRANSPORT_STALL_SECONDS = 120
     settings.HOUSTON_BRAIN_TRANSPORT_REPUBLISH_MAX = 5
     settings.HOUSTON_BRAIN_WORKER_BEAT_STALE_SECONDS = 1_000
-    _allow_publish(monkeypatch)
-    waiting = _prepare(settings, ["plafond transport"])
+    allow_publish(monkeypatch)
+    waiting = prepare(settings, ["plafond transport"])
     start = timezone.now()
     waiting.transport_republish_count = 5
     waiting.transport_stall_since = start - timedelta(seconds=120)
@@ -134,26 +180,18 @@ def test_transport_loss_does_not_change_the_execution_retry_counter(monkeypatch,
 
 
 def test_an_expired_lease_requeues_once_and_the_old_token_cannot_write(monkeypatch, settings):
-    _allow_publish(monkeypatch)
-    analysis = _prepare(settings, ["bail expire"])
+    allow_publish(monkeypatch)
+    analysis = prepare(settings, ["bail expire"])
     now = timezone.now()
     original = analysis.attempt_token
+    trace = [{"kind": "tool", "tool": "search_signals", "envelope": {"kept": True}}]
     analysis.status = BrainAnalysis.Status.RUNNING
     analysis.claimed_at = now - timedelta(seconds=300)
     analysis.lease_expires_at = now - timedelta(seconds=1)
     analysis.transient_retries_used = 0
     analysis.transport_republish_count = 4
+    analysis.trace = trace
     analysis.save()
-    BrainLot.objects.create(
-        analysis=analysis,
-        stable_key="lot-0001",
-        input_hash="d" * 64,
-        configuration_hash="e" * 64,
-        status=BrainLot.Status.VALIDATED,
-        output={"kept": True},
-        attempt_token=original,
-        reserved_input_tokens=3,
-    )
     recover_brain_works(now=now)
     analysis.refresh_from_db()
     assert analysis.status == BrainAnalysis.Status.QUEUED
@@ -161,17 +199,6 @@ def test_an_expired_lease_requeues_once_and_the_old_token_cannot_write(monkeypat
     assert analysis.transient_retries_used == 1
     assert analysis.transport_republish_count == 4
     assert analysis.claimed_at is None
-    stored = BrainLot.objects.get(analysis=analysis)
-    assert stored.output == {"kept": True}
-    assert stored.attempt_token == original
-    assert write_validated_lot(
-        analysis_id=analysis.id,
-        attempt_token=original,
-        stable_key="lot-0002",
-        input_hash="f" * 64,
-        configuration_hash="a" * 64,
-        output={"stolen": True},
-        reserved_input_tokens=1,
-    ) is False
-    assert BrainLot.objects.filter(analysis=analysis).count() == 1
+    assert analysis.trace == trace
+    assert claim_analysis(analysis.id, original) is False
     assert uuid.UUID(str(analysis.attempt_token))

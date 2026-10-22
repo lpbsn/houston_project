@@ -150,12 +150,28 @@ class BrainAnalysis(BaseModel):
     provider_calls_used = models.PositiveIntegerField(default=0)
     configuration = models.JSONField()
     result = models.JSONField(null=True, blank=True)
+    # Tool name, arguments, and returned copy ids, in order. Texts stay on the dossier.
+    trace = models.JSONField(default=list, blank=True)
+    # Reporting, period, copied mechanisms, and joined contributions. Blank on rows
+    # admitted before this identity existed; those rows do not block a new launch.
+    context_fingerprint = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["establishment", "idempotency_key"],
                 name="brain_an_est_idem_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "context_fingerprint"],
+                condition=Q(status__in=["queued", "running", "completed"])
+                & ~Q(context_fingerprint=""),
+                name="brain_an_ctx_live_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment"],
+                condition=Q(status="running"),
+                name="brain_an_one_running",
             ),
             models.CheckConstraint(
                 condition=Q(
@@ -173,6 +189,10 @@ class BrainAnalysis(BaseModel):
         indexes = [
             models.Index(fields=["author"], name="brain_an_author_idx"),
             models.Index(fields=["status", "created_at"], name="brain_an_stat_cr_idx"),
+            models.Index(
+                fields=["establishment", "status", "created_at"],
+                name="brain_an_est_stat_cr_idx",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -763,8 +783,12 @@ class BrainObjectiveEvaluation(BaseModel):
 
 
 class BrainKnowledgeVersion(BaseModel):
-    """Platform formulation. Approval does not activate it."""
+    """Platform formulation. Approval does not activate it.
 
+    Several versions may be active. Only one active row is allowed per identifier.
+    """
+
+    identifier = models.CharField(max_length=80, blank=True, default="")
     global_formulation = models.TextField()
     conditions = models.TextField(blank=True, default="")
     limits = models.TextField(blank=True, default="")
@@ -776,9 +800,9 @@ class BrainKnowledgeVersion(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["is_active"],
+                fields=["identifier"],
                 condition=Q(is_active=True),
-                name="brain_know_one_active",
+                name="brain_know_active_ident_uniq",
             ),
             models.CheckConstraint(
                 condition=~Q(is_active=True) | Q(approved_at__isnull=False),

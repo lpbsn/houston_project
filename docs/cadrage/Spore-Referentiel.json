@@ -1,0 +1,275 @@
+{
+  "schema_version": "spore.knowledge.2",
+  "version": "0.3.0",
+  "created_at": "2026-10-05",
+  "purpose": "Référentiel expérimental : raisonnements métier et mécanismes à mobiliser selon les preuves du site analysé.",
+  "scope": {
+    "sectors": [
+      "restauration"
+    ],
+    "case_count": 2,
+    "empirically_validated_mechanisms": 0,
+    "deployment_status": "candidat pour installation locale"
+  },
+  "usage_rules": [
+    "Les cas de référence ne sont pas des données du client analysé. Ne jamais attribuer leurs noms, chiffres, dates ou observations à ce client.",
+    "Choisir un mécanisme uniquement si les données actuelles en documentent les conditions ; expliquer les faits qui le soutiennent et les éléments manquants.",
+    "Distinguer décomposition arithmétique, faits rapportés et hypothèses causales. Ne pas transformer une convergence de faits en effet causal chiffré certain.",
+    "Une hypothèse opérationnelle bien étayée peut justifier une décision réversible sans attendre une preuve exhaustive. Adapter l’action au contexte.",
+    "Consulter les plans existants et leurs statuts avant de proposer une création. Un plan terminé ne prouve pas son impact.",
+    "Calculer les objectifs à partir du site courant. Ne pas copier les seuils, deux salariés ou horaires de ce cas comme règles universelles.",
+    "Séparer la validation du raisonnement, la validation du mécanisme, celle des objectifs et la preuve de résultat réel.",
+    "Une amélioration sur C01 après exposition à son corrigé est un exercice de développement, pas un test indépendant ni la preuve d’un entraînement des poids du modèle.",
+    "C01 et C02 sont désormais exposés avec leurs corrigés : les réserver au développement, pas à une évaluation indépendante.",
+    "Le moteur n’envoie que les mécanismes sélectionnés. L’archive privée des cas et ses corrigés ne sont pas joints aux analyses client."
+  ],
+  "mechanisms": [
+    {
+      "id": "M-REST-001",
+      "version": 1,
+      "title": "Répartition des heures, attente et ventes complémentaires",
+      "status": "expert_validated",
+      "origin_case_ids": [
+        "C01"
+      ],
+      "evidence_type": "cas fictif corrigé par un exploitant ; aucune efficacité empirique démontrée",
+      "principle": "À fréquentation et volume d’heures constants, une couverture insuffisante du pic de service peut allonger l’attente et réduire les ventes complémentaires. Comparer la répartition des heures à celle d’une période plus performante avant d’ajouter des effectifs.",
+      "applicability": {
+        "required_evidence": [
+          "Périodes comparables et baisse du ticket ou des ventes complémentaires.",
+          "Attente en hausse et indice documenté d’un changement de couverture au pic."
+        ],
+        "supporting_evidence": [
+          "Renoncements à des achats faute de temps.",
+          "Disponibilité des produits et tarifs inchangés.",
+          "Créneaux plus tardifs potentiellement moins chargés."
+        ],
+        "missing_evidence_response": "Demander au responsable de salle les horaires réellement couverts, les attentes et les ventes par créneau ; ne pas prescrire automatiquement un effectif."
+      },
+      "alternative_explanations": [
+        "Tarifs, promotions ou composition des ventes modifiés.",
+        "Rupture de produits.",
+        "Clientèle ou taille des groupes différentes.",
+        "Production cuisine ou équipement ralentissant le service.",
+        "Changement de méthode de mesure ou de collecte des avis."
+      ],
+      "decision_pattern": "Si les indices convergent vers le changement d’organisation, proposer le retour ciblé à la couverture antérieure, adapté aux contraintes actuelles, et mesurer les effets.",
+      "measurement_pattern": {
+        "leading_kpis": [
+          "Attente par créneau",
+          "Couverture du pic"
+        ],
+        "outcome_kpis": [
+          "CA boissons par couvert",
+          "CA desserts par couvert",
+          "Ticket moyen",
+          "Satisfaction avec taille d’échantillon"
+        ],
+        "guardrails": [
+          "Heures et coût salarial",
+          "Qualité du service sur les autres créneaux"
+        ],
+        "target_rule": "Valeurs de la période de référence comparable du client ; objectifs à valider, pas gains garantis."
+      },
+      "do_not_infer": [
+        "Toute baisse de ticket vient du personnel.",
+        "Deux personnes à midi est un standard universel.",
+        "Trois desserts refusés prouvent la cause de toute la baisse.",
+        "Une validation humaine sur un cas fictif prouve le mécanisme dans le réel."
+      ],
+      "empirical_results": [],
+      "validation": {
+        "date": "2026-10-05",
+        "by": "Maxime Deromedi",
+        "scope": "accord sur le schéma et les limites ; aucun résultat réel mesuré"
+      },
+      "retrieval": {
+        "kpis": [
+          "ticket moyen",
+          "CA boissons",
+          "CA desserts",
+          "satisfaction",
+          "attente"
+        ],
+        "situations": [
+          "attente",
+          "service",
+          "horaires",
+          "personnel",
+          "couverture",
+          "prise commande",
+          "déjeuner"
+        ],
+        "sectors": [
+          "restaurant",
+          "restauration",
+          "food beverage"
+        ]
+      }
+    },
+    {
+      "id": "M-REST-002",
+      "version": 1,
+      "title": "Utilité économique d’une formule à prix réduit",
+      "status": "expert_validated",
+      "origin_case_ids": [
+        "C02"
+      ],
+      "evidence_type": "cas fictif corrigé par un exploitant ; aucun résultat réel",
+      "principle": "Évaluer une formule selon les couverts supplémentaires et les ventes habituelles remplacées, en tenant compte du remplissage et des coûts ; sa popularité seule ne prouve pas son intérêt.",
+      "applicability": {
+        "required_evidence": [
+          "Prix réduit récemment introduit",
+          "Ticket en baisse et fréquentation stable",
+          "Tickets, coûts et remplissage à obtenir"
+        ]
+      },
+      "do_not_infer": [
+        "Ne pas confondre CA et marge.",
+        "Ne pas présumer que chaque vente de formule remplace une vente à plein tarif.",
+        "Une semaine supplémentaire renseigne sans démontrer à elle seule une causalité.",
+        "Renforcer la communication reste un test si des places sont disponibles, pas un gain garanti."
+      ],
+      "empirical_results": [],
+      "validation": {
+        "date": "2026-10-05",
+        "by": "Maxime Deromedi",
+        "scope": "accord sur le schéma et les limites ; aucun résultat réel mesuré"
+      },
+      "retrieval": {
+        "kpis": [
+          "ticket moyen",
+          "chiffre affaires",
+          "CA plats",
+          "CA boissons",
+          "couverts",
+          "remplissage",
+          "marge"
+        ],
+        "situations": [
+          "formule",
+          "promotion",
+          "prix réduit",
+          "remise",
+          "menu",
+          "fréquentation"
+        ],
+        "sectors": [
+          "restaurant",
+          "restauration",
+          "food beverage"
+        ]
+      },
+      "decision_pattern": "Recueillir les données manquantes, puis décider du maintien, de l’adaptation ou de l’arrêt ; ne pas agir sur une seule corrélation.",
+      "measurement_pattern": {
+        "outcome_kpis": [
+          "ticket moyen",
+          "chiffre affaires",
+          "CA plats",
+          "CA boissons",
+          "couverts",
+          "remplissage",
+          "marge"
+        ],
+        "target_rule": "Cible spécifique au site à valider après établissement de la base. Date de bilan proposée, puis confirmée par le client."
+      }
+    },
+    {
+      "id": "M-REST-003",
+      "version": 1,
+      "title": "Rupture ponctuelle et pertinence d’un produit",
+      "status": "expert_validated",
+      "origin_case_ids": [
+        "C02"
+      ],
+      "evidence_type": "cas fictif corrigé par un exploitant ; aucun résultat réel",
+      "principle": "Un CA de catégorie stable pendant une rupture peut déclencher une étude de simplification de carte, mais ne démontre pas que le produit est inutile.",
+      "applicability": {
+        "required_evidence": [
+          "Produit indisponible identifié",
+          "Durée de rupture connue",
+          "Ventes de catégorie et détails par produit à comparer"
+        ]
+      },
+      "do_not_infer": [
+        "Vérifier substitutions, marge, pertes et préférence des clients.",
+        "Ne pas extrapoler 40 minutes à une semaine entière.",
+        "Ne pas supprimer automatiquement le produit."
+      ],
+      "empirical_results": [],
+      "validation": {
+        "date": "2026-10-05",
+        "by": "Maxime Deromedi",
+        "scope": "accord sur le schéma et les limites ; aucun résultat réel mesuré"
+      },
+      "retrieval": {
+        "kpis": [
+          "CA desserts",
+          "ventes",
+          "marge",
+          "pertes"
+        ],
+        "situations": [
+          "rupture",
+          "indisponible",
+          "dessert",
+          "produit",
+          "substitution",
+          "carte"
+        ],
+        "sectors": [
+          "restaurant",
+          "restauration",
+          "food beverage"
+        ]
+      },
+      "decision_pattern": "Recueillir les données manquantes, puis décider du maintien, de l’adaptation ou de l’arrêt ; ne pas agir sur une seule corrélation.",
+      "measurement_pattern": {
+        "outcome_kpis": [
+          "CA desserts",
+          "ventes",
+          "marge",
+          "pertes"
+        ],
+        "target_rule": "Cible spécifique au site à valider après établissement de la base. Date de bilan proposée, puis confirmée par le client."
+      }
+    }
+  ],
+  "learned_mechanisms": [],
+  "maintenance": {
+    "workflow": [
+      "Ajouter les faits et la provenance du cas.",
+      "Recueillir la correction métier.",
+      "Proposer un mécanisme ou enrichir un mécanisme existant sans doublon.",
+      "Faire valider explicitement sa portée et ses limites.",
+      "Versionner ; conserver l’ancienne version.",
+      "Ajouter séparément les résultats réels lorsqu’ils sont mesurés."
+    ],
+    "schema_note": "mechanisms indexés et learned_mechanisms approuvés sont sélectionnés par le code. Les cas privés restent dans une archive distincte ; la mémoire client reste dans la base Spore."
+  },
+  "updated_at": "2026-10-05",
+  "change_log": [
+    {
+      "version": "0.2.0",
+      "date": "2026-10-05",
+      "changes": [
+        "Ajout C02 et retour métier de Maxime",
+        "Nuances assistant identifiées séparément",
+        "Deux mécanismes candidats ajoutés",
+        "C01 et son mécanisme conservés à l’identique"
+      ]
+    }
+  ],
+  "case_index": [
+    {
+      "id": "C01",
+      "nature": "synthetic",
+      "outcome_status": "not_observed"
+    },
+    {
+      "id": "C02",
+      "nature": "synthetic",
+      "outcome_status": "not_observed"
+    }
+  ]
+}

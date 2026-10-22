@@ -469,6 +469,71 @@ def _decimal(value):
         return None
 
 
+def single_sealed_measure_reading(
+    objective_payload: dict,
+    measure_items: list[tuple[str, dict]],
+) -> dict | None:
+    """Outcome when exactly one sealed reporting measure matches the indicator.
+
+    ``None`` means the count is not one. This does not read a live revision.
+    """
+    if objective_payload.get("decision") not in _ACCEPTED_DECISIONS:
+        return None
+    indicator = str(objective_payload.get("indicator") or "").strip().casefold()
+    if not indicator:
+        return None
+    matched = [
+        (item_id, payload)
+        for item_id, payload in measure_items
+        if str(payload.get("label") or "").strip().casefold() == indicator
+    ]
+    if len(matched) != 1:
+        return None
+    item_id, measure = matched[0]
+    stored = {
+        "item_id": item_id,
+        "value": measure.get("value"),
+        "unit": measure.get("unit"),
+    }
+    condition = str(objective_payload.get("success_condition") or "")
+    if condition == "qualitative":
+        return {
+            "outcome": OUTCOME_QUALITATIVE,
+            "reason": "qualitative_appreciation",
+            "measure": None,
+        }
+    if condition not in _NUMERIC_CONDITIONS:
+        return {
+            "outcome": OUTCOME_NON_EVALUABLE,
+            "reason": "condition_missing",
+            "measure": None,
+        }
+    if measure.get("ambiguities"):
+        reason = "ambiguous_measure"
+    elif not _same_unit(objective_payload.get("unit"), measure.get("unit")):
+        reason = "unit_mismatch"
+    elif _decimal(objective_payload.get("target")) is None:
+        reason = "target_not_numeric"
+    elif _decimal(measure.get("value")) is None:
+        reason = "comparison_not_verifiable"
+    else:
+        reached = _satisfies(
+            condition,
+            _decimal(objective_payload.get("target")),
+            _decimal(measure.get("value")),
+        )
+        return {
+            "outcome": OUTCOME_REACHED if reached else OUTCOME_NOT_REACHED,
+            "reason": "numeric_comparison",
+            "measure": stored,
+        }
+    return {
+        "outcome": OUTCOME_NON_EVALUABLE,
+        "reason": reason,
+        "measure": stored,
+    }
+
+
 def revision_overlaps_period(
     revision: BrainObjectiveRevision,
     *,
