@@ -5,6 +5,10 @@ import { act, cleanup, render } from '@testing-library/react'
 import { type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.hoisted(() => {
+  vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+})
+
 import { clearApiClientAuth } from '@/api/client'
 import { AuthProvider, useAuth } from '@/app/auth-provider'
 import { clearAuthState } from '@/features/auth/api'
