@@ -16,6 +16,7 @@ import {
   useUpdateRuntimeBusinessUnit,
 } from '@/features/establishment-config/hooks'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
+import { useServerText } from '@/features/establishment-config/lib/use-server-text'
 import {
   INSTANCE_DESCRIPTION_MAX_LENGTH,
   countedTextLength,
@@ -32,11 +33,21 @@ export function OperationalConfigBusinessUnitCard({
   establishmentId,
   canRemoveBusinessUnit,
 }: OperationalConfigBusinessUnitCardProps) {
-  const [description, setDescription] = useState(businessUnit.instance_description)
-  const [specificName, setSpecificName] = useState(businessUnit.specific_name)
+  const specificNameDraft = useServerText(businessUnit.specific_name, businessUnit.id)
+  const descriptionDraft = useServerText(businessUnit.instance_description, businessUnit.id)
+  const specificName = specificNameDraft.text
+  const description = descriptionDraft.text
   const [subjectLabel, setSubjectLabel] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [boundUnitId, setBoundUnitId] = useState(businessUnit.id)
+
+  if (businessUnit.id !== boundUnitId) {
+    setBoundUnitId(businessUnit.id)
+    setSubjectLabel('')
+    setFeedback(null)
+    setErrorMessage(null)
+  }
 
   const updateMutation = useUpdateRuntimeBusinessUnit(establishmentId)
   const deactivateBuMutation = useDeactivateRuntimeBusinessUnit(establishmentId)
@@ -55,8 +66,8 @@ export function OperationalConfigBusinessUnitCard({
 
   const descriptionLength = countedTextLength(description)
   const descriptionOverLimit = descriptionLength > INSTANCE_DESCRIPTION_MAX_LENGTH
-  const nameChanged = specificName.trim() !== businessUnit.specific_name.trim()
-  const descriptionChanged = description.trim() !== businessUnit.instance_description.trim()
+  const nameChanged = specificNameDraft.changed
+  const descriptionChanged = descriptionDraft.changed
   const canSaveDescription = descriptionChanged && !descriptionOverLimit
   const canSaveNameDespiteHistoricalDescription =
     nameChanged && !descriptionChanged && descriptionOverLimit
@@ -70,11 +81,11 @@ export function OperationalConfigBusinessUnitCard({
       specific_name?: string
       instance_description?: string
     } = {}
-    if (!descriptionOverLimit) {
+    if (nameChanged) {
       input.specific_name = specificName.trim()
+    }
+    if (descriptionChanged && !descriptionOverLimit) {
       input.instance_description = description.trim()
-    } else if (canSaveNameDespiteHistoricalDescription) {
-      input.specific_name = specificName.trim()
     }
 
     try {
@@ -222,7 +233,7 @@ export function OperationalConfigBusinessUnitCard({
             id={`name-${businessUnit.id}`}
             value={specificName}
             disabled={isBusy || isInactive}
-            onChange={(event) => setSpecificName(event.target.value)}
+            onChange={(event) => specificNameDraft.setText(event.target.value)}
             className="h-11 rounded-[1rem] border-[#e7dfd1] bg-white"
           />
         </div>
@@ -244,7 +255,7 @@ export function OperationalConfigBusinessUnitCard({
             id={`description-${businessUnit.id}`}
             value={description}
             disabled={isBusy || isInactive}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => descriptionDraft.setText(event.target.value)}
             placeholder="Décrivez le rôle opérationnel de ce pôle…"
             className="min-h-28 rounded-[1rem] border-[#e7dfd1] bg-white"
           />

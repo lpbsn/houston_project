@@ -4309,6 +4309,7 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/PatchedActivityDescriptionUpdateRequest'
+        required: true
       security:
       - BearerAccessToken: []
       responses:
@@ -15329,6 +15330,8 @@ components:
           type: string
           maxLength: 10000
           minLength: 10
+      required:
+      - description
     PatchedChatRenameGroupRequest:
       type: object
       properties:

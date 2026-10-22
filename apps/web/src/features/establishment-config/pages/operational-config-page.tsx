@@ -128,7 +128,7 @@ function OperationalConfigContent({ establishmentId }: { establishmentId: string
       ) : (
         businessUnits.map((businessUnit) => (
           <OperationalConfigBusinessUnitCard
-            key={`${businessUnit.id}:${businessUnit.instance_description}:${businessUnit.activity_subjects.length}:${businessUnit.active}`}
+            key={`${businessUnit.id}:${businessUnit.activity_subjects.length}:${businessUnit.active}`}
             businessUnit={businessUnit}
             establishmentId={establishmentId}
             canRemoveBusinessUnit={

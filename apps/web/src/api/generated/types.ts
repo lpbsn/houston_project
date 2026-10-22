@@ -5146,7 +5146,7 @@ export interface components {
             tasks?: components["schemas"]["ActionPlanTaskInput"][];
         };
         PatchedActivityDescriptionUpdateRequest: {
-            description?: string;
+            description: string;
         };
         PatchedChatRenameGroupRequest: {
             title?: string;
@@ -9899,7 +9899,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": components["schemas"]["PatchedActivityDescriptionUpdateRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["PatchedActivityDescriptionUpdateRequest"];

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.utils import (
     extend_schema_field,
     extend_schema_serializer,
@@ -247,6 +248,22 @@ class ActivityDescriptionUpdateRequestSerializer(serializers.Serializer):
         min_length=ACTIVITY_DESCRIPTION_MIN_LENGTH,
         max_length=ACTIVITY_DESCRIPTION_MAX_LENGTH,
     )
+
+
+class ActivityDescriptionUpdateRequestSerializerExtension(OpenApiSerializerExtension):
+    """Publish description as required on PATCH.
+
+    drf-spectacular omits required fields from partial request components, while
+    this endpoint rejects a body that does not include description.
+    """
+
+    target_class = ActivityDescriptionUpdateRequestSerializer
+
+    def map_serializer(self, auto_schema, direction):
+        schema = auto_schema._map_serializer(self.target, direction, bypass_extensions=True)
+        if direction == "request" and "description" not in schema.get("required", []):
+            schema["required"] = [*schema.get("required", []), "description"]
+        return schema
 
 
 class RuntimeActivitySubjectCreateRequestSerializer(serializers.Serializer):

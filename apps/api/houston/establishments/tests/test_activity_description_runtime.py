@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -38,6 +39,16 @@ def api_client():
 
 def activity_description_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/activity-description/"
+
+
+def test_activity_description_patch_schema_requires_description():
+    schema_text = (Path(__file__).resolve().parents[3] / "schema.yml").read_text()
+    component = schema_text.split("    PatchedActivityDescriptionUpdateRequest:\n", 1)[1]
+    component = component.split("\n    Patched", 1)[0]
+
+    assert "minLength: 10" in component
+    assert "maxLength: 10000" in component
+    assert "\n      required:\n      - description" in component
 
 
 def business_unit_detail_url(establishment_id, business_unit_id) -> str:
