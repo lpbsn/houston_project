@@ -1,7 +1,7 @@
 # Data inventory — Spore
 
 Status: authoritative for store privacy work
-Last reviewed: 2026-09-02
+Last reviewed: 2026-10-21
 
 This document describes **what the product actually collects and retains**, what account deletion does, and remaining uncertainties. It is the source of truth for Privacy Policy and store declarations. It is not a legal opinion.
 
@@ -25,7 +25,7 @@ This document describes **what the product actually collects and retains**, what
 
 ### Operational content
 
-- Observation `raw_text`, private photos (`ObservationMedia` / `TemporaryUpload`).
+- Observation `raw_text`, private photos (`ObservationMedia` / `TemporaryUpload`). An active `OWNER` membership of the same establishment can read `raw_text` on signal detail when `can_view_signal_detail` allows that signal. The exposed source is the earliest `CREATED_FROM` link (`observation.created_at`, then `observation.id`), and only when that observation belongs to the signal’s establishment; otherwise the detail field is null. Signal mutation responses that return this detail include the same text for that caller. `DIRECTOR`, `MANAGER`, and `STAFF` do not receive it, including on a signal they can otherwise open. Owners whose membership is not active, owners of another establishment, and Cross read-only views do not receive it. Feeds, notifications, realtime payloads, and technical logs still omit `raw_text`.
 - Comments and mention links.
 - Chat messages (7-day hard purge of message rows; conversations may remain empty).
 - Signals (title, structured summary from AI), action plans and executions, analytics patterns, gamification ledger (append-only).
