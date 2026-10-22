@@ -1,7 +1,7 @@
 # Security / RGPD Domain
 
 Status: authoritative
-Last reviewed: 2026-09-15
+Last reviewed: 2026-10-21
 Implementation status: partial
 
 ## 1. Purpose
@@ -40,7 +40,7 @@ Identity / Membership defines who the user is and which establishment they belon
 - Backend authorization is required before returning business data or granting business actions.
 - Security controls fail closed.
 - A processor agreement / DPA is a legal/business prerequisite for real client operation, but not a product feature in MVP.
-- Raw Observation text is sensitive operational input and must not appear in feeds, notifications, realtime payloads, technical logs, or persistent frontend storage.
+- Raw Observation text is sensitive operational input. Feeds, notifications, realtime payloads, technical logs, and persistent frontend storage do not include it. The authorized product read is the active Owner signal-detail rule in [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 - Media is private operational context and must never be public by default.
 - Notifications and realtime payloads are minimal and do not grant access.
 - AI only receives validated in-scope inputs; Chat is not analyzed in MVP; images are not sent to AI in MVP.
@@ -105,7 +105,7 @@ Auth session and account-deletion paths: [`apps/api/schema.yml`](../../../apps/a
 - TanStack Query owns server state. Auth bootstrap data must clear on logout or session loss.
 - Frontend fetches full content only through authenticated and authorized API calls.
 - Frontend must not rely on notification payloads or realtime payloads as business truth.
-- Frontend must not display raw Observation text in feed cards or from notification/realtime payloads.
+- Frontend must not display raw Observation text in feed cards or from notification/realtime payloads. Signal detail follows the Owner rule in [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 - Frontend must not store audio durably.
 - Frontend should keep any raw Observation draft behavior minimal and short-lived.
 - Frontend must handle `401`, `403`, and `404` without turning UI hints into security authority.
@@ -116,7 +116,7 @@ Auth session and account-deletion paths: [`apps/api/schema.yml`](../../../apps/a
 - Inspect `apps/api/schema.yml` before listing privacy/security endpoints.
 - Read `identity_membership_domain.md` and `rbac_permissions_domain.md` before changing access rules.
 - Do not log raw Observation text, chat body, full comments, audio, photos, tokens, secrets, or AI prompt/content.
-- Do not expose raw Observation text in feed, notification, realtime, or persistent frontend state.
+- Do not expose raw Observation text in feed, notification, realtime, or persistent frontend state. The Owner signal-detail read is [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 - Do not send images to AI in MVP.
 - Do not analyze Chat with AI in MVP.
 - Do not describe Houston as GDPR-compliant by default; describe implemented controls only.

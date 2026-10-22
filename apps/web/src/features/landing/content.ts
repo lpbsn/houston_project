@@ -148,6 +148,7 @@ export const privacyPolicyContent = {
         'Compte : e-mail ou identifiant, mot de passe haché, prénom, nom, identifiant interne, rôle et statut d’appartenance à un établissement.',
         'Session : jetons d’accès et de rafraîchissement sous forme de condensats, agent utilisateur, adresse IP (métadonnées de session), établissement sélectionné. Sur le web, le rafraîchissement utilise un cookie HttpOnly et un jeton CSRF. Sur Native, le rafraîchissement est stocké dans le stockage sécurisé Capacitor. Le jeton d’accès reste en mémoire.',
         'Contenu opérationnel : texte d’observation, photos privées, commentaires et mentions, messages de chat, signaux, plans d’action, notifications in-app, éventuel historique de gamification.',
+        'Le propriétaire de l’établissement peut consulter le texte original d’une observation.',
         'Appareil : microphone pour la transcription (audio traité le temps de la requête, puis supprimé ; seul le texte est conservé). Photos via le sélecteur de fichiers. Jeton de notification push (FCM) si vous activez les notifications Native.',
         'Formulaire de contact de la landing : nom et prénom, e-mail professionnel, établissement ou groupe, téléphone s’il est renseigné, et message.',
         'Spore ne collecte pas de géolocalisation, carnet de contacts, biométrie, identifiant publicitaire, ni d’analytics produit via un SDK dédié.',
