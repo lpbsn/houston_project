@@ -4245,6 +4245,103 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/activity-description/:
+    get:
+      operationId: v1_establishments_activity_description_retrieve
+      description: Returns the establishment activity description. An active establishment
+        without a stored row returns an empty description.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDescriptionResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_activity_description_partial_update
+      description: Updates only the establishment activity description text.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActivityDescriptionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActivityDescriptionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActivityDescriptionUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDescriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/:
     post:
       operationId: v1_establishments_activity_subjects_deactivate_create
@@ -11251,6 +11348,13 @@ components:
       required:
       - establishment_id
       - requires_login
+    ActivityDescriptionResponse:
+      type: object
+      properties:
+        description:
+          type: string
+      required:
+      - description
     ActivitySubjectTreeItem:
       type: object
       properties:
@@ -15218,6 +15322,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActionPlanTaskInput'
+    PatchedActivityDescriptionUpdateRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 10000
+          minLength: 10
     PatchedChatRenameGroupRequest:
       type: object
       properties:
@@ -15260,6 +15371,7 @@ components:
           maxLength: 255
         instance_description:
           type: string
+          maxLength: 5000
     PatchedUserProfileUpdateRequest:
       type: object
       properties:
@@ -15930,6 +16042,7 @@ components:
         instance_description:
           type: string
           default: ''
+          maxLength: 5000
       required:
       - catalog_key
       - specific_name

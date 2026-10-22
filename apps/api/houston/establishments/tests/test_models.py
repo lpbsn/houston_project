@@ -4,13 +4,16 @@ from django.db import IntegrityError
 
 from houston.accounts.models import User
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MAX_LENGTH,
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    INSTANCE_DESCRIPTION_MAX_LENGTH,
     BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipScope,
     OnboardingSession,
+    validate_instance_description,
 )
 from houston.establishments.services import (
     InvalidOnboardingSessionScopeError,
@@ -342,6 +345,42 @@ def test_start_onboarding_session_rejects_mismatched_scope(establishment):
             organization=other_organization,
             establishment=establishment,
         )
+
+
+def test_activity_description_bounds_count_unicode_code_points(establishment):
+    at_ceiling = EstablishmentActivityDescription(
+        establishment=establishment,
+        description="😀" * ACTIVITY_DESCRIPTION_MAX_LENGTH,
+    )
+    at_ceiling.full_clean()
+
+    padded = EstablishmentActivityDescription(
+        establishment=establishment,
+        description=f"  {'é' * ACTIVITY_DESCRIPTION_MAX_LENGTH}  ",
+    )
+    padded.full_clean()
+
+    too_long = EstablishmentActivityDescription(
+        establishment=establishment,
+        description="😀" * (ACTIVITY_DESCRIPTION_MAX_LENGTH + 1),
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        too_long.full_clean()
+    assert "description" in exc_info.value.message_dict
+
+
+def test_validate_instance_description_counts_unicode_code_points():
+    assert len("😀") == 1
+    assert (
+        validate_instance_description("😀" * INSTANCE_DESCRIPTION_MAX_LENGTH)
+        == "😀" * INSTANCE_DESCRIPTION_MAX_LENGTH
+    )
+    assert validate_instance_description(f"  {'é' * INSTANCE_DESCRIPTION_MAX_LENGTH}  ") == (
+        "é" * INSTANCE_DESCRIPTION_MAX_LENGTH
+    )
+    assert validate_instance_description("") == ""
+    with pytest.raises(ValidationError):
+        validate_instance_description("😀" * (INSTANCE_DESCRIPTION_MAX_LENGTH + 1))
 
 
 def test_activity_description_is_canonical_per_establishment(establishment):

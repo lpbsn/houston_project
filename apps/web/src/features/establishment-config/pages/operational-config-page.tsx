@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { OperationalConfigActivityDescriptionCard } from '@/features/establishment-config/components/operational-config-activity-description-card'
 import { OperationalConfigBusinessUnitCard } from '@/features/establishment-config/components/operational-config-business-unit-card'
 import {
   useCreateRuntimeBusinessUnit,
@@ -94,6 +95,8 @@ function OperationalConfigContent({ establishmentId }: { establishmentId: string
 
   return (
     <div className="space-y-4 px-4 py-5 sm:space-y-5">
+      <OperationalConfigActivityDescriptionCard establishmentId={establishmentId} />
+
       <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
         <CardHeader className="gap-2">
           <CardTitle className="text-lg font-semibold">Ajouter un pôle</CardTitle>

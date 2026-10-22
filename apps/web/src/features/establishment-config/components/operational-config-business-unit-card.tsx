@@ -16,8 +16,10 @@ import {
   useUpdateRuntimeBusinessUnit,
 } from '@/features/establishment-config/hooks'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
-
-const DESCRIPTION_MAX_LENGTH = 500
+import {
+  INSTANCE_DESCRIPTION_MAX_LENGTH,
+  countedTextLength,
+} from '@/features/onboarding/lib/onboarding-draft-payload'
 
 type OperationalConfigBusinessUnitCardProps = {
   businessUnit: BusinessUnitTreeItem
@@ -51,17 +53,34 @@ export function OperationalConfigBusinessUnitCard({
     deactivateSubjectMutation.isPending ||
     reactivateSubjectMutation.isPending
 
+  const descriptionLength = countedTextLength(description)
+  const descriptionOverLimit = descriptionLength > INSTANCE_DESCRIPTION_MAX_LENGTH
+  const nameChanged = specificName.trim() !== businessUnit.specific_name.trim()
+  const descriptionChanged = description.trim() !== businessUnit.instance_description.trim()
+  const canSaveDescription = descriptionChanged && !descriptionOverLimit
+  const canSaveNameDespiteHistoricalDescription =
+    nameChanged && !descriptionChanged && descriptionOverLimit
+  const canSave = canSaveDescription || (nameChanged && !descriptionOverLimit) || canSaveNameDespiteHistoricalDescription
+
   async function handleSave() {
     setFeedback(null)
     setErrorMessage(null)
 
+    const input: {
+      specific_name?: string
+      instance_description?: string
+    } = {}
+    if (!descriptionOverLimit) {
+      input.specific_name = specificName.trim()
+      input.instance_description = description.trim()
+    } else if (canSaveNameDespiteHistoricalDescription) {
+      input.specific_name = specificName.trim()
+    }
+
     try {
       await updateMutation.mutateAsync({
         businessUnitId: businessUnit.id,
-        input: {
-          specific_name: specificName.trim(),
-          instance_description: description.trim(),
-        },
+        input,
       })
       setFeedback('Pôle enregistré.')
     } catch (error) {
@@ -209,28 +228,38 @@ export function OperationalConfigBusinessUnitCard({
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor={`description-${businessUnit.id}`}>
-            Description d’instance
-          </label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium" htmlFor={`description-${businessUnit.id}`}>
+              Description d’instance
+            </label>
+            <span
+              className={
+                descriptionOverLimit ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'
+              }
+            >
+              {descriptionLength} / {INSTANCE_DESCRIPTION_MAX_LENGTH}
+            </span>
+          </div>
           <Textarea
             id={`description-${businessUnit.id}`}
             value={description}
-            maxLength={DESCRIPTION_MAX_LENGTH}
             disabled={isBusy || isInactive}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Décrivez le rôle opérationnel de ce pôle…"
             className="min-h-28 rounded-[1rem] border-[#e7dfd1] bg-white"
           />
+          {descriptionOverLimit ? (
+            <p className="text-sm text-destructive">
+              {descriptionChanged
+                ? 'La description dépasse 5 000 caractères. Raccourcissez-la pour l’enregistrer.'
+                : 'Cette description dépasse 5 000 caractères. Le nom peut être enregistré ; raccourcissez la description pour la mettre à jour.'}
+            </p>
+          ) : null}
           <div className="flex justify-end">
             <Button
               type="button"
               className="h-10 rounded-[1rem]"
-              disabled={
-                isBusy ||
-                isInactive ||
-                (specificName.trim() === businessUnit.specific_name.trim() &&
-                  description.trim() === businessUnit.instance_description.trim())
-              }
+              disabled={isBusy || isInactive || !canSave}
               onClick={() => {
                 void handleSave()
               }}
