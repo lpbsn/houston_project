@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import type {
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
@@ -356,7 +358,7 @@ function stubLgViewport(matches: boolean) {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches,
+      matches: testMediaMatches(query, matches),
       media: query,
       onchange: null,
       addListener: vi.fn(),

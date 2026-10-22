@@ -5,6 +5,8 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { SignalFeedItem } from '@/features/signals/types'
 import {
@@ -219,7 +221,7 @@ function mockLgViewport(matches: boolean) {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches,
+      matches: testMediaMatches(query, matches),
       media: query,
       onchange: null,
       addListener: vi.fn(),

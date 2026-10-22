@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
 import { ActionPlanTemplateUsePage } from './action-plan-template-use-page'
@@ -75,7 +77,7 @@ function enableDesktopWeb() {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes('1024'),
+      matches: testMediaMatches(query, query.includes('1024')),
       media: query,
       onchange: null,
       addListener: vi.fn(),
@@ -179,8 +181,8 @@ describe('ActionPlanTemplateUsePage', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
-      value: vi.fn().mockImplementation(() => ({
-        matches: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: testMediaMatches(query, true, 'fine'),
         media: '',
         onchange: null,
         addListener: vi.fn(),
