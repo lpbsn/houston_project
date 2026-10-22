@@ -4,7 +4,17 @@ export const DRAFT_STEP_TEAM = 'team' as const
 export type OnboardingDraftStep = typeof DRAFT_STEP_STRUCTURE | typeof DRAFT_STEP_TEAM
 
 export const ACTIVITY_DESCRIPTION_MIN_LENGTH = 10
-export const ACTIVITY_DESCRIPTION_MAX_LENGTH = 5000
+export const ACTIVITY_DESCRIPTION_MAX_LENGTH = 10000
+export const INSTANCE_DESCRIPTION_MAX_LENGTH = 5000
+
+/**
+ * Code-point length of the trimmed text.
+ * Matches Python `len(value.strip())`, including characters outside the BMP.
+ * `string.length` counts UTF-16 code units and would count an emoji as two.
+ */
+export function countedTextLength(value: string): number {
+  return Array.from(value.trim()).length
+}
 
 export type OnboardingDraftPerson = {
   email: string

@@ -1,6 +1,8 @@
 import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_DESCRIPTION_MIN_LENGTH,
+  INSTANCE_DESCRIPTION_MAX_LENGTH,
+  countedTextLength,
   isMemberRowEmpty,
   isPersonRowEmpty,
   type OnboardingDraftPayload,
@@ -24,7 +26,7 @@ export function isEstablishmentNameValid(name: string): boolean {
 }
 
 export function isEstablishmentDescriptionValid(description: string): boolean {
-  const length = description.trim().length
+  const length = countedTextLength(description)
   return length >= ACTIVITY_DESCRIPTION_MIN_LENGTH && length <= ACTIVITY_DESCRIPTION_MAX_LENGTH
 }
 
@@ -81,6 +83,14 @@ export function canContinueFromStructureStep(payload: OnboardingDraftPayload): S
         code: 'missing_specific_name',
         section: 'business_units',
         field: 'specific_name',
+        key: businessUnit.client_key,
+      })
+    }
+    if (countedTextLength(businessUnit.instance_description) > INSTANCE_DESCRIPTION_MAX_LENGTH) {
+      errors.push({
+        code: 'invalid_instance_description_length',
+        section: 'business_units',
+        field: 'instance_description',
         key: businessUnit.client_key,
       })
     }
@@ -220,8 +230,15 @@ export function removeBusinessUnitFromDraft(
 }
 
 export function structureStickyMessage(payload: OnboardingDraftPayload): string {
-  if (canContinueFromStructureStep(payload).ok) {
+  const gate = canContinueFromStructureStep(payload)
+  if (gate.ok) {
     return 'Tout est prêt, passons à l’équipe.'
+  }
+  const descriptionTooLong =
+    countedTextLength(payload.establishment.description) > ACTIVITY_DESCRIPTION_MAX_LENGTH ||
+    gate.errors.some((error) => error.code === 'invalid_instance_description_length')
+  if (descriptionTooLong) {
+    return 'Une description dépasse la longueur autorisée.'
   }
   return 'Nommez votre établissement et chaque pôle pour continuer.'
 }

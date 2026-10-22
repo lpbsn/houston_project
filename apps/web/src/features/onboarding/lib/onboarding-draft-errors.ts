@@ -20,7 +20,9 @@ function fieldPath(error: OnboardingDraftValidationErrorItem): string {
 const CODE_MESSAGES: Record<string, string> = {
   missing_establishment_name: 'Le nom de l’établissement est obligatoire.',
   invalid_activity_description_length:
-    'La description doit contenir entre 10 et 5 000 caractères.',
+    'La description doit contenir entre 10 et 10 000 caractères.',
+  invalid_instance_description_length:
+    'La description du pôle doit contenir au plus 5 000 caractères.',
   insufficient_business_units: 'Ajoutez au moins un pôle d’activité.',
   missing_catalog_key: 'Sélectionnez un pôle depuis le catalogue.',
   missing_specific_name: 'Le nom du pôle est obligatoire.',

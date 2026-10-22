@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -9,6 +11,8 @@ from houston.accounts.api.serializers import ApiErrorResponseSerializer, DetailR
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.establishments.access import get_api_access_context
 from houston.establishments.api.serializers import (
+    ActivityDescriptionResponseSerializer,
+    ActivityDescriptionUpdateRequestSerializer,
     ActivitySubjectTreeItemSerializer,
     BusinessUnitTreeItemSerializer,
     BusinessUnitTreeResponseSerializer,
@@ -75,12 +79,14 @@ from houston.establishments.services import (
     deactivate_membership_for_management,
     deactivate_runtime_activity_subject,
     deactivate_runtime_business_unit,
+    get_runtime_activity_description,
     invite_membership_for_establishment,
     reactivate_runtime_activity_subject,
     reactivate_runtime_business_unit,
     reinvite_membership_for_establishment,
     resolve_stale_owner_actor_membership_for_deactivation,
     update_membership_for_management,
+    update_runtime_activity_description,
     update_runtime_business_unit,
 )
 
@@ -113,6 +119,12 @@ def _runtime_config_conflict_response(exc: RuntimeConfigConflictError):
         },
         status=status.HTTP_409_CONFLICT,
     )
+
+
+def _raise_activity_description_validation(exc: DjangoValidationError) -> None:
+    if hasattr(exc, "error_dict"):
+        raise DRFValidationError(exc.message_dict) from exc
+    raise DRFValidationError(exc.messages) from exc
 
 
 class MembershipListView(APIView):
@@ -646,6 +658,67 @@ class EstablishmentBusinessUnitDetailView(APIView):
             serialize_business_unit_tree_item(business_unit=business_unit)
         )
         return Response(response_serializer.data)
+
+
+class EstablishmentActivityDescriptionView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        responses={
+            200: ActivityDescriptionResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Returns the establishment activity description. An active establishment "
+            "without a stored row returns an empty description."
+        ),
+    )
+    def get(self, request, establishment_id):
+        access_context = get_api_access_context(request)
+        try:
+            description = get_runtime_activity_description(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        return Response({"description": description})
+
+    @extend_schema(
+        tags=["establishments"],
+        request=ActivityDescriptionUpdateRequestSerializer,
+        responses={
+            200: ActivityDescriptionResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Updates only the establishment activity description text.",
+    )
+    def patch(self, request, establishment_id):
+        serializer = ActivityDescriptionUpdateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        access_context = get_api_access_context(request)
+        try:
+            description = update_runtime_activity_description(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                description=serializer.validated_data["description"],
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except DjangoValidationError as exc:
+            _raise_activity_description_validation(exc)
+        return Response({"description": description})
 
 
 class EstablishmentBusinessUnitReactivateView(APIView):

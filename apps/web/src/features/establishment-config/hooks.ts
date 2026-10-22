@@ -1,20 +1,45 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { businessUnitTreeQueryKey } from '@/features/auth/api'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 
 import {
+  activityDescriptionQueryKey,
   createRuntimeActivitySubject,
   createRuntimeBusinessUnit,
   deactivateRuntimeActivitySubject,
   deactivateRuntimeBusinessUnit,
+  fetchActivityDescription,
   reactivateRuntimeActivitySubject,
   reactivateRuntimeBusinessUnit,
+  updateActivityDescription,
   updateRuntimeBusinessUnit,
 } from './api'
 
 type QueryOptions = {
   enabled?: boolean
+}
+
+export function useActivityDescription(
+  establishmentId: string | null | undefined,
+  options?: QueryOptions,
+) {
+  return useQuery({
+    queryKey: activityDescriptionQueryKey(establishmentId ?? ''),
+    queryFn: () => fetchActivityDescription(establishmentId ?? ''),
+    enabled: Boolean(establishmentId) && (options?.enabled ?? true),
+  })
+}
+
+export function useUpdateActivityDescription(establishmentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (description: string) => updateActivityDescription(establishmentId, description),
+    onSuccess: (data) => {
+      queryClient.setQueryData(activityDescriptionQueryKey(establishmentId), data)
+    },
+  })
 }
 
 export function useOperationalConfigTree(

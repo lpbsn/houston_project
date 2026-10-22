@@ -8,6 +8,8 @@ import {
 
 describe('onboarding-draft-errors', () => {
   it('maps complete and invitation snake_case codes', () => {
+    expect(messageForDraftErrorCode('invalid_activity_description_length')).toContain('10 000')
+    expect(messageForDraftErrorCode('invalid_instance_description_length')).toContain('5 000')
     expect(messageForDraftErrorCode('activation_not_ready')).toContain('prérequis')
     expect(messageForDraftErrorCode('invalid_onboarding_state')).toBeTruthy()
     expect(messageForDraftErrorCode('draft_not_found')).toBeTruthy()

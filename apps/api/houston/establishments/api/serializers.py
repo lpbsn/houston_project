@@ -11,6 +11,9 @@ from houston.establishments.membership_scope import (
     membership_scope_rows_for_membership,
 )
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MAX_LENGTH,
+    ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    INSTANCE_DESCRIPTION_MAX_LENGTH,
     BusinessUnit,
     EstablishmentMembership,
 )
@@ -209,6 +212,8 @@ class RuntimeBusinessUnitCreateRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default="",
+        trim_whitespace=True,
+        max_length=INSTANCE_DESCRIPTION_MAX_LENGTH,
     )
 
 
@@ -218,7 +223,12 @@ class RuntimeBusinessUnitUpdateRequestSerializer(serializers.Serializer):
         max_length=255,
         required=False,
     )
-    instance_description = serializers.CharField(required=False, allow_blank=True)
+    instance_description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        max_length=INSTANCE_DESCRIPTION_MAX_LENGTH,
+    )
 
     def validate(self, attrs):
         if not attrs:
@@ -226,6 +236,18 @@ class RuntimeBusinessUnitUpdateRequestSerializer(serializers.Serializer):
                 "At least one of specific_name or instance_description must be provided."
             )
         return attrs
+
+
+class ActivityDescriptionResponseSerializer(serializers.Serializer):
+    description = serializers.CharField(allow_blank=True)
+
+
+class ActivityDescriptionUpdateRequestSerializer(serializers.Serializer):
+    description = serializers.CharField(
+        trim_whitespace=True,
+        min_length=ACTIVITY_DESCRIPTION_MIN_LENGTH,
+        max_length=ACTIVITY_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class RuntimeActivitySubjectCreateRequestSerializer(serializers.Serializer):

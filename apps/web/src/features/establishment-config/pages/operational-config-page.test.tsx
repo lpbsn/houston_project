@@ -42,6 +42,16 @@ vi.mock('@/features/establishment-config/hooks', () => ({
     isPending: false,
     mutateAsync: vi.fn(),
   }),
+  useActivityDescription: () => ({
+    data: { description: 'Description déjà enregistrée pour cet établissement.' },
+    isPending: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+  useUpdateActivityDescription: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
 }))
 
 vi.mock('@/features/onboarding/components/business-unit-autocomplete', () => ({
@@ -157,6 +167,7 @@ describe('OperationalConfigPage', () => {
 
     render(wrap(createElement(OperationalConfigPage, { establishmentId: 'est-1' })))
 
+    expect(screen.getByText('Description de l’établissement')).toBeTruthy()
     expect(screen.getByText('Ajouter un pôle')).toBeTruthy()
     expect(screen.queryByText('Retour')).toBeNull()
     expect(treeState.fetchCount).toBe(1)
