@@ -15,12 +15,12 @@ Does not own: Observation intake, AI contracts, Action Plan lifecycle, Feed quer
 
 In: create/aggregate from validated CandidateSignals; statuses `open`, `in_progress`, `interesting`, `resolved`, `canceled`; one primary BU/AS classification per Signal (`affected_business_unit`, `responsible_business_unit`, `activity_subject`; optional `operational_unit`, `location_text`, **`issue_focus`**); safe summaries; establishment-scoped commands.
 
-Out: manual Signal create; free-floating Signal; treating Signal as Observation, Action, or ticket; AI urgency or AI-created plans; frontend-owned transitions; public/cross-tenant links; raw Observation text on product surfaces; frontend merge; image AI.
+Out: manual Signal create; free-floating Signal; treating Signal as Observation, Action, or ticket; AI urgency or AI-created plans; frontend-owned transitions; public/cross-tenant links; raw Observation text on feeds, notifications, realtime, Cross detail, and durable frontend state; frontend merge; image AI.
 
 ## 3. Core invariants
 
 - Only backend-validated proposals create or aggregate a Signal. Observation remains a separate row even when aggregated.
-- Raw Observation text must not appear on Signal surfaces, notifications, realtime, or durable frontend state.
+- Feeds, notifications, realtime, Cross detail, and durable frontend state do not include raw Observation text. Establishment signal detail may include it only for the Owner read in [`rbac_permissions_domain.md`](rbac_permissions_domain.md), including on mutation responses that return that detail.
 - Lifecycle is backend-owned. Visibility does not imply actionability.
 - **One** primary BU/AS classification per Signal. Multiple problems in one Observation → multiple CandidateSignals / Signals.
 - Ma vue uses `MembershipScope` (Owner/Director: all active). Feed subscriptions are deferred — [`feed_subscription_domain.md`](feed_subscription_domain.md).
@@ -77,6 +77,6 @@ Keep these non-obvious query/response rules:
 
 ## 8. Frontend / agent notes
 
-Feed and detail show structured Signal cards, never raw Observation text. Hints are UX. Realtime is invalidation only.
+Feed cards show structured Signal fields and do not include raw Observation text. Establishment detail may show the original observation to an authorized Owner. Hints are UX. Realtime is invalidation only.
 
 Inspect Signal code and `schema.yml` before listing endpoints. Linked executions: [`action_plan_domain.md`](action_plan_domain.md). Feed sort/filter: [`feed_domain.md`](feed_domain.md). Visibility: [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
