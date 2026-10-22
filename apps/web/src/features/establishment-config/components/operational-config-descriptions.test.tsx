@@ -51,7 +51,10 @@ function wrap(node: ReactNode) {
   return createElement(QueryClientProvider, { client }, node)
 }
 
-function businessUnit(instanceDescription: string): BusinessUnitTreeItem {
+function businessUnit(
+  instanceDescription: string,
+  overrides: Partial<BusinessUnitTreeItem> = {},
+): BusinessUnitTreeItem {
   return {
     id: 'bu-1',
     specific_name: 'Hôtel',
@@ -73,6 +76,7 @@ function businessUnit(instanceDescription: string): BusinessUnitTreeItem {
         is_generic: true,
       },
     ],
+    ...overrides,
   }
 }
 
@@ -114,6 +118,61 @@ describe('OperationalConfigActivityDescriptionCard', () => {
     expect(updateBusinessUnit).not.toHaveBeenCalled()
     expect(await screen.findByText('Description enregistrée.')).toBeTruthy()
   })
+
+  it('adopts a refreshed description and does not save it back', () => {
+    const view = render(
+      wrap(createElement(OperationalConfigActivityDescriptionCard, { establishmentId: 'est-1' })),
+    )
+
+    activityState.description = 'Description actualisée par un autre directeur.'
+    view.rerender(
+      wrap(createElement(OperationalConfigActivityDescriptionCard, { establishmentId: 'est-1' })),
+    )
+
+    const field = screen.getByLabelText('Description') as HTMLTextAreaElement
+    expect(field.value).toBe('Description actualisée par un autre directeur.')
+    expect(screen.getByRole('button', { name: 'Enregistrer' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(updateActivity).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unsaved description when a newer server value arrives', () => {
+    const view = render(
+      wrap(createElement(OperationalConfigActivityDescriptionCard, { establishmentId: 'est-1' })),
+    )
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'Brouillon local encore assez long.' },
+    })
+
+    activityState.description = 'Description actualisée par un autre directeur.'
+    view.rerender(
+      wrap(createElement(OperationalConfigActivityDescriptionCard, { establishmentId: 'est-1' })),
+    )
+
+    const field = screen.getByLabelText('Description') as HTMLTextAreaElement
+    expect(field.value).toBe('Brouillon local encore assez long.')
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(updateActivity).toHaveBeenCalledWith('Brouillon local encore assez long.')
+  })
+
+  it('drops the previous establishment draft even when the server text matches', () => {
+    const view = render(
+      wrap(createElement(OperationalConfigActivityDescriptionCard, { establishmentId: 'est-1' })),
+    )
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'Brouillon local encore assez long.' },
+    })
+
+    view.rerender(
+      wrap(createElement(OperationalConfigActivityDescriptionCard, { establishmentId: 'est-2' })),
+    )
+
+    const field = screen.getByLabelText('Description') as HTMLTextAreaElement
+    expect(field.value).toBe('Description déjà assez longue.')
+    expect(screen.getByRole('button', { name: 'Enregistrer' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(updateActivity).not.toHaveBeenCalled()
+  })
 })
 
 describe('OperationalConfigBusinessUnitCard', () => {
@@ -139,6 +198,118 @@ describe('OperationalConfigBusinessUnitCard', () => {
       businessUnitId: 'bu-1',
       input: { specific_name: 'Hôtel patio' },
     })
+  })
+
+  it('sends only the name when a rename leaves the description untouched', () => {
+    render(
+      wrap(
+        createElement(OperationalConfigBusinessUnitCard, {
+          establishmentId: 'est-1',
+          businessUnit: businessUnit('Description du pôle déjà en place.'),
+          canRemoveBusinessUnit: false,
+        }),
+      ),
+    )
+
+    fireEvent.change(screen.getByLabelText('Nom d’instance'), { target: { value: 'Hôtel patio' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    expect(updateBusinessUnit).toHaveBeenCalledWith({
+      businessUnitId: 'bu-1',
+      input: { specific_name: 'Hôtel patio' },
+    })
+  })
+
+  it('sends only the description when the name was not edited', () => {
+    render(
+      wrap(
+        createElement(OperationalConfigBusinessUnitCard, {
+          establishmentId: 'est-1',
+          businessUnit: businessUnit('Description du pôle déjà en place.'),
+          canRemoveBusinessUnit: false,
+        }),
+      ),
+    )
+
+    fireEvent.change(screen.getByLabelText('Description d’instance'), {
+      target: { value: 'Nouveau périmètre du pôle.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    expect(updateBusinessUnit).toHaveBeenCalledWith({
+      businessUnitId: 'bu-1',
+      input: { instance_description: 'Nouveau périmètre du pôle.' },
+    })
+  })
+
+  it('keeps an unsaved name when the pole description is refreshed', () => {
+    const view = render(
+      wrap(
+        createElement(OperationalConfigBusinessUnitCard, {
+          establishmentId: 'est-1',
+          businessUnit: businessUnit('Description initiale du pôle.'),
+          canRemoveBusinessUnit: false,
+        }),
+      ),
+    )
+    fireEvent.change(screen.getByLabelText('Nom d’instance'), { target: { value: 'Hôtel patio' } })
+
+    view.rerender(
+      wrap(
+        createElement(OperationalConfigBusinessUnitCard, {
+          establishmentId: 'est-1',
+          businessUnit: businessUnit('Description enregistrée par un directeur.'),
+          canRemoveBusinessUnit: false,
+        }),
+      ),
+    )
+
+    expect((screen.getByLabelText('Nom d’instance') as HTMLInputElement).value).toBe('Hôtel patio')
+    expect((screen.getByLabelText('Description d’instance') as HTMLTextAreaElement).value).toBe(
+      'Description enregistrée par un directeur.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(updateBusinessUnit).toHaveBeenCalledWith({
+      businessUnitId: 'bu-1',
+      input: { specific_name: 'Hôtel patio' },
+    })
+  })
+
+  it('drops the previous pole draft when another pole is shown', () => {
+    const view = render(
+      wrap(
+        createElement(OperationalConfigBusinessUnitCard, {
+          establishmentId: 'est-1',
+          businessUnit: businessUnit('Description du premier pôle.'),
+          canRemoveBusinessUnit: false,
+        }),
+      ),
+    )
+    fireEvent.change(screen.getByLabelText('Nom d’instance'), { target: { value: 'Hôtel patio' } })
+    fireEvent.change(screen.getByLabelText('Description d’instance'), {
+      target: { value: 'Brouillon du premier pôle.' },
+    })
+
+    view.rerender(
+      wrap(
+        createElement(OperationalConfigBusinessUnitCard, {
+          establishmentId: 'est-2',
+          businessUnit: businessUnit('Description du second pôle.', {
+            id: 'bu-2',
+            specific_name: 'Spa',
+          }),
+          canRemoveBusinessUnit: false,
+        }),
+      ),
+    )
+
+    expect((screen.getByLabelText('Nom d’instance') as HTMLInputElement).value).toBe('Spa')
+    expect((screen.getByLabelText('Description d’instance') as HTMLTextAreaElement).value).toBe(
+      'Description du second pôle.',
+    )
+    expect(screen.getByRole('button', { name: 'Enregistrer' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(updateBusinessUnit).not.toHaveBeenCalled()
   })
 
   it('refuses to save a description that exceeds 5000 characters', () => {

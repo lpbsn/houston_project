@@ -9,6 +9,7 @@ import {
   useUpdateActivityDescription,
 } from '@/features/establishment-config/hooks'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
+import { useServerText } from '@/features/establishment-config/lib/use-server-text'
 import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_DESCRIPTION_MIN_LENGTH,
@@ -66,6 +67,8 @@ export function OperationalConfigActivityDescriptionCard({
 
   return (
     <ActivityDescriptionEditor
+      key={establishmentId}
+      establishmentId={establishmentId}
       serverDescription={descriptionQuery.data.description}
       isSaving={updateMutation.isPending}
       onSave={updateMutation.mutateAsync}
@@ -74,28 +77,31 @@ export function OperationalConfigActivityDescriptionCard({
 }
 
 function ActivityDescriptionEditor({
+  establishmentId,
   serverDescription,
   isSaving,
   onSave,
 }: {
+  establishmentId: string
   serverDescription: string
   isSaving: boolean
   onSave: (description: string) => Promise<{ description: string }>
 }) {
-  const [description, setDescription] = useState(serverDescription)
+  const descriptionDraft = useServerText(serverDescription, establishmentId)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const description = descriptionDraft.text
   const length = countedTextLength(description)
   const tooLong = length > ACTIVITY_DESCRIPTION_MAX_LENGTH
   const tooShort = length < ACTIVITY_DESCRIPTION_MIN_LENGTH
-  const unchanged = description.trim() === serverDescription.trim()
+  const unchanged = !descriptionDraft.changed
 
   async function handleSave() {
     setFeedback(null)
     setErrorMessage(null)
     try {
       const saved = await onSave(description.trim())
-      setDescription(saved.description)
+      descriptionDraft.setText(saved.description)
       setFeedback('Description enregistrée.')
     } catch (error) {
       setErrorMessage(
@@ -129,7 +135,7 @@ function ActivityDescriptionEditor({
           id="establishment-activity-description"
           value={description}
           disabled={isSaving}
-          onChange={(event) => setDescription(event.target.value)}
+          onChange={(event) => descriptionDraft.setText(event.target.value)}
           placeholder="Décrivez votre établissement : type, capacité, spécificités, positionnement…"
           className="min-h-36 rounded-[1rem] border-[#e7dfd1] bg-white"
         />
