@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
-const LG_QUERY = '(min-width: 1024px)'
+import { COMPUTER_POINTER_QUERY } from '@/lib/primary-pointer'
+
+export const LG_MEDIA_QUERY = '(min-width: 1024px)'
 const XL_QUERY = '(min-width: 1280px)'
 
 function readMediaQuery(query: string): boolean {
@@ -37,7 +39,10 @@ function useMediaQuery(query: string): boolean {
 }
 
 export function useLgViewport(): boolean {
-  return useMediaQuery(LG_QUERY)
+  // Re-render `isDesktopWebLanding(useLgViewport())` when the primary pointer
+  // changes. The returned value stays the width check.
+  useMediaQuery(COMPUTER_POINTER_QUERY)
+  return useMediaQuery(LG_MEDIA_QUERY)
 }
 
 /** Wide enough for a form side column beside the open desktop sidebar. */
