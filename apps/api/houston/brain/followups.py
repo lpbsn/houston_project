@@ -24,6 +24,7 @@ from houston.brain.configuration import (
     follow_up_ceilings,
     frozen_counter,
     frozen_knowledge,
+    frozen_mechanisms,
 )
 from houston.brain.errors import BrainWorkError
 from houston.brain.models import (
@@ -380,28 +381,57 @@ def _context_payload(message, analysis, by_id, required_ids, ceilings) -> dict:
             }
         )
     config = analysis.configuration if isinstance(analysis.configuration, dict) else {}
-    required = {
-        "question": message.body,
-        "purpose": message.purpose,
-        "frozen_configuration": {
-            "knowledge": frozen_knowledge(config),
-            "schema_version": config.get("schema_version"),
-            "prompt_version": config.get("prompt_version"),
-            "model": config.get("model"),
-        },
-        "analysis_result": analysis.result,
-        "required_items": required_items,
-        "declarations": declarations,
-    }
+    knowledge = frozen_knowledge(config)
+    mechanisms = frozen_mechanisms(config)
     budget = min(ceilings["per_call_input_tokens"], ceilings["follow_up_total_input_tokens"])
     provider_name, model_name = frozen_counter(analysis.configuration)
+
+    def assemble(
+        selected: list[dict],
+        history_kept: list[dict],
+        history_omitted: list[dict],
+    ) -> dict:
+        required = {
+            "question": message.body,
+            "purpose": message.purpose,
+            "frozen_configuration": {
+                "knowledge": knowledge,
+                "mechanisms": selected,
+                "mechanisms_omitted": len(mechanisms) - len(selected),
+                "schema_version": config.get("schema_version"),
+                "prompt_version": config.get("prompt_version"),
+                "model": config.get("model"),
+            },
+            "analysis_result": analysis.result,
+            "required_items": required_items,
+            "declarations": declarations,
+        }
+        return _envelope(
+            message,
+            required,
+            required_ids,
+            history_kept,
+            _summary(history_omitted),
+        )
+
+    kept_mechanisms = list(mechanisms)
+    # Mechanisms that fit beside the required evidence stay. The omitted tail is counted.
+    while True:
+        bare = assemble(kept_mechanisms, [], [])
+        if call_input_tokens(bare, provider=provider_name, model=model_name) <= budget:
+            break
+        if not kept_mechanisms:
+            raise BrainWorkError(
+                code="budget_exceeded",
+                message="Le budget du follow-up ne peut pas contenir les preuves requises.",
+            )
+        kept_mechanisms.pop()
     views = [_message_view(earlier) for earlier in prior]
     kept = list(views)
     omitted: list[dict] = []
     # Newest turns stay in full while they fit. Older turns become one derived summary.
     while True:
-        summary = _summary(omitted)
-        payload = _envelope(message, required, required_ids, kept, summary)
+        payload = assemble(kept_mechanisms, kept, omitted)
         if call_input_tokens(payload, provider=provider_name, model=model_name) <= budget:
             return payload
         if not kept:

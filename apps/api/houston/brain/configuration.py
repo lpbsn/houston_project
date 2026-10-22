@@ -107,6 +107,7 @@ def context_fingerprint(*, reporting, mechanisms: list[dict], contributions: lis
 
 
 def _knowledge_from_mechanisms(mechanisms: list[dict]) -> dict:
+    """Historical singular copy. The admission list stays on ``mechanisms``."""
     if not mechanisms:
         return empty_knowledge()
     first = mechanisms[0]
@@ -120,8 +121,59 @@ def _knowledge_from_mechanisms(mechanisms: list[dict]) -> dict:
     }
 
 
+def frozen_mechanisms(configuration: object) -> list[dict]:
+    """Every mechanism copied onto the analysis. Live rows are not loaded.
+
+    The admission list is kept in its stored order. A singular knowledge object
+    is added only when its version is absent from that list, so an older analysis
+    does not lose the one mechanism it froze.
+    """
+    if not isinstance(configuration, dict):
+        return []
+    stored = configuration.get("mechanisms")
+    mechanisms = _mechanism_copies(stored) if isinstance(stored, list) else []
+    knowledge = frozen_knowledge(configuration)
+    version_id = knowledge.get("version_id")
+    if knowledge.get("selection") != "active" or not version_id:
+        return mechanisms
+    if any(item["version_id"] == version_id for item in mechanisms):
+        return mechanisms
+    mechanisms.append(
+        {
+            "version_id": version_id,
+            "identifier": "",
+            "formulation": knowledge["formulation"],
+            "conditions": knowledge["conditions"],
+            "limits": knowledge["limits"],
+            "uncertainty": knowledge["uncertainty"],
+        }
+    )
+    return mechanisms
+
+
+def _mechanism_copies(mechanisms: list) -> list[dict]:
+    copies = []
+    for item in mechanisms:
+        if not isinstance(item, dict):
+            continue
+        version_id = item.get("version_id")
+        if not version_id:
+            continue
+        copies.append(
+            {
+                "version_id": str(version_id),
+                "identifier": str(item.get("identifier") or ""),
+                "formulation": str(item.get("formulation") or ""),
+                "conditions": str(item.get("conditions") or ""),
+                "limits": str(item.get("limits") or ""),
+                "uncertainty": str(item.get("uncertainty") or ""),
+            }
+        )
+    return copies
+
+
 def frozen_knowledge(configuration: object) -> dict:
-    """Content already copied onto the analysis. The live version row is not loaded."""
+    """Singular copy stored on the analysis. The live version row is not loaded."""
     if not isinstance(configuration, dict):
         return empty_knowledge()
     raw = configuration.get("knowledge")

@@ -20,6 +20,7 @@ from houston.brain.models import (
     BrainAnalysis,
     BrainDossier,
     BrainDossierItem,
+    BrainKnowledgeVersion,
     BrainLot,
     BrainMechanismCandidate,
     BrainMessage,
@@ -180,10 +181,22 @@ def test_explanation_and_hypothesis_use_the_frozen_dossier():
     body = json.dumps(provider.calls[0], ensure_ascii=False)
     assert "PREUVE-INTACTE-SALLE" in body
     assert "FORBIDDEN_LIVE" not in body
-    frozen = provider.calls[0]["frozen_configuration"]["knowledge"]
+    frozen_configuration = provider.calls[0]["frozen_configuration"]
+    frozen = frozen_configuration["knowledge"]
     assert frozen["version_id"] == "k-figee"
     assert frozen["formulation"] == "Formule figée k-figee."
     assert frozen["conditions"] == "Condition figée."
+    assert frozen_configuration["mechanisms"] == [
+        {
+            "version_id": "k-figee",
+            "identifier": "",
+            "formulation": "Formule figée k-figee.",
+            "conditions": "Condition figée.",
+            "limits": "Limite figée.",
+            "uncertainty": "Incertitude figée.",
+        }
+    ]
+    assert frozen_configuration["mechanisms_omitted"] == 0
     assert "k-vivant" not in body
     slot_free = _ask(
         owner,
@@ -203,6 +216,163 @@ def test_explanation_and_hypothesis_use_the_frozen_dossier():
     log = AIUsageLog.objects.get(correlation_id=message.id)
     assert log.ai_domain == AIUsageLog.Domain.BRAIN_FOLLOW_UP
     assert log.establishment_id == establishment.id
+
+
+def test_follow_up_sends_every_mechanism_frozen_at_admission():
+    _establishment, owner, analysis, item = _completed()
+    first = {
+        "version_id": "k-figee",
+        "identifier": "z-service",
+        "formulation": "Formule figée k-figee.",
+        "conditions": "Condition figée.",
+        "limits": "Limite figée.",
+        "uncertainty": "Incertitude figée.",
+    }
+    second = {
+        "version_id": "k-bar",
+        "identifier": "a-bar",
+        "formulation": "Formule figée du bar.",
+        "conditions": "Quand le bar décroche.",
+        "limits": "Pas une cause unique.",
+        "uncertainty": "À vérifier.",
+    }
+    configuration = dict(analysis.configuration)
+    configuration["mechanisms"] = [first, "illisible", {"formulation": "sans version"}, second]
+    configuration["knowledge"] = {
+        "version_id": "k-figee",
+        "selection": "active",
+        "formulation": first["formulation"],
+        "conditions": first["conditions"],
+        "limits": first["limits"],
+        "uncertainty": first["uncertainty"],
+    }
+    analysis.configuration = configuration
+    analysis.save(update_fields=["configuration", "updated_at"])
+    BrainKnowledgeVersion.objects.create(
+        identifier="vivant-admission",
+        global_formulation="FORMULE-VIVANTE-ADMISSION",
+        approved_at=timezone.now(),
+        is_active=True,
+    )
+    provider = RecordingProvider()
+    message = _ask(owner, analysis, "mecanismes", cited=[str(item.id)])
+    _run(message, provider)
+    message.refresh_from_db()
+    assert message.status == BrainMessage.Status.COMPLETED
+    frozen = provider.calls[0]["frozen_configuration"]
+    assert frozen["knowledge"]["version_id"] == "k-figee"
+    assert [item["identifier"] for item in frozen["mechanisms"]] == ["z-service", "a-bar"]
+    assert frozen["mechanisms"][1]["formulation"] == "Formule figée du bar."
+    assert frozen["mechanisms"][1]["conditions"] == "Quand le bar décroche."
+    assert frozen["mechanisms_omitted"] == 0
+    assert "FORMULE-VIVANTE-ADMISSION" not in json.dumps(provider.calls[0], ensure_ascii=False)
+
+
+def test_follow_up_keeps_a_legacy_knowledge_without_a_mechanism_list():
+    _establishment, owner, analysis, item = _completed()
+    configuration = dict(analysis.configuration)
+    configuration.pop("mechanisms")
+    analysis.configuration = configuration
+    analysis.save(update_fields=["configuration", "updated_at"])
+    BrainKnowledgeVersion.objects.create(
+        identifier="vivant-legacy",
+        global_formulation="FORMULE-VIVANTE-LEGACY",
+        approved_at=timezone.now(),
+        is_active=True,
+    )
+    provider = RecordingProvider()
+    message = _ask(owner, analysis, "ancien", cited=[str(item.id)])
+    _run(message, provider)
+    message.refresh_from_db()
+    assert message.status == BrainMessage.Status.COMPLETED
+    frozen = provider.calls[0]["frozen_configuration"]
+    assert frozen["knowledge"]["version_id"] == "k-figee"
+    assert frozen["knowledge"]["formulation"] == "Formule figée k-figee."
+    assert frozen["mechanisms"] == [
+        {
+            "version_id": "k-figee",
+            "identifier": "",
+            "formulation": "Formule figée k-figee.",
+            "conditions": "Condition figée.",
+            "limits": "Limite figée.",
+            "uncertainty": "Incertitude figée.",
+        }
+    ]
+    assert frozen["mechanisms_omitted"] == 0
+    assert "FORMULE-VIVANTE-LEGACY" not in json.dumps(provider.calls[0], ensure_ascii=False)
+
+
+def test_follow_up_omits_only_the_mechanisms_that_miss_the_token_budget():
+    from houston.brain.configuration import call_input_tokens, follow_up_ceilings, frozen_counter
+    from houston.brain.followups import _context_payload
+
+    _establishment, owner, analysis, item = _completed()
+    short = {
+        "version_id": "k-court",
+        "identifier": "court",
+        "formulation": "Formule courte.",
+        "conditions": "",
+        "limits": "",
+        "uncertainty": "",
+    }
+    huge = {
+        "version_id": "k-long",
+        "identifier": "long",
+        "formulation": "MECANISME-TROP-GROS-" + ("x" * 8000),
+        "conditions": "",
+        "limits": "",
+        "uncertainty": "",
+    }
+    configuration = dict(analysis.configuration)
+    configuration["knowledge"] = {
+        "version_id": "k-court",
+        "selection": "active",
+        "formulation": short["formulation"],
+        "conditions": "",
+        "limits": "",
+        "uncertainty": "",
+    }
+    configuration["mechanisms"] = [short]
+    analysis.configuration = configuration
+    analysis.save(update_fields=["configuration", "updated_at"])
+    BrainMessage.objects.create(
+        analysis=analysis,
+        author=owner.user,
+        request_id="tour-recent",
+        sequence=1,
+        purpose=BrainMessage.Purpose.EXPLAIN,
+        body="TOUR-RECENT-A-GARDER",
+        status=BrainMessage.Status.COMPLETED,
+        result={"answer": "reponse-recente"},
+    )
+    message = _ask(owner, analysis, "budget-mecanismes", cited=[str(item.id)])
+    ceilings = follow_up_ceilings(analysis.configuration)
+    wide = dict(ceilings)
+    wide["per_call_input_tokens"] = 2_000_000
+    wide["follow_up_total_input_tokens"] = 2_000_000
+    by_id = {str(item.id): item}
+    provider_name, model_name = frozen_counter(analysis.configuration)
+    prefix = _context_payload(message, analysis, by_id, [str(item.id)], wide)
+    prefix_cost = call_input_tokens(prefix, provider=provider_name, model=model_name)
+    configuration = dict(analysis.configuration)
+    configuration["mechanisms"] = [short, huge]
+    configuration["ceilings"] = dict(configuration["ceilings"])
+    configuration["ceilings"]["per_call_input_tokens"] = prefix_cost + 50
+    configuration["ceilings"]["follow_up_total_input_tokens"] = prefix_cost + 50
+    analysis.configuration = configuration
+    analysis.save(update_fields=["configuration", "updated_at"])
+    provider = RecordingProvider()
+    _run(message, provider)
+    message.refresh_from_db()
+    assert message.status == BrainMessage.Status.COMPLETED, message.failure_code
+    payload = provider.calls[0]
+    frozen = payload["frozen_configuration"]
+    assert [item["identifier"] for item in frozen["mechanisms"]] == ["court"]
+    assert frozen["mechanisms_omitted"] == 1
+    assert frozen["knowledge"]["version_id"] == "k-court"
+    assert payload["required_items"][0]["payload"]["text"] == "PREUVE-INTACTE-SALLE"
+    assert [view["body"] for view in payload["history"]["messages"]] == ["TOUR-RECENT-A-GARDER"]
+    assert "MECANISME-TROP-GROS" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_same_request_is_returned_before_a_capacity_refusal(settings):
