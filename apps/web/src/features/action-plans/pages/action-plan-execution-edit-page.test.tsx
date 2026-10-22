@@ -5,6 +5,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 
 import { ActionPlanExecutionEditPage } from './action-plan-execution-edit-page'
@@ -252,7 +254,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
       configurable: true,
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
-        matches: query.includes('1024'),
+        matches: testMediaMatches(query, query.includes('1024')),
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -393,7 +395,7 @@ describe('ActionPlanExecutionEditPage guards', () => {
       configurable: true,
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
-        matches: query.includes('1024'),
+        matches: testMediaMatches(query, query.includes('1024')),
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -463,8 +465,8 @@ describe('ActionPlanExecutionEditPage guards', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
-      value: vi.fn().mockImplementation(() => ({
-        matches: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: testMediaMatches(query, true, 'fine'),
         media: '',
         onchange: null,
         addListener: vi.fn(),

@@ -15,6 +15,18 @@ import {
 } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse } from '@/features/auth/types'
 import type { PendingOnboardingMembership } from '@/features/auth/lib/pending-onboarding'
+import { COMPUTER_POINTER_QUERY } from '@/lib/primary-pointer'
+
+function stubComputerPointer(matches: boolean) {
+  vi.stubGlobal('window', {
+    matchMedia: (query: string) => ({
+      matches: matches && query === COMPUTER_POINTER_QUERY,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }),
+  })
+}
 
 function bootstrap(
   overrides: Partial<BootstrapResponse> & {
@@ -79,16 +91,58 @@ const ownerOrgHints = {
 describe('isDesktopWebLanding', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
   })
 
-  it('is true only for web on a large viewport', () => {
+  it('keeps the desktop interface for a fine pointer on a narrow web window', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    stubComputerPointer(true)
+    expect(isDesktopWebLanding(false)).toBe(true)
+  })
+
+  it('keeps the mobile interface for a coarse pointer on a narrow web window', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    stubComputerPointer(false)
+    expect(isDesktopWebLanding(false)).toBe(false)
+  })
+
+  it('keeps the desktop interface for a coarse pointer on a wide web window', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    stubComputerPointer(false)
+    expect(isDesktopWebLanding(true)).toBe(true)
+  })
+
+  it('does not treat a fine pointer without hover as a computer', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubGlobal('window', {
+      matchMedia: (query: string) => ({
+        matches: query === '(pointer: fine)',
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    })
+    expect(isDesktopWebLanding(false)).toBe(false)
+    expect(isDesktopWebLanding(true)).toBe(true)
+  })
+
+  it('falls back to viewport width when pointer media is unavailable', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubGlobal('window', {})
     expect(isDesktopWebLanding(true)).toBe(true)
     expect(isDesktopWebLanding(false)).toBe(false)
   })
 
-  it('is false on native regardless of viewport', () => {
+  it('stays false on native for a fine pointer at any width', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubComputerPointer(true)
+    expect(isDesktopWebLanding(true)).toBe(false)
+    expect(isDesktopWebLanding(false)).toBe(false)
+  })
+
+  it('stays false on native for a coarse pointer at any width', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubComputerPointer(false)
     expect(isDesktopWebLanding(true)).toBe(false)
     expect(isDesktopWebLanding(false)).toBe(false)
   })
@@ -97,6 +151,7 @@ describe('isDesktopWebLanding', () => {
 describe('resolveAuthenticatedLanding', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
   })
 
   it('returns reporting for owner with an ACTIVE membership selected', () => {
@@ -125,6 +180,7 @@ describe('resolveAuthenticatedLanding', () => {
 
   it('keeps native large-viewport multi-membership landing on the selector', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubComputerPointer(true)
     const multiOwner = bootstrap({
       memberships: [membership('Nice', 'est-1'), membership('Cannes', 'est-2')],
       permission_hints: ownerOrgHints,

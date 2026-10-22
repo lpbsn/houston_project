@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { createMemoryHistory, type AppHistory } from '@/app/app-history'
 import { AppRouteProvider } from '@/app/app-routes'
 import type { AnalyticsDashboardResponse } from '@/features/analytics/api'
@@ -88,7 +90,7 @@ function stubLgViewport(matches: boolean) {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches,
+      matches: testMediaMatches(query, matches),
       media: query,
       onchange: null,
       addListener: vi.fn(),

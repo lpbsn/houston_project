@@ -3,6 +3,8 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { TerrainTopbar } from './terrain-topbar'
 
 function stubLgViewport(matches: boolean) {
@@ -10,7 +12,7 @@ function stubLgViewport(matches: boolean) {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches,
+      matches: testMediaMatches(query, matches),
       media: query,
       onchange: null,
       addListener: vi.fn(),

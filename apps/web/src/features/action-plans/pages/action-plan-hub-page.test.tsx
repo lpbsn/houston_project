@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { testMediaMatches } from '@/test/viewport-match-media'
+
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { ActionPlanListItem } from '../types'
 
@@ -114,7 +116,7 @@ function enableDesktopWeb() {
     configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes('1024'),
+      matches: testMediaMatches(query, query.includes('1024')),
       media: query,
       onchange: null,
       addListener: vi.fn(),
@@ -225,7 +227,7 @@ describe('ActionPlanHubPage', () => {
       configurable: true,
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
-        matches: true,
+        matches: testMediaMatches(query, true, 'fine'),
         media: query,
         onchange: null,
         addListener: vi.fn(),

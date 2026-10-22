@@ -9,6 +9,7 @@ import {
   hasTrueCrossEstablishmentScope,
 } from '@/features/navigation/lib/shared-navigation'
 import { isPlatformOperatorActive } from '@/features/platform/lib/access'
+import { hasComputerPointer } from '@/lib/primary-pointer'
 import { getAppRuntime } from '@/lib/runtime'
 
 export const CROSS_DASHBOARD_LANDING_PATH = '/cross/signals'
@@ -27,7 +28,13 @@ export type AuthenticatedLandingContext = {
 }
 
 export function isDesktopWebLanding(isLgViewport: boolean): boolean {
-  return getAppRuntime() === 'web' && isLgViewport
+  if (getAppRuntime() !== 'web') {
+    return false
+  }
+  if (hasComputerPointer()) {
+    return true
+  }
+  return isLgViewport
 }
 
 export function resolveAuthenticatedLanding(
