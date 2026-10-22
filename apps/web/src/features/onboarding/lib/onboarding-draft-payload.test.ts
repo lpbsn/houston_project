@@ -8,6 +8,9 @@ import {
   displayDraftActivitySubjectLabel,
 } from './onboarding-draft-catalog'
 import {
+  ACTIVITY_DESCRIPTION_MAX_LENGTH,
+  INSTANCE_DESCRIPTION_MAX_LENGTH,
+  countedTextLength,
   emptyOnboardingDraftPayload,
   OnboardingDraftPayloadParseError,
   parseOnboardingDraftPayload,
@@ -19,6 +22,22 @@ import {
   canContinueFromStructureStep,
   removeBusinessUnitFromDraft,
 } from './onboarding-draft-validation'
+
+describe('countedTextLength', () => {
+  it('counts Unicode code points, including characters outside the BMP', () => {
+    expect('😀'.length).toBe(2)
+    expect(countedTextLength('😀')).toBe(1)
+    expect(countedTextLength(`  ${'😀'.repeat(ACTIVITY_DESCRIPTION_MAX_LENGTH)}  `)).toBe(
+      ACTIVITY_DESCRIPTION_MAX_LENGTH,
+    )
+    expect(countedTextLength('é'.repeat(INSTANCE_DESCRIPTION_MAX_LENGTH))).toBe(
+      INSTANCE_DESCRIPTION_MAX_LENGTH,
+    )
+    expect(countedTextLength(`x${'😀'.repeat(INSTANCE_DESCRIPTION_MAX_LENGTH)}`)).toBe(
+      INSTANCE_DESCRIPTION_MAX_LENGTH + 1,
+    )
+  })
+})
 
 describe('parseOnboardingDraftPayload', () => {
   it('returns empty draft for null/undefined', () => {
@@ -92,6 +111,32 @@ describe('structure and complete gates', () => {
       'business_unit_without_subjects',
     )
     expect(canContinueFromStructureStep(readyStructure()).ok).toBe(true)
+  })
+
+  it('blocks continuation when a description exceeds its ceiling without truncating', () => {
+    const establishmentTooLong = readyStructure()
+    establishmentTooLong.establishment.description = '😀'.repeat(ACTIVITY_DESCRIPTION_MAX_LENGTH + 1)
+    expect(canContinueFromStructureStep(establishmentTooLong).ok).toBe(false)
+    expect(
+      canContinueFromStructureStep(establishmentTooLong).errors.map((error) => error.code),
+    ).toContain('invalid_activity_description_length')
+    expect(establishmentTooLong.establishment.description).toHaveLength(
+      (ACTIVITY_DESCRIPTION_MAX_LENGTH + 1) * 2,
+    )
+
+    const atCeiling = readyStructure()
+    atCeiling.establishment.description = '😀'.repeat(ACTIVITY_DESCRIPTION_MAX_LENGTH)
+    atCeiling.business_units[0]!.instance_description = 'é'.repeat(INSTANCE_DESCRIPTION_MAX_LENGTH)
+    expect(canContinueFromStructureStep(atCeiling).ok).toBe(true)
+
+    const poleTooLong = readyStructure()
+    poleTooLong.business_units[0]!.instance_description = 'P'.repeat(INSTANCE_DESCRIPTION_MAX_LENGTH + 1)
+    const gate = canContinueFromStructureStep(poleTooLong)
+    expect(gate.ok).toBe(false)
+    expect(gate.errors.map((error) => error.code)).toContain('invalid_instance_description_length')
+    expect(poleTooLong.business_units[0]?.instance_description).toHaveLength(
+      INSTANCE_DESCRIPTION_MAX_LENGTH + 1,
+    )
   })
 
   it('allows two poles on the same catalog key and reports empty catalog or name', () => {

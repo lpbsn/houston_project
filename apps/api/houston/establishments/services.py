@@ -3529,6 +3529,76 @@ def update_runtime_business_unit(
         raise
 
 
+def get_runtime_activity_description(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> str:
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+    description = (
+        EstablishmentActivityDescription.objects.filter(establishment=establishment)
+        .values_list("description", flat=True)
+        .first()
+    )
+    return "" if description is None else description
+
+
+@transaction.atomic
+def update_runtime_activity_description(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    description: str,
+) -> str:
+    """Update only the activity description text.
+
+    A missing row is created so consultation and edit stay available. An
+    existing row keeps its source, submitter, and validation timestamp.
+    """
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+    if current_membership is None:
+        raise RuntimeConfigNotFoundError
+
+    normalized = description.strip()
+    locked_establishment = Establishment.objects.select_for_update().get(pk=establishment.pk)
+    row = (
+        EstablishmentActivityDescription.objects.select_for_update()
+        .filter(establishment=locked_establishment)
+        .first()
+    )
+    if row is None:
+        row = EstablishmentActivityDescription(
+            establishment=locked_establishment,
+            description=normalized,
+            source=EstablishmentActivityDescription.Source.MANUAL,
+            submitted_by=current_membership.user,
+            validated_at=timezone.now(),
+        )
+        row.full_clean()
+        try:
+            with transaction.atomic():
+                row.save()
+        except IntegrityError:
+            row = EstablishmentActivityDescription.objects.select_for_update().get(
+                establishment=locked_establishment
+            )
+            row.description = normalized
+            row.full_clean()
+            row.save(update_fields=["description", "updated_at"])
+        return row.description
+
+    row.description = normalized
+    row.full_clean()
+    row.save(update_fields=["description", "updated_at"])
+    return row.description
+
+
 @transaction.atomic
 def reactivate_runtime_business_unit(
     *,

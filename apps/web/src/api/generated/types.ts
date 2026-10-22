@@ -1220,6 +1220,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/activity-description/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the establishment activity description. An active establishment without a stored row returns an empty description. */
+        get: operations["v1_establishments_activity_description_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Updates only the establishment activity description text. */
+        patch: operations["v1_establishments_activity_description_partial_update"];
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/": {
         parameters: {
             query?: never;
@@ -3905,6 +3923,9 @@ export interface components {
             /** Format: uuid */
             establishment_id: string;
         };
+        ActivityDescriptionResponse: {
+            description: string;
+        };
         ActivitySubjectTreeItem: {
             /** Format: uuid */
             id: string;
@@ -5896,6 +5917,9 @@ export interface components {
             description?: string;
             requires_validation?: boolean;
             tasks?: components["schemas"]["ActionPlanTaskInput"][];
+        };
+        PatchedActivityDescriptionUpdateRequest: {
+            description: string;
         };
         PatchedChatRenameGroupRequest: {
             title?: string;
@@ -10624,6 +10648,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_activity_description_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityDescriptionResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_activity_description_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchedActivityDescriptionUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedActivityDescriptionUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedActivityDescriptionUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityDescriptionResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };

@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterable
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Max
 
@@ -17,12 +18,27 @@ from houston.establishments.business_unit_identity import (
     normalize_business_unit_specific_name,
 )
 from houston.establishments.models import (
+    INSTANCE_DESCRIPTION_MAX_LENGTH,
     ActivitySubject,
     BusinessUnit,
     CatalogActivitySubject,
     CatalogBusinessUnit,
     Establishment,
+    validate_instance_description,
 )
+
+
+def _validated_instance_description(value: str) -> str:
+    try:
+        return validate_instance_description(value)
+    except ValidationError as exc:
+        raise DomainValidationError(
+            (
+                "Instance description must be at most "
+                f"{INSTANCE_DESCRIPTION_MAX_LENGTH} characters."
+            ),
+            code="invalid_instance_description_length",
+        ) from exc
 
 
 def _not_found(message: str) -> DomainNotFoundError:
@@ -174,7 +190,7 @@ def _create_business_unit_core(
     color_index = 0 if last_color is None else last_color + 1
 
     business_unit_id = uuid.uuid4()
-    normalized_description = instance_description.strip()
+    normalized_description = _validated_instance_description(instance_description)
     business_unit = BusinessUnit(
         id=business_unit_id,
         establishment=locked_establishment,
@@ -356,6 +372,9 @@ def update_business_unit(
 
     next_normalized_specific_name = business_unit.normalized_specific_name
     update_fields: list[str] = []
+    normalized_description = None
+    if instance_description is not None:
+        normalized_description = _validated_instance_description(instance_description)
 
     if specific_name is not None:
         normalized_name_input = specific_name.strip()
@@ -386,8 +405,8 @@ def update_business_unit(
         business_unit.normalized_specific_name = next_normalized_specific_name
         update_fields.extend(["specific_name", "normalized_specific_name"])
 
-    if instance_description is not None:
-        business_unit.instance_description = instance_description.strip()
+    if normalized_description is not None:
+        business_unit.instance_description = normalized_description
         update_fields.append("instance_description")
 
     if not update_fields:

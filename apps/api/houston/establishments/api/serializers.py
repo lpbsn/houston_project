@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.utils import (
     extend_schema_field,
     extend_schema_serializer,
@@ -11,6 +12,9 @@ from houston.establishments.membership_scope import (
     membership_scope_rows_for_membership,
 )
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MAX_LENGTH,
+    ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    INSTANCE_DESCRIPTION_MAX_LENGTH,
     BusinessUnit,
     EstablishmentMembership,
 )
@@ -209,6 +213,8 @@ class RuntimeBusinessUnitCreateRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default="",
+        trim_whitespace=True,
+        max_length=INSTANCE_DESCRIPTION_MAX_LENGTH,
     )
 
 
@@ -218,7 +224,12 @@ class RuntimeBusinessUnitUpdateRequestSerializer(serializers.Serializer):
         max_length=255,
         required=False,
     )
-    instance_description = serializers.CharField(required=False, allow_blank=True)
+    instance_description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        max_length=INSTANCE_DESCRIPTION_MAX_LENGTH,
+    )
 
     def validate(self, attrs):
         if not attrs:
@@ -226,6 +237,34 @@ class RuntimeBusinessUnitUpdateRequestSerializer(serializers.Serializer):
                 "At least one of specific_name or instance_description must be provided."
             )
         return attrs
+
+
+class ActivityDescriptionResponseSerializer(serializers.Serializer):
+    description = serializers.CharField(allow_blank=True)
+
+
+class ActivityDescriptionUpdateRequestSerializer(serializers.Serializer):
+    description = serializers.CharField(
+        trim_whitespace=True,
+        min_length=ACTIVITY_DESCRIPTION_MIN_LENGTH,
+        max_length=ACTIVITY_DESCRIPTION_MAX_LENGTH,
+    )
+
+
+class ActivityDescriptionUpdateRequestSerializerExtension(OpenApiSerializerExtension):
+    """Publish description as required on PATCH.
+
+    drf-spectacular omits required fields from partial request components, while
+    this endpoint rejects a body that does not include description.
+    """
+
+    target_class = ActivityDescriptionUpdateRequestSerializer
+
+    def map_serializer(self, auto_schema, direction):
+        schema = auto_schema._map_serializer(self.target, direction, bypass_extensions=True)
+        if direction == "request" and "description" not in schema.get("required", []):
+            schema["required"] = [*schema.get("required", []), "description"]
+        return schema
 
 
 class RuntimeActivitySubjectCreateRequestSerializer(serializers.Serializer):

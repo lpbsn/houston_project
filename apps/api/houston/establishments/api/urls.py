@@ -25,6 +25,7 @@ from houston.establishments.api.safety_views import (
 from houston.establishments.api.views import (
     CatalogActivitySubjectSuggestView,
     CatalogBusinessUnitSuggestView,
+    EstablishmentActivityDescriptionView,
     EstablishmentActivitySubjectCreateView,
     EstablishmentActivitySubjectDeactivateView,
     EstablishmentActivitySubjectReactivateView,
@@ -81,6 +82,11 @@ urlpatterns = [
         "invitations/accept/",
         DirectorInvitationAcceptView.as_view(),
         name="director-invitation-accept",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/activity-description/",
+        EstablishmentActivityDescriptionView.as_view(),
+        name="establishment-activity-description",
     ),
     path(
         "establishments/<uuid:establishment_id>/business-units/",

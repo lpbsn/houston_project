@@ -86,6 +86,58 @@ async function withRuntimeConfigMutation<T>(
   return assertRuntimeConfigData(result, fallbackError)
 }
 
+export type ActivityDescription = {
+  description: string
+}
+
+export function activityDescriptionQueryKey(establishmentId: string) {
+  return ['establishment-activity-description', establishmentId] as const
+}
+
+export async function fetchActivityDescription(
+  establishmentId: string,
+): Promise<ActivityDescription> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/activity-description/', {
+        params: {
+          path: { establishment_id: establishmentId },
+        },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.response.ok && result.data && typeof result.data.description === 'string') {
+    return { description: result.data.description }
+  }
+
+  throwRuntimeConfigError(
+    result.response,
+    result.error,
+    'La description de l’établissement n’a pas pu être chargée.',
+  )
+}
+
+export async function updateActivityDescription(
+  establishmentId: string,
+  description: string,
+): Promise<ActivityDescription> {
+  const result = await withRuntimeConfigMutation(
+    'La description de l’établissement n’a pas pu être enregistrée.',
+    (accessToken, csrfToken) =>
+      apiClient.PATCH('/api/v1/establishments/{establishment_id}/activity-description/', {
+        params: {
+          path: { establishment_id: establishmentId },
+        },
+        body: { description },
+        credentials: 'include',
+        headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+      }),
+  )
+  return { description: result.description }
+}
+
 export async function createRuntimeBusinessUnit(
   establishmentId: string,
   input: {
