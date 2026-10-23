@@ -1,11 +1,11 @@
 """Live OpenAI title-wording smoke — opt-in, not CI.
 
-The archive test records a fixed comparison set and does not apply v6_4 writing
-criteria, so it can snapshot prompt v6_3. Writing checks run only when the
-runtime prompt is ai_observation_pipeline_v6_4.
+The archive test records a fixed comparison set and does not apply current writing
+criteria, so it can snapshot an older prompt. Writing checks run only when the
+runtime prompt is ai_observation_pipeline_v6_5.
 
-Archives use write_smoke_archive. The kind includes the prompt version, so a
-v6_3 reference and a v6_4 run are separate files. Each scenario stores that
+Archives use write_smoke_archive. The kind includes the prompt version, so
+successive prompt versions stay separate files. Each scenario stores that
 run's taxonomy. Routing is compared by business identity, not by raw keys.
 
 Requires HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1 and OPENAI_API_KEY.
@@ -226,8 +226,8 @@ def _assert_not_starting_with(title: str, verbs: tuple[str, ...]) -> None:
 def test_archive_title_wording_reference():
     """Record the comparison set for whichever prompt is running.
 
-    Does not apply v6_4 writing criteria. On prompt v6_3 this is the before
-    snapshot; on v6_4 it is the after snapshot. The archive kind keeps them apart.
+    Does not apply current writing criteria. The archive kind includes the
+    prompt version, so successive snapshots stay separate files.
     """
     _skip_if_smoke_not_enabled()
 

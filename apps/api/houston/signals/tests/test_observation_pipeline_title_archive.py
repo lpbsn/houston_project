@@ -10,9 +10,10 @@ from houston.signals.tests.title_wording_archive import (
 )
 
 
-def test_v6_3_reference_does_not_apply_v6_4_writing_criteria():
+def test_older_prompts_do_not_apply_current_writing_criteria():
     assert title_writing_criteria_apply("ai_observation_pipeline_v6_3") is False
-    assert title_writing_criteria_apply("ai_observation_pipeline_v6_4") is True
+    assert title_writing_criteria_apply("ai_observation_pipeline_v6_4") is False
+    assert title_writing_criteria_apply("ai_observation_pipeline_v6_5") is True
 
 
 def test_before_and_after_title_archives_stay_distinct(tmp_path):
