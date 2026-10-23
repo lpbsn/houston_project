@@ -5,7 +5,8 @@ criteria, so it can snapshot prompt v6_3. Writing checks run only when the
 runtime prompt is ai_observation_pipeline_v6_4.
 
 Archives use write_smoke_archive. The kind includes the prompt version, so a
-v6_3 reference and a v6_4 run are separate files.
+v6_3 reference and a v6_4 run are separate files. Each scenario stores that
+run's taxonomy. Routing is compared by business identity, not by raw keys.
 
 Requires HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1 and OPENAI_API_KEY.
 Do not set that variable during ordinary implementation or CI.
@@ -35,14 +36,19 @@ from houston.signals.constants import (
 )
 from houston.signals.pipeline_v6_smoke_archive import write_smoke_archive
 from houston.signals.tests.conftest import create_observation
+from houston.signals.tests.title_wording_archive import (
+    TITLE_WRITING_CRITERIA_PROMPT_VERSION,
+    business_routing_for_candidate,
+    routing_context_from_taxonomy,
+    title_archive_kind,
+    title_writing_criteria_apply,
+)
 from houston.testing.factories import build_membership
 
 pytestmark = [
     pytest.mark.django_db,
     pytest.mark.openai_observation_smoke,
 ]
-
-WRITING_CRITERIA_PROMPT_VERSION = "ai_observation_pipeline_v6_4"
 
 CANDIDATE_ARCHIVE_FIELDS = (
     "title",
@@ -107,15 +113,6 @@ _FORBIDDEN_NOMINALIZATIONS = (
 )
 
 
-def title_archive_kind(prompt_version: str) -> str:
-    """Filename prefix kept distinct per prompt version by write_smoke_archive."""
-    return f"title-wording-{prompt_version}"
-
-
-def title_writing_criteria_apply(prompt_version: str) -> bool:
-    return prompt_version == WRITING_CRITERIA_PROMPT_VERSION
-
-
 def _openai_smoke_enabled() -> bool:
     return os.environ.get("HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST") == "1"
 
@@ -135,7 +132,7 @@ def _skip_unless_writing_criteria() -> None:
     if not title_writing_criteria_apply(AI_OBSERVATION_PIPELINE_PROMPT_VERSION):
         pytest.skip(
             "Title writing criteria apply only to "
-            f"{WRITING_CRITERIA_PROMPT_VERSION}; current prompt is "
+            f"{TITLE_WRITING_CRITERIA_PROMPT_VERSION}; current prompt is "
             f"{AI_OBSERVATION_PIPELINE_PROMPT_VERSION}. "
             "Run test_archive_title_wording_reference for a reference snapshot."
         )
@@ -180,6 +177,11 @@ def _setup_taxonomy(establishment) -> None:
 
 
 def _propose(text: str):
+    output, _routing_context = _propose_in_context(text)
+    return output
+
+
+def _propose_in_context(text: str):
     membership = build_membership()
     _setup_taxonomy(membership.establishment)
     observation = create_observation(membership=membership, text=text)
@@ -188,12 +190,19 @@ def _propose(text: str):
     assert input_payload["schema_version"] == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     provider = OpenAIObservationPipelineProvider()
     response = provider.propose(input_payload=input_payload)
-    return parse_pipeline_output(response.payload)
+    output = parse_pipeline_output(response.payload)
+    routing_context = routing_context_from_taxonomy(input_payload["routing_taxonomy"])
+    return output, routing_context
 
 
-def _candidate_record(candidate: PipelineCandidateOutput) -> dict[str, object]:
+def _candidate_record(
+    candidate: PipelineCandidateOutput,
+    routing_context: dict[str, object],
+) -> dict[str, object]:
     payload = candidate.model_dump(mode="json")
-    return {key: payload[key] for key in CANDIDATE_ARCHIVE_FIELDS}
+    record = {key: payload[key] for key in CANDIDATE_ARCHIVE_FIELDS}
+    record["business_routing"] = business_routing_for_candidate(record, routing_context)
+    return record
 
 
 def _assert_parsable(candidate: PipelineCandidateOutput) -> None:
@@ -226,15 +235,17 @@ def test_archive_title_wording_reference():
     errors: list[str] = []
     for case in COMPARISON_CASES:
         try:
-            output = _propose(case["text"])
+            output, routing_context = _propose_in_context(case["text"])
             scenario_results.append(
                 {
                     "id": case["id"],
                     "text": case["text"],
                     "passed": True,
                     "candidate_count": len(output.candidates),
+                    "routing_context": routing_context,
                     "candidates": [
-                        _candidate_record(candidate) for candidate in output.candidates
+                        _candidate_record(candidate, routing_context)
+                        for candidate in output.candidates
                     ],
                 }
             )
@@ -261,7 +272,8 @@ def test_archive_title_wording_reference():
             "summary": (
                 "Title wording comparison archive. "
                 f"prompt {prompt_version}, {len(scenario_results)} scenarios. "
-                "Writing criteria are not applied here."
+                "Writing criteria are not applied. Routing is resolved inside "
+                "each run's taxonomy, not compared as raw keys."
             ),
         },
     )

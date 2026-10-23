@@ -112,7 +112,7 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
 
 PR filter (Makefile + CI — keep the two strings identical): `-m "not openai_observation_smoke and not openai_smoke and not slow and not heavy"`.
 
-The title smoke archives a fixed comparison set through `write_smoke_archive`. The archive kind includes the runtime prompt version, so a `v6_3` reference and a `v6_4` run stay as separate files under `.artifacts/pipeline-v6-smoke/`. `test_archive_title_wording_reference` records payloads only. The writing checks run only when the prompt is `ai_observation_pipeline_v6_4`. Both stay opt-in and are not part of CI.
+The title smoke archives a fixed comparison set through `write_smoke_archive`. The archive kind includes the runtime prompt version, so a `v6_3` reference and a `v6_4` run stay separate files. Each scenario stores that run's taxonomy. Comparison resolves routing inside it (catalog key, specific name, subject label) and does not compare raw UUID keys. A title or summary paraphrase, a null route against a resolved one, or a free `information_type` is a fluctuation. A changed candidate count, `signal_kind`, pole or subject when the taxonomy shape matches, or a lost observation number in the title is a regression. A different available taxonomy is reported as context, not as a routing regression. Writing checks run only on `ai_observation_pipeline_v6_4`. Both stay opt-in and are not part of CI.
 
 ### Auth throttling in pytest
 
