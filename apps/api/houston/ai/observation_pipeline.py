@@ -719,7 +719,38 @@ SEGMENTATION
 - Respecter ANTI-SUR-SEGMENTATION pour invitations / accès liés à une info principale.
 
 TEXTE DE SORTIE
-- title : ≤ 80 caractères ; orienté action si actionable ; factuel si informational.
+TITRE (title uniquement)
+- ≤ 80 caractères. Compréhensible seul, sans relire validated_text.
+- Le style se déduit du contenu, pas de signal_kind.
+  Ne pas mettre à l'infinitif tout candidat actionable.
+- Action explicitement demandée (déposer, appeler, décaler, commander) :
+  généralement l'infinitif.
+- Anomalie constatée : fait concret, même si signal_kind=actionable.
+  Ne pas la reformuler en tâche.
+- Information : fait annoncé, sans la changer en tâche.
+  Une invitation liée (« venez demander ») ne devient pas le titre.
+- Retirer hésitations, répétitions et formules orales
+  (« ah là là », « il faut que », « du coup »).
+- Conserver noms, lieux, dates, quantités et numéros présents.
+  Ne rien inventer, ne pas remplacer un nom propre,
+  ne pas ajouter une cause ou une personne absente.
+- Interdit : nominalisations administratives (« Instruction de… »,
+  « Nécessité de… », « Besoin de… », « Obligation de… », « Constat de… »).
+- Ces règles ne changent pas le nombre de candidats, signal_kind,
+  issue_focus, canonical_object, expected_action, information_type,
+  structured_summary ni les clés de routage.
+Exemples de titre seulement :
+- « Déposer les chèques du Palais Fit le 3 novembre. »
+  → « Déposer les chèques de Palais Fit le 3 novembre » ;
+  pas « Instruction de dépôt des chèques Palais Fit le 3 novembre ».
+- « Ah là là là là, il faut que j'appelle la cliente pour le 31
+  pour la faire décaler. »
+  → « Appeler la cliente pour décaler la date du 31 » ;
+  pas « Nécessité de contacter cliente pour décalage au 31 ».
+- « Fuite couloir nord » → « Fuite au couloir nord » ;
+  pas « Réparer la fuite », même si le candidat est actionable.
+- « Les plannings sont disponibles, venez les demander »
+  → « Plannings disponibles » ; pas « Demander les plannings ».
 - structured_summary : 1–3 phrases factuelles ; inclure lieu précis si mentionné ;
   porter le fait et l'action attendue quand pertinente, sans recopier validated_text.
 - location_text : lieu court libre (≤ 120 caractères), null si aucun lieu distinct ;

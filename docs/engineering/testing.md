@@ -108,9 +108,11 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
 | **Standard suite** (PR filter; ~2 900 collected functions as of the backend test-strategy audit) | `FakeObservationPipelineProvider` via autouse `force_fake_observation_pipeline_provider` | Yes |
 | **Provider guard tests** | Fake + mocked OpenAI client (`test_observation_pipeline_provider.py`) | Yes |
 | **Pipeline validation / golden** | Fake provider, DB-heavy | Yes (in PR) |
-| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py`, `test_openai_observation_pipeline_v6_business_smoke.py`) | No — manual / pre-release only; optional local archives under `.artifacts/pipeline-v6-smoke/` (gitignored, not source of truth) |
+| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py`, `test_openai_observation_pipeline_v6_business_smoke.py`, `test_openai_observation_pipeline_v6_4_title_smoke.py`) | No — manual / pre-release only; optional local archives under `.artifacts/pipeline-v6-smoke/` (gitignored, not source of truth) |
 
 PR filter (Makefile + CI — keep the two strings identical): `-m "not openai_observation_smoke and not openai_smoke and not slow and not heavy"`.
+
+The title smoke archives a fixed comparison set through `write_smoke_archive`. The archive kind includes the runtime prompt version, so a `v6_3` reference and a `v6_4` run stay as separate files under `.artifacts/pipeline-v6-smoke/`. `test_archive_title_wording_reference` records payloads only. The writing checks run only when the prompt is `ai_observation_pipeline_v6_4`. Both stay opt-in and are not part of CI.
 
 ### Auth throttling in pytest
 
@@ -128,7 +130,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 
 - Auth / bootstrap / CSRF / refresh rotation
 - RBAC and cross-establishment isolation
-- Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_3` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
+- Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_4` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
 - Action Plan lifecycle (catalog, planning-submit, executions, schedules, service + API transitions + permissions)
 - Chat WS ticket auth and message delivery
 - Upload validators
