@@ -56,7 +56,12 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
             "properties": {
                 "title": {
                     "type": "string",
-                    "description": "Short operational title.",
+                    "description": (
+                        "Titre court en français : infinitif seulement pour une action "
+                        "explicitement demandée ; anomalie constatée formulée comme un "
+                        "fait, même si actionable ; information formulée comme un fait "
+                        "annoncé ; pas de nominalisation administrative."
+                    ),
                 },
                 "structured_summary": {
                     "type": "string",
@@ -80,7 +85,10 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 "signal_kind": {
                     "type": "string",
                     "enum": list(AI_SIGNAL_KIND_VALUES),
-                    "description": "actionable or informational.",
+                    "description": (
+                        "actionable : anomalie à traiter ou action concrète explicitement "
+                        "demandée ; informational : simple annonce, sans action demandée."
+                    ),
                 },
                 "expected_action": {
                     "type": ["string", "null"],
