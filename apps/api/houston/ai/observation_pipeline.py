@@ -609,12 +609,13 @@ CONTEXTE
 
 MÉTHODE — ANALYSE FAIT PAR FAIT
 1. Lire validated_text et lister mentalement chaque FAIT opérationnel DISTINCT
-   (anomalie corrective OU information utile à l'équipe : disponibilité, planning,
-   horaires, consigne, changement d'organisation, statut rétabli / à surveiller).
+   (anomalie à traiter, action concrète explicitement demandée, ou annonce utile :
+   disponibilité, planning, horaires, changement annoncé, statut rétabli / à surveiller).
 2. Pour chaque fait, appliquer la grille mentale avant de produire le JSON :
    - symptôme / fait constaté,
    - nature / cause probable si pertinente (sinon N/A pour l'informatif),
-   - action attendue si corrective ; sinon inform / monitor,
+   - action attendue si anomalie à traiter ou action concrète explicitement demandée ;
+     inform / monitor pour une simple annonce,
    - lieu pertinent (inclus dans issue_focus si discriminant),
    - pôle responsable (transversal ou dedicated selon règles ci-dessous).
 3. Produire un candidat JSON par fait distinct (max {MAX_CANDIDATES_PER_OBSERVATION}).
@@ -627,9 +628,10 @@ QUAND ÉMETTRE 0 / 1 / N CANDIDATS
   responsables, natures différentes), y compris mélange actionable + informational.
 - Retourner "candidates": [] SEULEMENT si : pure politesse / encouragement sans fait ;
   négation / fausse alerte sans fait résiduel ; bavardage hors ops ; aucun fait identifiable.
-- Ne PAS utiliser [] parce que le routing est ambigu (mettre les clés à null), faute
-  d'action corrective immédiate (utiliser informational), formulation courte, ou présence
-  d'une invitation accessoire.
+- Ne PAS utiliser [] parce que le routing est ambigu (mettre les clés à null),
+  parce qu'une action demandée n'est pas une anomalie (elle reste actionable),
+  parce qu'une annonce n'a pas de correction immédiate (elle reste informational),
+  formulation courte, ou présence d'une invitation accessoire.
 
 ANTI-SUR-SEGMENTATION
 - Une modalité d'accès, un conseil ou une invitation liée à l'information principale
@@ -639,10 +641,10 @@ ANTI-SUR-SEGMENTATION
 
 CANONICAL_OBJECT (obligatoire)
 - Actionable : objet / produit / équipement concerné (ex. clim, sirop mojito, vitre).
-- Informational : objet / thème opérationnel (ex. planning, horaires, consigne).
+- Informational : objet / thème annoncé (ex. planning, horaires, dépôt prévu).
 
 ISSUE_FOCUS (obligatoire, 1–80 caractères)
-- Actionable : problème précis (en complément de canonical_object).
+- Actionable : problème précis, ou action demandée, en complément de canonical_object.
 - Informational : état, disponibilité ou changement annoncé, court et stable
   (ex. planning étages disponible).
 - Inclure le lieu dans issue_focus UNIQUEMENT quand il discrimine des faits distincts
@@ -651,10 +653,16 @@ ISSUE_FOCUS (obligatoire, 1–80 caractères)
 - Sert côté backend à la clé d'agrégation — pas de synonymes inventés pour le même focus.
 
 SIGNAL_KIND / EXPECTED_ACTION / INFORMATION_TYPE
-- signal_kind "actionable" : intervention / correction / réappro / sécurisation / inspection
-  attendue.
-- signal_kind "informational" : fait à connaître, diffuser ou surveiller sans correction
-  immédiate (planning, horaires, consignes, org, statut rétabli).
+- Décider signal_kind ici, avant le titre. Le bloc TITRE ne le modifie pas.
+- signal_kind "actionable" : une intervention est attendue. Anomalie à corriger,
+  réapprovisionner, sécuriser ou inspecter, ou action concrète explicitement
+  demandée (déposer, appeler, décaler, commander), même sans anomalie.
+- signal_kind "informational" : simple annonce à connaître, diffuser ou surveiller,
+  sans action concrète demandée (planning disponible, horaire annoncé,
+  dépôt prévu, statut rétabli).
+- « Déposer les chèques du Palais Fit le 3 novembre » → actionable.
+  « Le dépôt des chèques est prévu le 3 novembre » → informational.
+  « Il faut que j'appelle la cliente pour la faire décaler » → actionable.
 - expected_action : une valeur parmi clean_secure, repair, replenish, inspect, coordinate,
   assist, inform, monitor, safety_response — ou null si inconnue.
   Pour informational : préférer inform ou monitor.

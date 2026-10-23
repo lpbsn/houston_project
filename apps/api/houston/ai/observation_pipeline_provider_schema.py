@@ -85,7 +85,10 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 "signal_kind": {
                     "type": "string",
                     "enum": list(AI_SIGNAL_KIND_VALUES),
-                    "description": "actionable or informational.",
+                    "description": (
+                        "actionable : anomalie à traiter ou action concrète explicitement "
+                        "demandée ; informational : simple annonce, sans action demandée."
+                    ),
                 },
                 "expected_action": {
                     "type": ["string", "null"],

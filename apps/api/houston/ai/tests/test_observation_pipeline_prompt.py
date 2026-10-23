@@ -22,8 +22,8 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 
-def test_prompt_version_is_v6_4_schema_remains_v6():
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_4"
+def test_prompt_version_is_v6_5_schema_remains_v6():
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_5"
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
     assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 
@@ -53,6 +53,13 @@ def test_system_prompt_is_french_and_covers_dual_context():
     assert "schedule_update" in prompt
     assert "Les plannings sont disponibles, venez les demander" in prompt
     assert "exactement 1" in prompt
+    assert "Décider signal_kind ici, avant le titre" in prompt
+    assert "même sans anomalie" in prompt
+    assert "Le dépôt des chèques est prévu le 3 novembre" in prompt
+    assert "simple annonce" in prompt
+    assert "action attendue si corrective" not in prompt
+    assert "consignes, org" not in prompt
+    assert "responsible uniquement si le texte de validated_text justifie clairement" in prompt
     assert "Le style se déduit du contenu, pas de signal_kind" in prompt
     assert "même si signal_kind=actionable" in prompt
     assert "généralement l'infinitif" in prompt
@@ -103,7 +110,7 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
     payload = build_pipeline_input(observation=observation)
 
     assert payload["prompt_version"] == AI_OBSERVATION_PIPELINE_PROMPT_VERSION
-    assert payload["prompt_version"] == "ai_observation_pipeline_v6_4"
+    assert payload["prompt_version"] == "ai_observation_pipeline_v6_5"
     assert payload["schema_version"] == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert payload["validated_text"] == observation.raw_text
     assert "establishment_context" in payload

@@ -11,7 +11,7 @@ import re
 import unicodedata
 from typing import Any
 
-TITLE_WRITING_CRITERIA_PROMPT_VERSION = "ai_observation_pipeline_v6_4"
+TITLE_WRITING_CRITERIA_PROMPT_VERSION = "ai_observation_pipeline_v6_5"
 
 _NUMBER_RE = re.compile(r"\d+")
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
