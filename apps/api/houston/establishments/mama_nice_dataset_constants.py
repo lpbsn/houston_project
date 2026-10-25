@@ -299,9 +299,5 @@ WEEKDAYS_ALL = (
 )
 
 
-def paris_dt(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0):
-    return datetime(year, month, day, hour, minute, second, tzinfo=PARIS_TZ)
-
-
 def combine_paris(day: date, clock: time) -> datetime:
     return datetime.combine(day, clock, tzinfo=PARIS_TZ)

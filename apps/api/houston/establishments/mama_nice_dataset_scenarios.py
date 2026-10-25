@@ -189,10 +189,6 @@ def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
     return any(hint.casefold() in folded for hint in hints)
 
 
-def activity_for(*, pole: str, unit: str, focus: str) -> str:
-    return infer_activity(pole=pole, unit=unit, focus=focus)
-
-
 def _named_overrides() -> dict[str, dict]:
     return {
         "signal:golden-clim-318": {
