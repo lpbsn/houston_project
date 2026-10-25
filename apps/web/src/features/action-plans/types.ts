@@ -9,7 +9,6 @@ export type ActionPlanListItem = components['schemas']['ActionPlanListItem']
 export type ActionPlanDetail = components['schemas']['ActionPlanDetail']
 export type ActionPlanCreateRequest = components['schemas']['ActionPlanCreateRequest']
 export type ActionPlanScheduleCreateRequest = components['schemas']['ActionPlanScheduleCreateRequest']
-export type ActionPlanScheduleDetail = components['schemas']['ActionPlanScheduleDetail']
 export type ActionPlanCreate201Response = components['schemas']['ActionPlanCreate201Response']
 export type PatchedActionPlanUpdateRequest = components['schemas']['PatchedActionPlanUpdateRequest']
 export type PatchedActionPlanExecutionUpdateRequest =
@@ -45,7 +44,6 @@ export type ActionPlanTaskExecutionPermissionHints =
 export type ActionPlanBusinessUnit = components['schemas']['ActionPlanBusinessUnit']
 export type ActionPlanTaskTemplate = components['schemas']['ActionPlanTaskTemplate']
 export type ActionPlanAssigneesByPole = components['schemas']['ActionPlanAssigneesByPole']
-export type ActionPlanInvolvedPole = components['schemas']['ActionPlanInvolvedPole']
 export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecutionFeedItem']
 export type ActionPlanExecutionFeedItemWrapper =
   components['schemas']['ActionPlanExecutionFeedItemWrapper']
