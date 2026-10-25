@@ -38,6 +38,8 @@ vi.mock('@/features/invitations/api', () => ({
   previewDirectorInvitation,
 }))
 
+import { InvitationAcceptApiError } from '@/features/invitations/api'
+
 import { InvitationAcceptPage } from './invitation-accept-page'
 
 function renderPage(initialHref: string, onAccepted = vi.fn()) {
@@ -80,12 +82,12 @@ describe('InvitationAcceptPage', () => {
     expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
     expect(
       screen.getByText(
-        'This invitation link is missing or invalid. Open the link from your email to continue.',
+        'Ce lien est absent ou invalide. Ouvrez le lien reçu par e-mail pour rejoindre votre équipe.',
       ),
     ).toBeTruthy()
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(history.getHref()).toBe('/login')
   })
 
@@ -97,7 +99,7 @@ describe('InvitationAcceptPage', () => {
     expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
     expect(
       screen.getByText(
-        'This invitation link is missing or invalid. Open the link from your email to continue.',
+        'Ce lien est absent ou invalide. Ouvrez le lien reçu par e-mail pour rejoindre votre équipe.',
       ),
     ).toBeTruthy()
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
@@ -112,7 +114,7 @@ describe('InvitationAcceptPage', () => {
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
       target: { value: 'SecurePass123!' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
 
     await vi.waitFor(() => {
       expect(acceptDirectorInvitation).toHaveBeenCalledWith('invite-token', {
@@ -130,7 +132,7 @@ describe('InvitationAcceptPage', () => {
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
       target: { value: 'DifferentPass12' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 
@@ -143,12 +145,15 @@ describe('InvitationAcceptPage', () => {
     const { history, onAccepted } = renderPage('/invitations#invite-token')
 
     expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
-    fireEvent.click(await screen.findByRole('button', { name: 'Accept invitation' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
 
     await vi.waitFor(() => {
       expect(acceptDirectorInvitation).toHaveBeenCalledWith('invite-token', {})
-      expect(history.getHref()).toBe('/login')
+      expect(screen.getByText('Bienvenue dans votre équipe !')).toBeTruthy()
     })
+    expect(history.getHref()).toBe('/invitations')
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter à Spore' }))
+    expect(history.getHref()).toBe('/login')
     expect(onAccepted).not.toHaveBeenCalled()
     expect(logout).not.toHaveBeenCalled()
   })
@@ -162,15 +167,15 @@ describe('InvitationAcceptPage', () => {
     })
     const { history, onAccepted } = renderPage('/invitations#invite-token')
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Accept invitation' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/accepted for another account/i)).toBeTruthy()
+      expect(screen.getByText(/acceptée pour un autre compte/i)).toBeTruthy()
     })
     expect(history.getHref()).toBe('/invitations')
     expect(onAccepted).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Changer de compte et continuer' }))
 
     await vi.waitFor(() => {
       expect(logout).toHaveBeenCalledOnce()
@@ -187,10 +192,81 @@ describe('InvitationAcceptPage', () => {
     })
     const { onAccepted } = renderPage('/invitations#invite-token')
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Accept invitation' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
 
-    await vi.waitFor(() => {
-      expect(onAccepted).toHaveBeenCalledOnce()
-    })
+    await screen.findByText('Bienvenue dans votre équipe !')
+    expect(onAccepted).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir mon espace Spore' }))
+    expect(onAccepted).toHaveBeenCalledOnce()
   })
+
+  it('shows an expired invitation without password fields or an active submit', async () => {
+    previewDirectorInvitation.mockRejectedValue(new InvitationAcceptApiError('Expired', 400, 'invitation_expired'))
+    renderPage('/invitations#expired-token')
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Cette invitation a expiré. Demandez une nouvelle invitation à votre responsable.')
+    expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Rejoindre mon équipe' })).toHaveProperty('disabled', true)
+    expect(acceptDirectorInvitation).not.toHaveBeenCalled()
+  })
+
+  it('shows the server message when password validation fails', async () => {
+    acceptDirectorInvitation.mockRejectedValueOnce(
+      new InvitationAcceptApiError('Ce mot de passe est trop courant.', 400, 'validation_error'),
+    )
+    renderPage('/invitations#invite-token')
+
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Ce mot de passe est trop courant.',
+    )
+    expect(screen.queryByText(/Vérifiez votre connexion/)).toBeNull()
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
+  })
+
+  it('shows a French validation message when the server sends no field error', async () => {
+    acceptDirectorInvitation.mockRejectedValueOnce(
+      new InvitationAcceptApiError(
+        'Les informations saisies ne sont pas valides. Corrigez-les puis réessayez.',
+        400,
+        'validation_error',
+      ),
+    )
+    renderPage('/invitations#invite-token')
+
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Les informations saisies ne sont pas valides. Corrigez-les puis réessayez.',
+    )
+    expect(screen.queryByText('Request validation failed.')).toBeNull()
+    expect(screen.queryByText(/Vérifiez votre connexion/)).toBeNull()
+  })
+
+  it('does not show success after a rejected acceptance and permits retry', async () => {
+    previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
+    acceptDirectorInvitation.mockRejectedValueOnce(new Error('Network unavailable'))
+    renderPage('/invitations#invite-token')
+    fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Vérifiez votre connexion')
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+    await screen.findByText('Bienvenue dans votre équipe !')
+    expect(acceptDirectorInvitation).toHaveBeenCalledTimes(2)
+  })
+
 })

@@ -10,6 +10,7 @@ import {
   logout,
   refreshAccessToken,
 } from '@/features/auth/api'
+import { acceptDirectorInvitation } from '@/features/invitations/api'
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 import { resetSuccessToastsForTests } from '@/lib/success-toast'
 import {
@@ -1719,6 +1720,118 @@ describe('auth api login logout', () => {
     expect(setAccessTokenMock).toHaveBeenCalledWith('next-cookie-access')
     expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
       user: { id: 'next-user' },
+    })
+  })
+
+  describe('invitation accept validation errors', () => {
+    const frenchValidationMessage =
+      'Les informations saisies ne sont pas valides. Corrigez-les puis réessayez.'
+
+    beforeEach(() => {
+      vi.stubEnv('VITE_APP_RUNTIME', 'native')
+      getAccessTokenMock.mockReturnValue(null)
+    })
+
+    it('puts password field errors before the other fields on InvitationAcceptApiError', async () => {
+      apiClientPostMock.mockResolvedValueOnce({
+        response: { status: 400 },
+        data: undefined,
+        error: {
+          code: 'validation_error',
+          detail: 'Request validation failed.',
+          errors: {
+            password_confirmation: ['Les mots de passe ne correspondent pas.'],
+            password: ['Ce mot de passe est trop courant.', 'Ce mot de passe est trop court.'],
+          },
+        },
+      })
+
+      await expect(
+        acceptDirectorInvitation('invite-token', {
+          password: 'secret',
+          password_confirmation: 'secret',
+        }),
+      ).rejects.toMatchObject({
+        name: 'InvitationAcceptApiError',
+        message:
+          'Ce mot de passe est trop courant. Ce mot de passe est trop court. Les mots de passe ne correspondent pas.',
+        status: 400,
+        code: 'validation_error',
+      })
+    })
+
+    it('uses the other field errors when password has none', async () => {
+      apiClientPostMock.mockResolvedValueOnce({
+        response: { status: 400 },
+        data: undefined,
+        error: {
+          code: 'validation_error',
+          detail: 'Request validation failed.',
+          errors: {
+            terms_version: ['La version des conditions est invalide.'],
+            password_confirmation: ['Les mots de passe ne correspondent pas.'],
+          },
+        },
+      })
+
+      await expect(
+        acceptDirectorInvitation('invite-token', {
+          password: 'secret',
+          password_confirmation: 'secret',
+        }),
+      ).rejects.toMatchObject({
+        name: 'InvitationAcceptApiError',
+        message:
+          'La version des conditions est invalide. Les mots de passe ne correspondent pas.',
+        status: 400,
+        code: 'validation_error',
+      })
+    })
+
+    it('uses a French validation message when the server sends no field error', async () => {
+      apiClientPostMock.mockResolvedValueOnce({
+        response: { status: 400 },
+        data: undefined,
+        error: {
+          code: 'validation_error',
+          detail: 'Request validation failed.',
+        },
+      })
+
+      await expect(
+        acceptDirectorInvitation('invite-token', {
+          password: 'secret',
+          password_confirmation: 'secret',
+        }),
+      ).rejects.toMatchObject({
+        name: 'InvitationAcceptApiError',
+        message: frenchValidationMessage,
+        status: 400,
+        code: 'validation_error',
+      })
+    })
+
+    it('keeps a non-validation invitation error', async () => {
+      apiClientPostMock.mockResolvedValueOnce({
+        response: { status: 400 },
+        data: undefined,
+        error: {
+          code: 'invitation_expired',
+          detail: 'This invitation has expired.',
+        },
+      })
+
+      await expect(
+        acceptDirectorInvitation('invite-token', {
+          password: 'secret',
+          password_confirmation: 'secret',
+        }),
+      ).rejects.toMatchObject({
+        name: 'InvitationAcceptApiError',
+        message: 'This invitation has expired.',
+        status: 400,
+        code: 'invitation_expired',
+      })
     })
   })
 
