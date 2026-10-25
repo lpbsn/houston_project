@@ -1,7 +1,7 @@
 # AI Observation Pipeline Contract
 
 Status: authoritative (contract)
-Implementation status: **pipeline v6** — schema `ai_observation_pipeline_v6` ; prompt `ai_observation_pipeline_v6_3` ; dual context (`establishment_context` + `routing_taxonomy`) ; nullable routing keys ; `signal_kind` actionable|informational ; author scope is server-only (not sent to the LLM) ; backend aggregation on normalized `issue_focus` (no LLM aggregate hint)
+Implementation status: **pipeline v6** — schema `ai_observation_pipeline_v6` ; prompt `ai_observation_pipeline_v6_5` ; dual context (`establishment_context` + `routing_taxonomy`) ; nullable routing keys ; `signal_kind` actionable|informational ; author scope is server-only (not sent to the LLM) ; backend aggregation on normalized `issue_focus` (no LLM aggregate hint)
 
 ## Purpose
 
@@ -42,11 +42,12 @@ Author membership scope is **not** sent to the LLM. Post-resolve apply order:
 ### System prompt
 
 - **Language**: French.
-- **`prompt_version`**: `ai_observation_pipeline_v6_3`
+- **`prompt_version`**: `ai_observation_pipeline_v6_5`
 - **`schema_version`**: `ai_observation_pipeline_v6`
+- **Titre** : le style suit le contenu (infinitif pour une action explicitement demandée, fait pour une anomalie même actionable, fait pour une information) et non `signal_kind`. Le schéma reste `ai_observation_pipeline_v6`.
 - **MÉTHODE** : analyse **fait par fait** (anomalies **ou** informations opérationnelles).
 - **0 / 1 / N** : émettre un candidat par fait opérationnel ; `[]` seulement pour politesse, fausse alerte sans fait résiduel, ou absence de fait.
-- **`signal_kind`** : `actionable` (intervention attendue) ou `informational` (à connaître / diffuser / surveiller).
+- **`signal_kind`** : `actionable` pour une anomalie à traiter ou une action concrète explicitement demandée, même sans anomalie ; `informational` pour une simple annonce. Le bloc titre ne reclasse pas le candidat.
 - **Informational fields** : `canonical_object` = objet/thème ; `issue_focus` = état, disponibilité ou changement annoncé (court, stable).
 - **Anti-sur-segmentation** : invitation / modalité d’accès liée à l’info principale ≠ candidat séparé ni anomalie (ex. « Les plannings sont disponibles, venez les demander » → exactement 1 informational).
 - **`issue_focus`** : discriminant d’agrégation backend (1–80 chars).
@@ -99,7 +100,7 @@ Inactive BU/AS or sibling-BU subjects are rejected or corrected per resolver rul
 | Constant | Value |
 | --- | --- |
 | `AI_OBSERVATION_PIPELINE_SCHEMA_VERSION` | `ai_observation_pipeline_v6` |
-| `AI_OBSERVATION_PIPELINE_PROMPT_VERSION` | `ai_observation_pipeline_v6_3` |
+| `AI_OBSERVATION_PIPELINE_PROMPT_VERSION` | `ai_observation_pipeline_v6_5` |
 | `AI_ISSUE_FOCUS_MAX_LENGTH` | `80` |
 | `AI_INFORMATION_TYPE_MAX_LENGTH` | `64` |
 | `MAX_CANDIDATES_PER_OBSERVATION` | `5` |

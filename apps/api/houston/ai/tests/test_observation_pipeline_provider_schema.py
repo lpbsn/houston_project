@@ -127,3 +127,25 @@ def test_openai_schema_excludes_backend_only_fields(openai_schema):
 def test_openai_schema_information_type_max_length(openai_schema):
     info = openai_schema["$defs"]["pipeline_candidate"]["properties"]["information_type"]
     assert info["maxLength"] == AI_INFORMATION_TYPE_MAX_LENGTH
+
+
+def test_openai_schema_signal_kind_separates_requested_action_from_announcement(openai_schema):
+    description = openai_schema["$defs"]["pipeline_candidate"]["properties"]["signal_kind"][
+        "description"
+    ].casefold()
+    assert "explicitement" in description
+    assert "demandée" in description
+    assert "annonce" in description
+    assert "anomalie" in description
+
+
+def test_openai_schema_title_style_is_not_tied_to_actionable(openai_schema):
+    title = openai_schema["$defs"]["pipeline_candidate"]["properties"]["title"]
+    description = title["description"].casefold()
+    assert "infinitif" in description
+    assert "explicitement demandée" in description
+    before_anomaly, separator, _after = description.partition("anomalie")
+    assert separator == "anomalie"
+    assert "actionable" not in before_anomaly
+    assert "même si actionable" in description
+    assert "maxLength" not in title
