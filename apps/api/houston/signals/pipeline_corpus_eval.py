@@ -64,16 +64,6 @@ def assert_openai_eval_opt_in() -> None:
         raise RuntimeError("OPENAI_API_KEY is not configured.")
 
 
-def resolve_eval_provider(provider_name: str) -> ObservationPipelineProvider:
-    normalized = provider_name.strip().lower()
-    if normalized == "fake":
-        return FakeObservationPipelineProvider()
-    if normalized == "openai":
-        assert_openai_eval_opt_in()
-        return OpenAIObservationPipelineProvider()
-    raise ValueError(f"Unknown provider: {provider_name!r}. Use 'openai' or 'fake'.")
-
-
 def candidate_signature(raw: dict[str, Any]) -> tuple[str, str, str, str, str | None]:
     return (
         raw["affected_business_unit_routing_key"],

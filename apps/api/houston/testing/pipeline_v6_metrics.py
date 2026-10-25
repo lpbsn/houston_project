@@ -236,27 +236,6 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
 }
 
 
-def list_cases_for_metric(metric_id: str, cases: list[dict[str, Any]]) -> list[str]:
-    metric = metric_id.strip().upper()
-    return [case["id"] for case in cases if metric in case.get("metrics", [])]
-
-
-def list_cases_for_lot(lot_id: str, cases: list[dict[str, Any]]) -> list[str]:
-    return [case["id"] for case in cases if lot_id in case.get("lots", [])]
-
-
-def list_truth_rows_for_lot(
-    lot_id: str,
-    truth_tables: dict[str, Any],
-) -> list[str]:
-    row_ids: list[str] = []
-    for section_rows in truth_tables.get("sections", {}).values():
-        for row in section_rows:
-            if row.get("owning_lot") == lot_id:
-                row_ids.append(row["id"])
-    return row_ids
-
-
 def metrics_referenced_by_corpus(cases: list[dict[str, Any]]) -> set[str]:
     referenced: set[str] = set()
     for case in cases:

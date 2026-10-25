@@ -199,31 +199,6 @@ def recurrent_pattern_ids_queryset(
     )
 
 
-def recurrent_patterns_count_for_contributors(
-    user: User | None,
-    *,
-    as_of: datetime,
-    contributor_pattern_ids,
-    organization_id=None,
-    establishment_id=None,
-    establishment_ids=None,
-    _read_scope: AnalyticsReadScope | None = None,
-) -> int:
-    return (
-        recurrent_pattern_ids_queryset(
-            user,
-            as_of=as_of,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-            establishment_ids=establishment_ids,
-            pattern_ids=contributor_pattern_ids,
-            _read_scope=_read_scope,
-        )
-        .distinct()
-        .count()
-    )
-
-
 def _recurrence_rows(
     read_scope: AnalyticsReadScope,
     *,

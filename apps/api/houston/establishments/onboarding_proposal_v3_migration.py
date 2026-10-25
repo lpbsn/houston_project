@@ -167,22 +167,3 @@ def assert_no_non_terminal_v3_proposals(*, apps) -> None:
             f"{preview}"
             + ("…" if len(remaining) > 20 else "")
         )
-
-
-def inventory_onboarding_v3_proposals(*, apps) -> dict[str, int]:
-    proposal_model = _proposal_model(apps)
-    counts = {
-        "v3_non_terminal": 0,
-        "v3_terminal": 0,
-        "other": 0,
-    }
-    for proposal in proposal_model.objects.all().iterator():
-        payload = proposal.payload if isinstance(proposal.payload, dict) else {}
-        if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3:
-            counts["other"] += 1
-            continue
-        if proposal.status in PROPOSAL_NON_TERMINAL_STATUSES:
-            counts["v3_non_terminal"] += 1
-        else:
-            counts["v3_terminal"] += 1
-    return counts

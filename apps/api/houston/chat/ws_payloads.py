@@ -71,22 +71,6 @@ def build_message_created_payload(
     }
 
 
-def build_message_rejected_payload(
-    *,
-    client_message_id: UUID | None,
-    code: str,
-    detail: str,
-) -> dict:
-    payload = {
-        "type": "message.rejected",
-        "code": code,
-        "detail": detail,
-    }
-    if client_message_id is not None:
-        payload["client_message_id"] = str(client_message_id)
-    return payload
-
-
 def build_conversation_access_revoked_payload(
     *,
     conversation_id: UUID,

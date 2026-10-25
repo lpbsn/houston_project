@@ -74,14 +74,6 @@ class PlanningSubmissionResult:
         }
 
 
-def assert_use_cardinality(*, use_shared_chronology: bool, assignees: list | None) -> None:
-    requested = assignees or []
-    if not use_shared_chronology and len(requested) > 1:
-        raise ActionPlanValidationError(
-            "Individual chronology with multiple assignees requires planning-submit.",
-        )
-
-
 def assert_schedule_cardinality(*, use_shared_chronology: bool, assignees: list | None) -> None:
     requested = assignees or []
     if not use_shared_chronology and len(requested) != 1:
@@ -99,37 +91,6 @@ def normalize_oneshot_chronology_mode(
     if not (assignees or []):
         return True
     return use_shared_chronology
-
-
-def resolve_oneshot_execution_chronology(
-    *,
-    use_shared_chronology: bool,
-    assignees: list[dict],
-    start_at: datetime | None,
-    end_at: datetime | None,
-    visible_from: datetime | None,
-) -> tuple[bool, EstablishmentMembership | None, datetime | None, datetime | None, datetime | None]:
-    """Return (shared_mode, owner, start_at, end_at, visible_from)."""
-    shared = normalize_oneshot_chronology_mode(
-        use_shared_chronology=use_shared_chronology,
-        assignees=assignees,
-    )
-    if shared:
-        return True, None, start_at, end_at, visible_from
-
-    if len(assignees) != 1:
-        raise ActionPlanValidationError(
-            "Individual chronology with multiple assignees requires planning-submit.",
-        )
-    primary = assignees[0]
-    # assignees here are ValidatedAssigneePayload after validation in callers
-    return (
-        False,
-        primary.membership,
-        primary.start_at if primary.start_at is not None else start_at,
-        primary.end_at if primary.end_at is not None else end_at,
-        primary.visible_from if primary.visible_from is not None else visible_from,
-    )
 
 
 def _assert_planning_access(*, actor: EstablishmentMembership, action_plan: ActionPlan) -> None:

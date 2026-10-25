@@ -36,20 +36,6 @@ def snapshot_ready_business_units(*, establishment_id: uuid.UUID) -> QuerySet[Bu
     ).filter(snapshot_ready_business_units_q())
 
 
-def is_snapshot_ready_business_unit(business_unit: BusinessUnit | None) -> bool:
-    if business_unit is None:
-        return False
-    if not business_unit.active:
-        return False
-    if not business_unit.routing_key:
-        return False
-    if business_unit.catalog_business_unit_id is None:
-        return False
-    if not business_unit.specific_name:
-        return False
-    return True
-
-
 def _activity_subject_snapshot_source(*, activity_subject: ActivitySubject) -> str:
     if activity_subject.catalog_activity_subject_id is not None:
         return "catalog"
@@ -280,10 +266,6 @@ def establishment_has_any_active_business_unit(*, establishment_id: uuid.UUID) -
         establishment_id=establishment_id,
         active=True,
     ).exists()
-
-
-def get_establishment_for_snapshot(establishment_id: uuid.UUID) -> Establishment | None:
-    return Establishment.objects.filter(id=establishment_id).first()
 
 
 def get_active_establishment_for_pipeline(
