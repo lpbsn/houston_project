@@ -30,12 +30,6 @@ export function isEstablishmentDescriptionValid(description: string): boolean {
   return length >= ACTIVITY_DESCRIPTION_MIN_LENGTH && length <= ACTIVITY_DESCRIPTION_MAX_LENGTH
 }
 
-export function isBusinessUnitValid(
-  businessUnit: OnboardingDraftPayload['business_units'][number],
-): boolean {
-  return businessUnit.catalog_key.trim().length > 0 && businessUnit.specific_name.trim().length > 0
-}
-
 export function subjectsForBusinessUnit(
   payload: OnboardingDraftPayload,
   businessUnitClientKey: string,

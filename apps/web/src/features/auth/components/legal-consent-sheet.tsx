@@ -11,25 +11,9 @@ import { Button } from '@/components/ui/button'
 import {
   PUBLIC_PRIVACY_POLICY_URL,
   PUBLIC_TERMS_URL,
-  isAiConsentRequired,
-  isTermsAcceptanceRequired,
 } from '@/lib/legal'
 
 type LegalConsentKind = 'terms' | 'ai' | null
-
-export function legalConsentKindFromError(error: unknown): LegalConsentKind {
-  if (!error || typeof error !== 'object') {
-    return null
-  }
-  const code = 'code' in error && typeof error.code === 'string' ? error.code : null
-  if (code && isTermsAcceptanceRequired({ code })) {
-    return 'terms'
-  }
-  if (code && isAiConsentRequired({ code })) {
-    return 'ai'
-  }
-  return null
-}
 
 type LegalConsentSheetProps = {
   kind: LegalConsentKind

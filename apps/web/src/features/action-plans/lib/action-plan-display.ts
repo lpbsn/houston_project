@@ -62,22 +62,6 @@ export function formatActionPlanTaskStatusLabel(status: string): string {
   }
 }
 
-export function formatContributionStatusLabel(status: string | null | undefined): string | null {
-  if (!status) {
-    return null
-  }
-  switch (status) {
-    case 'in_progress':
-      return 'En cours'
-    case 'done':
-      return 'Terminé'
-    case 'not_started':
-      return 'Non démarré'
-    default:
-      return status
-  }
-}
-
 export function formatCatalogStatusLabel(status: string | null): string {
   switch (status) {
     case 'active':
@@ -105,21 +89,6 @@ export function isActionPlanExecutionOverdue(
     return false
   }
   return Date.parse(endAt) < Date.now()
-}
-
-export function formatActionPlanAllDayPeriodLabel(
-  startAt: string | null,
-  endAt: string | null,
-): string {
-  const start = splitIsoToCivil(startAt ?? '')
-  const end = splitIsoToCivil(endAt ?? '')
-  if (!start.date) {
-    return 'Journée entière'
-  }
-  if (end.date && end.date !== start.date) {
-    return `${formatCivilDateFr(start.date)} – ${formatCivilDateFr(end.date)} · Journée entière`
-  }
-  return `${formatCivilDateFr(start.date)} · Journée entière`
 }
 
 export function formatActionPlanAllDayInstantLabel(instantAt: string | null): string {

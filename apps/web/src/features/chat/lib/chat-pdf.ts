@@ -37,16 +37,6 @@ function isNativePdfRuntime(): boolean {
   return getAppRuntime() === 'native' && Capacitor.isNativePlatform()
 }
 
-function sanitizePdfFilename(filename: string): string {
-  const trimmed = filename.trim() || 'document.pdf'
-  const safe = trimmed.replace(/[^A-Za-z0-9._-]+/g, '_')
-  return safe.endsWith('.pdf') ? safe : `${safe}.pdf`
-}
-
-export function chatPdfCacheRelativePath(id: string, filename: string): string {
-  return `${CHAT_PDF_CACHE_PREFIX}/${id}-${sanitizePdfFilename(filename)}`
-}
-
 function downloadPdfOnWeb(href: string, filename: string, revokeAfterClick: boolean) {
   const anchor = document.createElement('a')
   anchor.href = href

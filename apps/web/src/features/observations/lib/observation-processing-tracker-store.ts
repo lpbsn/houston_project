@@ -95,10 +95,6 @@ export function subscribeObservationProcessingTracker(listener: Listener): () =>
   }
 }
 
-export function getObservationProcessingTrackerSnapshot(): TrackerStoreState {
-  return state
-}
-
 export function getObservationProcessingBannerSnapshot(): BannerViewModel {
   return state.banner
 }

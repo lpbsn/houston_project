@@ -5,7 +5,6 @@ import {
   fetchAnalyticsDashboard,
   fetchAnalyticsDashboardRankings,
   fetchAnalyticsPatternDetail,
-  fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatternGovernanceTargets,
   fetchAnalyticsPatternSignals,
   fetchAnalyticsPatterns,
@@ -98,17 +97,6 @@ export function useAnalyticsPatternsInfiniteQuery(
       }
       return lastPage.next_cursor
     },
-    enabled: options?.enabled ?? true,
-  })
-}
-
-export function useAnalyticsPatternFilterOptionsQuery(
-  state: AnalyticsUrlState,
-  options?: UseAnalyticsDashboardQueryOptions,
-) {
-  return useQuery({
-    queryKey: analyticsQueryKeys.patternFilterOptions(state),
-    queryFn: () => fetchAnalyticsPatternFilterOptions(state),
     enabled: options?.enabled ?? true,
   })
 }

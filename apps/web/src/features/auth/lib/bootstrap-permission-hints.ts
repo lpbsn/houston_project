@@ -14,12 +14,6 @@ export const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   platform_operator_active: false,
 }
 
-export function bootstrapPermissionHints(
-  overrides: Partial<BootstrapPermissionHints> = {},
-): BootstrapPermissionHints {
-  return { ...EMPTY_BOOTSTRAP_PERMISSION_HINTS, ...overrides }
-}
-
 export function getBootstrapPermissionHints(
   bootstrap: BootstrapResponse | null | undefined,
 ): BootstrapPermissionHints {

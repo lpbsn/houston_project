@@ -8,15 +8,6 @@ export type OnboardingDraftValidationErrorItem = {
   key?: string | null
 }
 
-export type FieldErrorMap = Record<string, string[]>
-
-function fieldPath(error: OnboardingDraftValidationErrorItem): string {
-  const parts = [error.section, error.field, error.key].filter(
-    (part): part is string => typeof part === 'string' && part.length > 0,
-  )
-  return parts.length > 0 ? parts.join('.') : error.code
-}
-
 const CODE_MESSAGES: Record<string, string> = {
   missing_establishment_name: 'Le nom de l’établissement est obligatoire.',
   invalid_activity_description_length:
@@ -77,23 +68,6 @@ export function messagesForDraftField(
       return (error.key ?? null) === targetKey
     })
     .map((error) => messageForDraftErrorCode(error.code))
-}
-
-export function mapDraftValidationErrors(
-  errors: OnboardingDraftValidationErrorItem[] | undefined,
-): FieldErrorMap {
-  const map: FieldErrorMap = {}
-  if (!errors) {
-    return map
-  }
-
-  for (const error of errors) {
-    const path = fieldPath(error)
-    const list = map[path] ?? []
-    list.push(messageForDraftErrorCode(error.code))
-    map[path] = list
-  }
-  return map
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

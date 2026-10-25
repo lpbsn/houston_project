@@ -81,7 +81,6 @@ export function formatExecutionFeedCreatedLabel(createdAt: string): string | nul
 }
 
 const MAX_CARD_VISIBLE_ASSIGNEES = 2
-const MAX_NAMED_OTHER_POLES = 2
 
 export function formatActionPlanFeedCardStatusLabel(
   item: Pick<ActionPlanExecutionFeedItem, 'status' | 'validated_at'>,
@@ -115,37 +114,6 @@ export function formatActionPlanFeedCardAssigneeDisplay(
     visible: names.slice(0, MAX_CARD_VISIBLE_ASSIGNEES),
     overflow: Math.max(0, names.length - MAX_CARD_VISIBLE_ASSIGNEES),
     empty: false,
-  }
-}
-
-type InvolvedPoleLike = {
-  business_unit?: {
-    id?: string
-    specific_name?: string
-  }
-}
-
-export function getActionPlanFeedOtherPoles(
-  item: Pick<ActionPlanExecutionFeedItem, 'pilot_business_unit' | 'involved_poles'>,
-): { names: string[]; overflow: number; otherCount: number } {
-  const pilotId = item.pilot_business_unit.id
-  const names: string[] = []
-  for (const pole of item.involved_poles as InvolvedPoleLike[]) {
-    const bu = pole.business_unit
-    if (!bu?.id || bu.id === pilotId) {
-      continue
-    }
-    const name = (bu.specific_name ?? '').trim()
-    if (!name || names.includes(name)) {
-      continue
-    }
-    names.push(name)
-  }
-  const otherCount = names.length
-  return {
-    names: names.slice(0, MAX_NAMED_OTHER_POLES),
-    overflow: Math.max(0, otherCount - MAX_NAMED_OTHER_POLES),
-    otherCount,
   }
 }
 

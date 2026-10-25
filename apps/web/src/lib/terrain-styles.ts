@@ -48,16 +48,7 @@ export const commentThread = {
 } as const
 
 /** Action plan execution feed — teal accent (#3A7A96). */
-export const ACTION_PLAN_FEED_TEAL = '#3A7A96'
-export const ACTION_PLAN_FEED_PENDING_BG = '#FCE9B8'
-/** Scheduled action plan execution — brown accent (#8B6914). */
-export const ACTION_PLAN_FEED_SCHEDULED = '#8B6914'
-export const actionPlanFeedTealBgClassName = 'bg-[#3A7A96]'
-export const actionPlanFeedPendingBgClassName = 'bg-[#FCE9B8]'
 export const actionPlanFeedTealTextClassName = 'text-[#3A7A96]'
-export const actionPlanFeedOverdueBgClassName = 'bg-[#E24B4A]'
-export const actionPlanFeedScheduledBgClassName = 'bg-[#8B6914]'
-export const actionPlanFeedScheduledBorderClassName = 'border-l-[#8B6914]'
 
 /** Feed card reporter avatar (signal feed maquette). */
 export const terrainFeedAvatar = 'bg-[#3A7A96] text-white'
@@ -122,20 +113,6 @@ export function terrainFeedInteractiveCardClassName(className?: string) {
     'cursor-pointer rounded-[22px] border border-[#E8E6DF] bg-white p-4',
     'border-l-4 transition',
     'hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30',
-    className,
-  )
-}
-
-/** Shared radius/padding for feed cards without left-accent border (e.g. pending validation). */
-export function terrainFeedCardBaseClassName(className?: string) {
-  return cn('cursor-pointer rounded-[22px] p-4 transition', className)
-}
-
-/** In-progress action plan feed card — flex row with left sidebar (~60px). */
-export function terrainActionPlanFeedCardClassName(className?: string) {
-  return cn(
-    'flex cursor-pointer overflow-hidden rounded-[22px] border border-[#E8E6DF] bg-white transition',
-    'hover:border-[#3A7A96]/30',
     className,
   )
 }

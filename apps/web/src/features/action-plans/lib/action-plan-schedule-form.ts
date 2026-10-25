@@ -29,33 +29,3 @@ export function isActionPlanScheduleConfigured(draft: ActionPlanScheduleDraft): 
     draft.endAt.trim() !== ''
   )
 }
-
-export function validateActionPlanScheduleDraft(
-  draft: ActionPlanScheduleDraft,
-): Record<string, string> {
-  if (!draft.enabled) {
-    return {}
-  }
-
-  const errors: Record<string, string> = {}
-  if (draft.recurrenceDays.length === 0) {
-    errors.recurrenceDays = 'Sélectionnez au moins un jour.'
-  }
-  if (!draft.endDate.trim()) {
-    errors.endDate = 'La date de fin est requise.'
-  }
-  if (!draft.startAt.trim()) {
-    errors.startAt = "L'heure de début est requise."
-  }
-  if (!draft.endAt.trim()) {
-    errors.endAt = "L'heure de fin est requise."
-  }
-  if (
-    draft.startAt.trim() &&
-    draft.endAt.trim() &&
-    draft.endAt.trim() <= draft.startAt.trim()
-  ) {
-    errors.endAt = "L'heure de fin doit être après l'heure de début."
-  }
-  return errors
-}

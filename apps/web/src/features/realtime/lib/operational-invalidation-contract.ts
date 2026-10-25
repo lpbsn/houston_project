@@ -15,8 +15,6 @@ export type OperationalInvalidationContract = {
 
 const parsedContract = contract as OperationalInvalidationContract
 
-export const operationalInvalidationContract: OperationalInvalidationContract = parsedContract
-
 export const operationalInvalidationEvents: readonly OperationalInvalidationContractEvent[] =
   parsedContract.events
 
@@ -26,10 +24,6 @@ export const operationalInvalidationEventPairs = operationalInvalidationEvents.m
 
 export const reasonGatedOperationalInvalidationEvents = operationalInvalidationEvents.filter(
   (event) => event.dispatch === 'by_reason',
-)
-
-export const subjectTypeOperationalInvalidationEvents = operationalInvalidationEvents.filter(
-  (event) => event.dispatch === 'by_subject_type',
 )
 
 export const notificationInvalidationReasons = new Set(

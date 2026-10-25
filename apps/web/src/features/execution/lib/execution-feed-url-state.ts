@@ -30,8 +30,6 @@ const CATEGORIES = new Set<ActionPlanExecutionFeedCategory>([
 ])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
-export const CROSS_EXECUTION_FEED_DEFAULT_VIEW_MODE: ExecutionViewMode = 'general'
-
 function parseSearchParams(search: string): URLSearchParams {
   return new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
 }
