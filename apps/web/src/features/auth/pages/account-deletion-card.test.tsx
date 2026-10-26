@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthApiError } from '@/features/auth/api'
+import { PUBLIC_ACCOUNT_DELETION_URL } from '@/lib/legal'
 
 import { AccountDeletionCard } from './account-deletion-card'
 
@@ -132,5 +133,14 @@ describe('AccountDeletionCard', () => {
     })
     expect(screen.queryByRole('button', { name: 'Recharger les conséquences' })).toBeNull()
     expect(screen.getByText('Cochez la fermeture de votre organisation pour continuer.')).toBeTruthy()
+  })
+
+  it('links the public deletion page owned by legal.ts', async () => {
+    render(<AccountDeletionCard onDeleted={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer mon compte' }))
+
+    const link = await screen.findByRole('link', { name: 'Autre moyen de demander la suppression' })
+    expect(link.getAttribute('href')).toBe(PUBLIC_ACCOUNT_DELETION_URL)
   })
 })
