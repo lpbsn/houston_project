@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
-  DISCOVERY_CAPTIONS_PATH,
   DISCOVERY_POSTER_PATH,
   DISCOVERY_SUMMARY,
   DISCOVERY_TITLE,
@@ -40,15 +39,7 @@ describe('DiscoveryPage', () => {
     const source = video?.querySelector('source')
     expect(source?.getAttribute('src')).toBe(PUBLIC_DISCOVERY_VIDEO_URL)
     expect(PUBLIC_DISCOVERY_VIDEO_URL).toBe('https://media.spore-os.com/spore-discovery-v1.mp4')
-
-    const track = video?.querySelector('track')
-    expect(track?.getAttribute('kind')).toBe('captions')
-    expect(track?.getAttribute('srclang')).toBe('fr')
-    expect(track?.getAttribute('label')).toBe('Français')
-    expect(track?.hasAttribute('default')).toBe(true)
-    expect(track?.getAttribute('src')).toBe(DISCOVERY_CAPTIONS_PATH)
-    expect(DISCOVERY_CAPTIONS_PATH.startsWith('/')).toBe(true)
-    expect(DISCOVERY_CAPTIONS_PATH.startsWith('http')).toBe(false)
+    expect(video?.querySelector('track')).toBeNull()
 
     fireEvent.error(video as HTMLVideoElement)
 
