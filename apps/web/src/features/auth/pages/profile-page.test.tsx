@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTestMatchMedia } from '@/test/viewport-match-media'
 
 import type { BootstrapResponse } from '@/features/auth/types'
-import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
+import { PUBLIC_DISCOVERY_URL, PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
 
 import { ProfilePage } from './profile-page'
 
@@ -325,6 +325,14 @@ describe('ProfilePage', () => {
     expect(isDocumentFollowing(switches[0], privacyLink as HTMLElement)).toBe(true)
     expect(isDocumentFollowing(lastButton, privacyLink as HTMLElement)).toBe(true)
     expect(isDocumentFollowing(privacyLink as HTMLElement, termsLink as HTMLElement)).toBe(true)
+
+    const discoveryLink = linkByHref(PUBLIC_DISCOVERY_URL)
+    expect(discoveryLink).toBeTruthy()
+    expect(discoveryLink?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Découvrir Spore')
+    expect(discoveryLink?.getAttribute('href')).toBe('https://spore-os.com/discover/')
+    expect(discoveryLink?.getAttribute('target')).toBe('_blank')
+    expect(discoveryLink?.getAttribute('rel')).toBe('noreferrer')
+    expect(isDocumentFollowing(termsLink as HTMLElement, discoveryLink as HTMLElement)).toBe(true)
   })
 
   it('opens history from operations', () => {
