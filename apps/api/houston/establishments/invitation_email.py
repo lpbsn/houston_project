@@ -27,6 +27,9 @@ _INVITATION_EMAIL_ROLES = frozenset(
     }
 )
 
+PUBLIC_DISCOVERY_PAGE_URL = "https://spore-os.com/discover/"
+PUBLIC_DISCOVERY_POSTER_URL = "https://spore-os.com/discover/poster-v1.jpg"
+
 _ROLE_LABELS_FR = {
     EstablishmentMembership.Role.STAFF: "Collaborateur",
     EstablishmentMembership.Role.MANAGER: "Manager",
@@ -161,6 +164,8 @@ def send_establishment_invitation_email(
         "accept_url": accept_url,
         "invitation_code": raw_token,
         "expires_at_label": _format_expires_at_fr(invitation.expires_at),
+        "discovery_page_url": PUBLIC_DISCOVERY_PAGE_URL,
+        "discovery_poster_url": PUBLIC_DISCOVERY_POSTER_URL,
     }
     subject = _build_invitation_email_subject(establishment_name=establishment_name)
     html_body, text_body = _render_invitation_email_bodies(context=context)
@@ -198,6 +203,8 @@ def build_invitation_idempotency_key(invitation_id: uuid.UUID | str) -> str:
 
 __all__ = [
     "InvitationEmailSchedulingStatus",
+    "PUBLIC_DISCOVERY_PAGE_URL",
+    "PUBLIC_DISCOVERY_POSTER_URL",
     "build_invitation_accept_path",
     "build_invitation_accept_url",
     "build_invitation_idempotency_key",

@@ -13,6 +13,8 @@ from resend.exceptions import ResendError
 from houston.accounts import tokens as auth_tokens
 from houston.accounts.models import User
 from houston.establishments.invitation_email import (
+    PUBLIC_DISCOVERY_PAGE_URL,
+    PUBLIC_DISCOVERY_POSTER_URL,
     build_invitation_accept_url,
     build_invitation_idempotency_key,
     schedule_establishment_invitation_email,
@@ -498,5 +500,46 @@ def test_invitation_email_welcomes_member_with_brand_and_safe_content(invitation
     assert "L'Atelier <Nord> & Sud" in params["text"]
     assert "L&#x27;Atelier" not in params["text"]
     assert "&amp;" not in params["text"]
-    assert f'{PUBLIC_APP_URL}/spore-icon-v4-192.png' in params["html"]
+    assert f"{PUBLIC_APP_URL}/spore-icon-v4-192.png" in params["html"]
     assert build_invitation_accept_url(raw_token=raw_token) in params["text"]
+
+
+@override_settings(
+    HOUSTON_PUBLIC_APP_URL=PUBLIC_APP_URL,
+    HOUSTON_INVITATION_EMAIL_FROM=INVITATION_FROM,
+    RESEND_API_KEY="re_test_key",
+)
+def test_invitation_email_adds_secondary_discovery_link_without_token(invitation_bundle):
+    invitation, raw_token, membership = invitation_bundle
+    accept_url = build_invitation_accept_url(raw_token=raw_token)
+
+    with patch("houston.establishments.resend_client.resend.Emails.send") as send:
+        send_establishment_invitation_email(
+            invitation_id=str(invitation.id),
+            raw_token=raw_token,
+        )
+
+    params = send.call_args.args[0]
+    assert PUBLIC_DISCOVERY_PAGE_URL == "https://spore-os.com/discover/"
+    assert PUBLIC_DISCOVERY_POSTER_URL == "https://spore-os.com/discover/poster-v1.jpg"
+    assert PUBLIC_DISCOVERY_PAGE_URL in params["html"]
+    assert PUBLIC_DISCOVERY_POSTER_URL in params["html"]
+    assert PUBLIC_DISCOVERY_PAGE_URL in params["text"]
+    assert "Découvrir Spore en 1 min 33" in params["html"]
+    assert "Découvrir Spore en 1 min 33" in params["text"]
+    assert raw_token not in PUBLIC_DISCOVERY_PAGE_URL
+    assert raw_token not in PUBLIC_DISCOVERY_POSTER_URL
+    discovery_refs = [
+        ref for ref in (params["html"] + params["text"]).split() if "spore-os.com/discover" in ref
+    ]
+    assert discovery_refs
+    assert all(raw_token not in ref for ref in discovery_refs)
+    assert f"Rejoindre {membership.establishment.name}" in params["html"]
+    assert accept_url in params["html"]
+    assert accept_url in params["text"]
+    html = params["html"]
+    assert html.index("Invitation valable") < html.index(PUBLIC_DISCOVERY_PAGE_URL)
+    assert html.index(PUBLIC_DISCOVERY_PAGE_URL) < html.index("Le bouton ne fonctionne pas")
+    text = params["text"]
+    assert text.index("Ce lien est personnel") < text.index(PUBLIC_DISCOVERY_PAGE_URL)
+    assert text.index(accept_url) < text.index("copiez le lien ci-dessus")
