@@ -26,7 +26,12 @@ import {
   acceptCurrentAiConsent,
   withdrawAiConsent,
 } from '@/features/auth/api'
-import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL, readAiConsentStatus } from '@/lib/legal'
+import {
+  PUBLIC_DISCOVERY_URL,
+  PUBLIC_PRIVACY_POLICY_URL,
+  PUBLIC_TERMS_URL,
+  readAiConsentStatus,
+} from '@/lib/legal'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import { buildOperationalConfigPath } from '@/features/establishment-config/lib/operational-config-navigation'
@@ -554,6 +559,14 @@ export function ProfilePage({
           rel="noreferrer"
         >
           Conditions d’utilisation
+        </a>
+        <a
+          href={PUBLIC_DISCOVERY_URL}
+          className={cn('text-xs', terrain.muted)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Découvrir Spore
         </a>
       </nav>
     </div>

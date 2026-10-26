@@ -44,6 +44,7 @@ export default defineConfig({
           new URL('./landing/conditions-d-utilisation/index.html', import.meta.url),
         ),
         support: fileURLToPath(new URL('./landing/support/index.html', import.meta.url)),
+        discover: fileURLToPath(new URL('./landing/discover/index.html', import.meta.url)),
       },
     },
   },
