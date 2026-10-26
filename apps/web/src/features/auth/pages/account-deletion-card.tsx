@@ -1,9 +1,8 @@
 import { useState } from 'react'
 
 import { AuthApiError, deleteAccount, fetchAccountDeletionPreview } from '@/features/auth/api'
+import { PUBLIC_ACCOUNT_DELETION_URL } from '@/lib/legal'
 import { cn } from '@/lib/utils'
-
-const PUBLIC_DELETION_URL = 'https://spore-os.com/supprimer-compte/'
 
 type AccountDeletionPreview = {
   requires_organization_closure: boolean
@@ -158,7 +157,7 @@ export function AccountDeletionCard({ disabled = false, onDeleted }: AccountDele
             </button>
           ) : null}
           <a
-            href={PUBLIC_DELETION_URL}
+            href={PUBLIC_ACCOUNT_DELETION_URL}
             className="block text-sm text-[#5c5a54] underline"
             target="_blank"
             rel="noreferrer"

@@ -5,6 +5,7 @@ import { privacyPolicyContent } from '@/features/landing/content'
 import {
   CURRENT_AI_CONSENT_VERSION,
   CURRENT_TERMS_VERSION,
+  PUBLIC_ACCOUNT_DELETION_URL,
   PUBLIC_PRIVACY_POLICY_URL,
   PUBLIC_TERMS_URL,
   isAiConsentRequired,
@@ -17,6 +18,7 @@ describe('legal constants', () => {
   it('pins public URLs and current versions', () => {
     expect(PUBLIC_PRIVACY_POLICY_URL).toBe('https://spore-os.com/politique-de-confidentialite/')
     expect(PUBLIC_TERMS_URL).toBe('https://spore-os.com/conditions-d-utilisation/')
+    expect(PUBLIC_ACCOUNT_DELETION_URL).toBe('https://spore-os.com/supprimer-compte/')
     expect(CURRENT_TERMS_VERSION).toBe('cgu-v1')
     expect(CURRENT_AI_CONSENT_VERSION).toBe('openai-v1')
     expect(isTermsAcceptanceRequired({ code: 'terms_acceptance_required' })).toBe(true)
