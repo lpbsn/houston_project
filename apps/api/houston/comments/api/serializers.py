@@ -233,18 +233,6 @@ class CommentPermissionHintsSerializer(serializers.Serializer):
     can_resolve = serializers.BooleanField()
 
 
-class InheritedSignalCommentItemSerializer(serializers.Serializer):
-    item_type = serializers.ChoiceField(choices=["inherited_signal"])
-    id = serializers.UUIDField()
-    origin = serializers.ChoiceField(
-        choices=["signal", "action_plan_execution"],
-    )
-    body = serializers.CharField()
-    author = CommentAuthorSerializer()
-    mentions = CommentMentionSerializer(many=True)
-    created_at = serializers.DateTimeField()
-
-
 class ExecutionCommentThreadItemSerializer(serializers.Serializer):
     item_type = serializers.ChoiceField(choices=["execution_thread"])
     id = serializers.UUIDField()

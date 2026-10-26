@@ -21,10 +21,6 @@ class SignalPermissionError(SignalServiceError):
     error_code = "permission_denied"
 
 
-class SignalBusinessConflictError(SignalServiceError):
-    error_code = "business_conflict"
-
-
 class SignalPinLimitError(SignalServiceError):
     error_code = "signal_pin_limit"
 

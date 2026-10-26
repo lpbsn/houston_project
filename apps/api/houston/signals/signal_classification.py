@@ -1,20 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from houston.establishments.models import ActivitySubject, BusinessUnit, Establishment
 from houston.signals.models import Signal
 
 
 class InvalidSignalClassificationError(Exception):
     pass
-
-
-@dataclass(frozen=True)
-class SignalClassification:
-    affected_business_unit: BusinessUnit
-    responsible_business_unit: BusinessUnit
-    activity_subject: ActivitySubject
 
 
 def validate_partial_signal_routing(

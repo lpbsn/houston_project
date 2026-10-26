@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from houston.core.exceptions import (
-    DomainConflictError,
     DomainNotFoundError,
     DomainValidationError,
 )
@@ -32,7 +31,3 @@ class ChatPermissionError(ChatError):
         self.message = message
         self.code = code or self.default_code
         super().__init__(message)
-
-
-class ChatConflictError(DomainConflictError, ChatError):
-    default_code = "conflict_error"

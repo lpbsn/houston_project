@@ -21,10 +21,6 @@ class OperationalInvalidationEvent:
     dispatch: OperationalInvalidationDispatch
 
 
-def contract_path() -> Path:
-    return _CONTRACT_PATH
-
-
 @lru_cache(maxsize=1)
 def load_operational_invalidation_contract() -> dict:
     payload = json.loads(_CONTRACT_PATH.read_text(encoding="utf-8"))

@@ -44,21 +44,6 @@ def get_active_season(establishment: Establishment) -> GamificationSeason | None
     )
 
 
-def get_season_for_occurred_at(
-    establishment: Establishment,
-    occurred_at: datetime,
-) -> GamificationSeason | None:
-    return (
-        GamificationSeason.objects.filter(
-            establishment_id=establishment.id,
-            starts_at__lte=occurred_at,
-            ends_at__gt=occurred_at,
-        )
-        .order_by("-starts_at")
-        .first()
-    )
-
-
 def get_season_by_starts_at(
     establishment: Establishment,
     starts_at: datetime,
@@ -198,17 +183,6 @@ def execution_reviewed_participant_memberships(
             status=EstablishmentMembership.Status.ACTIVE,
         ).order_by("id")
     )
-
-
-def provisional_badge_for_membership_season(
-    membership: EstablishmentMembership,
-    season: GamificationSeason,
-) -> str | None:
-    return badge_for_score(sum_points_for_membership_season(membership, season))
-
-
-def list_badge_awards_for_season(season: GamificationSeason):
-    return BadgeAward.objects.filter(season_id=season.id).order_by("awarded_at", "id")
 
 
 def get_badge_award(

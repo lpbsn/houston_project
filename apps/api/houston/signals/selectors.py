@@ -492,25 +492,6 @@ def get_cross_signal_for_detail(
     return get_signal_for_detail(membership=membership, signal_id=signal_id), membership
 
 
-def get_pending_resolution_request(
-    *,
-    signal_id: uuid.UUID,
-):
-    from houston.signals.models import SignalResolutionRequest
-
-    return (
-        SignalResolutionRequest.objects.filter(
-            signal_id=signal_id,
-            status=SignalResolutionRequest.Status.PENDING,
-        )
-        .select_related(
-            "requested_by_membership__user",
-            "reviewed_by_membership__user",
-        )
-        .first()
-    )
-
-
 def list_resolution_requests_for_signal(
     *,
     signal_id: uuid.UUID,
