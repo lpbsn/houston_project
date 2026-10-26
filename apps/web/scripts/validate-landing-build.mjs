@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,6 +12,8 @@ const requiredFiles = [
   'politique-de-confidentialite/index.html',
   'conditions-d-utilisation/index.html',
   'support/index.html',
+  'discover/index.html',
+  'discover/poster-v1.jpg',
   'robots.txt',
   'sitemap.xml',
   '_redirects',
@@ -25,11 +27,25 @@ const expectedCanonicals = {
     'https://spore-os.com/politique-de-confidentialite/',
   'conditions-d-utilisation/index.html': 'https://spore-os.com/conditions-d-utilisation/',
   'support/index.html': 'https://spore-os.com/support/',
+  'discover/index.html': 'https://spore-os.com/discover/',
 }
 
 function fail(message) {
   console.error(`landing build validation failed: ${message}`)
   process.exit(1)
+}
+
+function assertNoMp4(directory) {
+  for (const entry of readdirSync(directory)) {
+    const absolutePath = resolve(directory, entry)
+    if (statSync(absolutePath).isDirectory()) {
+      assertNoMp4(absolutePath)
+      continue
+    }
+    if (entry.toLowerCase().endsWith('.mp4')) {
+      fail(`mp4 must not be published in dist-landing (${absolutePath})`)
+    }
+  }
 }
 
 for (const relativePath of requiredFiles) {
@@ -77,6 +93,8 @@ const requiredRedirects = [
   '/conditions-d-utilisation/ /conditions-d-utilisation/index.html 200',
   '/support /support/index.html 200',
   '/support/ /support/index.html 200',
+  '/discover /discover/index.html 200',
+  '/discover/ /discover/index.html 200',
 ]
 for (const rule of requiredRedirects) {
   if (!redirects.includes(rule)) {
@@ -85,6 +103,18 @@ for (const rule of requiredRedirects) {
 }
 if (redirects.includes('/* /index.html 200')) {
   fail('_redirects must not SPA-fallback all routes to index.html')
+}
+for (const line of redirects.split('\n')) {
+  if (line.includes('/discover') && (line.includes('*') || line.includes(':'))) {
+    fail(`discover redirect must stay an exact path: ${line}`)
+  }
+}
+
+assertNoMp4(distRoot)
+
+const sitemap = readFileSync(resolve(distRoot, 'sitemap.xml'), 'utf8')
+if (!sitemap.includes('https://spore-os.com/discover/')) {
+  fail('sitemap missing https://spore-os.com/discover/')
 }
 
 console.log('landing build validation ok')
