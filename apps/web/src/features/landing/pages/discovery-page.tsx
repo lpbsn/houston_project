@@ -6,7 +6,6 @@ export const PUBLIC_DISCOVERY_VIDEO_URL =
   'https://media.spore-os.com/spore-discovery-v1.mp4' as const
 
 export const DISCOVERY_POSTER_PATH = '/discover/poster-v1.jpg' as const
-export const DISCOVERY_CAPTIONS_PATH = '/discover/captions-v1.vtt' as const
 
 export const DISCOVERY_TITLE = 'Découvrez Spore' as const
 export const DISCOVERY_SUMMARY =
@@ -41,13 +40,6 @@ export function DiscoveryPage() {
             onError={() => setUnavailable(true)}
           >
             <source src={PUBLIC_DISCOVERY_VIDEO_URL} type="video/mp4" />
-            <track
-              kind="captions"
-              src={DISCOVERY_CAPTIONS_PATH}
-              srcLang="fr"
-              label="Français"
-              default
-            />
           </video>
           {unavailable ? (
             <p role="status" className="mt-3 text-sm leading-relaxed text-spore-moss">

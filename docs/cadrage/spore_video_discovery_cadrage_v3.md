@@ -67,7 +67,7 @@ L'emplacement concret du lien, son libellé final et le comportement de navigati
 - La présentation intégrale doit conserver ses informations utiles, être intelligible et offrir une qualité correcte sur les appareils cibles.
 - Prévoir une image d'aperçu de bonne qualité et adaptée à l'email ainsi qu'à la page.
 - Vérifier avant publication que le contenu est diffusable publiquement : absence de données réelles sensibles ou secrets, droits sur les contenus audio/visuels et cohérence des fonctionnalités montrées avec les permissions réelles des différents rôles.
-- Les contenus parlés nécessaires à la compréhension doivent être accessibles par des **sous-titres ou une alternative équivalente** ; les informations indispensables fournies uniquement à l'image doivent aussi pouvoir être comprises autrement.
+- La V1 conserve l'audio d'origine de la vidéo. Une transcription générée et une piste de sous-titres ne font pas partie de cette livraison.
 - Une vidéo remplacée ultérieurement ne doit pas casser les liens déjà envoyés.
 
 **Aucun format, processus de conversion, stockage ou prestataire n'est imposé par ce cadrage.** La solution retenue doit préserver une lecture fluide et permettre la navigation dans la vidéo.
@@ -85,7 +85,7 @@ L'emplacement concret du lien, son libellé final et le comportement de navigati
 
 - Emails compatibles avec les principaux clients utilisés par les destinataires (notamment Gmail, Outlook et Apple Mail) ; **le lien d'invitation doit rester prioritaire**.
 - Page lisible et utilisable sur mobile et desktop, y compris en connexion limitée, sans téléchargement média inutile avant que l'utilisateur décide de lire.
-- Accessibilité raisonnable : textes lisibles, contraste, navigation clavier et contrôles utilisables, alternatives nécessaires au contenu vidéo.
+- Accessibilité raisonnable : textes lisibles, contraste, navigation clavier et contrôles utilisables.
 - Dégradation explicite lorsque le média est inaccessible.
 
 ### Coût, scalabilité et exploitation
@@ -105,6 +105,7 @@ L'emplacement concret du lien, son libellé final et le comportement de navigati
 - Obligation de regarder la présentation avant d'accepter une invitation.
 - Refonte des parcours d'invitation, de l'authentification ou de la navigation principale.
 - Mesure détaillée des comportements de lecture ou nouveau système d'analytics, sauf nécessité concrète révélée par l'audit.
+- Transcription générée et piste de sous-titres.
 
 ## 6. Critères d'acceptation — GO / NO-GO
 
@@ -118,7 +119,7 @@ La livraison est acceptable si les éléments suivants sont démontrés :
 6. **Application** : accès permanent pour chaque rôle et chaque surface concernée, avec retour possible à Spore sans perte de contexte.
 7. **Confidentialité** : aucun token d'invitation ni média privé exposé ; vidéo validée pour diffusion publique.
 8. **Résilience** : une vidéo indisponible ne compromet ni la page informative ni les emails, les invitations ou l'application.
-9. **Accessibilité** : contrôles utilisables et alternatives adaptées au contenu effectivement publié.
+9. **Accessibilité** : contrôles utilisables. La transcription générée et les sous-titres ne font pas partie de cette V1.
 10. **Environnements** : fonctionnement vérifié en staging avant toute exposition en production ; liens et contenus de production autonomes et disponibles.
 11. **Promotion** : PR ciblée vers `main`, sans merger les autres changements de `staging`, avec dépendances et diff contrôlés.
 12. **Native** : vérifier et planifier, si nécessaire, la distribution du changement aux applications mobiles installées ; une fusion Git ne vaut pas automatiquement mise à jour des applications natives.

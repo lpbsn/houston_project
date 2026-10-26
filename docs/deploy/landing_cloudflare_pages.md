@@ -29,7 +29,6 @@ apps/web/dist-landing/
 ├── support/index.html
 ├── discover/index.html
 ├── discover/poster-v1.jpg
-├── discover/captions-v1.vtt
 ├── robots.txt
 ├── sitemap.xml
 ├── _redirects
@@ -61,7 +60,6 @@ Commandes utiles :
    - `https://spore-os.com/support/`
    - `https://spore-os.com/discover/`
    - `https://spore-os.com/discover/poster-v1.jpg`
-   - `https://spore-os.com/discover/captions-v1.vtt`
    - `https://spore-os.com/robots.txt`
    - `https://spore-os.com/sitemap.xml`
    - `https://app.spore-os.com/`
@@ -76,12 +74,11 @@ La page publique est `https://spore-os.com/discover/`. Le chemin `/decouvrir/` n
 |-----------|------------|-------------|
 | Page | `https://spore-os.com/discover/` | Cloudflare Pages, production |
 | Miniature | `https://spore-os.com/discover/poster-v1.jpg` | Cloudflare Pages, production |
-| Sous-titres | `https://spore-os.com/discover/captions-v1.vtt` | Cloudflare Pages, même origine que la page |
 | Vidéo | `https://media.spore-os.com/spore-discovery-v1.mp4` | Bucket R2 public du même compte que `spore-os.com` |
 
 La landing et la vidéo vont sur le Cloudflare de production. Pas de déploiement Preview, pas d’hôte de staging, pas de restriction d’accès.
 
-Le MP4 n’est pas dans Git et n’entre pas dans `public-landing` : le build de la landing échoue si un `.mp4` est présent dans `dist-landing`. Le fichier préparé pour l’upload est `spore-discovery-v1.mp4` (H.264 Main, AAC, `+faststart`), hors dépôt. Clé d’objet : `spore-discovery-v1.mp4`. `Content-Type` : `video/mp4`.
+Le MP4 conserve l’audio d’origine. Cette V1 ne publie pas de transcription ni de piste de sous-titres. Le MP4 n’est pas dans Git et n’entre pas dans `public-landing` : le build de la landing échoue si un `.mp4` est présent dans `dist-landing`. Le fichier préparé pour l’upload est `spore-discovery-v1.mp4` (H.264 Main, AAC, `+faststart`), hors dépôt. Clé d’objet : `spore-discovery-v1.mp4`. `Content-Type` : `video/mp4`.
 
 Domaine média : `media.spore-os.com`, domaine propre du bucket. Pas d’URL `r2.dev`. Désactiver `r2.dev` une fois le domaine actif. Le proxy Cloudflare de ce nom d’hôte doit laisser passer `Range` : règle de cache en contournement pour `media.spore-os.com`. Ce contournement est une condition de lecture, pas un contrôle d’accès. Pas de Worker, de jeton ou de bucket privé.
 

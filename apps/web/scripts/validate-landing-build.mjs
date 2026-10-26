@@ -14,7 +14,6 @@ const requiredFiles = [
   'support/index.html',
   'discover/index.html',
   'discover/poster-v1.jpg',
-  'discover/captions-v1.vtt',
   'robots.txt',
   'sitemap.xml',
   '_redirects',
