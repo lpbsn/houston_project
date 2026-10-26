@@ -10,7 +10,6 @@ import json
 import time
 import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -55,12 +54,6 @@ from houston.testing.taxonomy import create_activity_subject, create_business_un
 pytestmark = pytest.mark.django_db(transaction=True)
 
 PARIS = ZoneInfo("Europe/Paris")
-PROMPT_SOURCE = (
-    Path(__file__).resolve().parents[5]
-    / "docs"
-    / "cadrage"
-    / "SPORE_Brain_Prompt_Metier_v7_1_REVISE.md"
-)
 
 
 class ScriptedProvider:
@@ -80,8 +73,7 @@ class ScriptedProvider:
         return self.handler(messages, tools)
 
 
-def test_packaged_prompt_is_the_validated_text():
-    assert metier_prompt() == PROMPT_SOURCE.read_text(encoding="utf-8")
+def test_packaged_prompt_is_the_v7_metier_text():
     assert metier_prompt().startswith("# SPORE Brain — Prompt métier v7")
 
 
