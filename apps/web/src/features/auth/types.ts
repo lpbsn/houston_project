@@ -20,6 +20,4 @@ export type MembershipUpdateRequest = components['schemas']['PatchedMembershipUp
 export type MembershipInvitationRequestRoleEnum = MembershipInvitationRequest['role']
 export type RoleEnum = NonNullable<MembershipUpdateRequest['role']>
 export type SwitchEstablishmentRequest = components['schemas']['SwitchEstablishmentRequest']
-export type UserPublic = components['schemas']['UserPublic']
-export type MembershipScopeItem = components['schemas']['EstablishmentMembershipScopeItem']
 export type BusinessUnitTreeResponse = components['schemas']['BusinessUnitTreeResponse']

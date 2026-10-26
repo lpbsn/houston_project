@@ -42,7 +42,6 @@ from houston.establishments.mama_nice_dataset_constants import (
     TOTAL_OBSERVATIONS,
     TOTAL_SIGNALS,
 )
-from houston.establishments.mama_nice_dataset_exceptions import MamaNiceDatasetError
 from houston.establishments.models import Establishment, EstablishmentMembership, MamaNiceSeedRecord
 from houston.gamification.models import BadgeAward, GamificationSeason
 from houston.observations.models import Observation
@@ -377,9 +376,3 @@ def validate_mama_nice_dataset(*, establishment: Establishment) -> list[str]:
     if (sunday.end_at - sunday.start_at) > timedelta(hours=4):
         errors.append("Super Sunday must stay an hourly occurrence")
     return errors
-
-
-def assert_mama_nice_dataset(*, establishment: Establishment) -> None:
-    errors = validate_mama_nice_dataset(establishment=establishment)
-    if errors:
-        raise MamaNiceDatasetError(errors)

@@ -3,8 +3,6 @@ import type { BootstrapResponse } from '@/features/auth/types'
 export type PendingOnboardingMembership =
   BootstrapResponse['pending_onboarding_memberships'][number]
 
-export type PendingLandingKind = 'waiting' | 'selection' | 'none'
-
 export type PendingLandingResolution =
   | { kind: 'none' }
   | { kind: 'waiting'; pending: PendingOnboardingMembership }

@@ -28,8 +28,3 @@ export function setOperationalRealtimeConnectionStatus(
     listener()
   }
 }
-
-export function __resetOperationalRealtimeConnectionStatusForTests(): void {
-  connectionStatus = 'idle'
-  listeners.clear()
-}

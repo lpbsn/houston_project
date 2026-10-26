@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from collections import Counter
-
 from houston.establishments.mama_nice_dataset_copy import (
     PATTERN_BY_TOPIC,
     PATTERN_POLE,
-    PATTERN_QUOTA,
 )
 
 TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
@@ -240,9 +237,3 @@ def pattern_for(*, topic: str | None, pole: str) -> str | None:
     if pattern and PATTERN_POLE[pattern] == pole:
         return pattern
     return None
-
-
-def remaining_pattern_quota(used: Counter) -> Counter:
-    leftover = Counter(PATTERN_QUOTA)
-    leftover.subtract(used)
-    return leftover

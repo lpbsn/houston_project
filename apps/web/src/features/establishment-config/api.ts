@@ -19,11 +19,6 @@ type RuntimeBusinessUnitUpdateRequest =
 type RuntimeActivitySubjectCreateRequest =
   components['schemas']['RuntimeActivitySubjectCreateRequest']
 
-export type RuntimeConfigApiErrorPayload = {
-  code?: string
-  detail?: string
-}
-
 export class RuntimeConfigApiError extends Error {
   status: number
   code: string | null

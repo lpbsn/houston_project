@@ -35,15 +35,6 @@ def freeze_django_now(at: datetime):
     return patch("django.utils.timezone.now", _now)
 
 
-def assert_not_after_snapshot(at: datetime, *, allow_future: bool = False) -> None:
-    if allow_future:
-        return
-    if at.astimezone(PARIS_TZ) > SNAPSHOT:
-        raise MamaNiceDatasetError(
-            [f"refusing historical clock after snapshot: {at.isoformat()}"]
-        )
-
-
 def establishment_timezone(establishment) -> datetime.tzinfo:
     name = getattr(establishment, "timezone", None) or "Europe/Paris"
     from zoneinfo import ZoneInfo

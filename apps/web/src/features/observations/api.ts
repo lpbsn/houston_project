@@ -66,26 +66,6 @@ export async function uploadTemporaryPhoto(
   return payload as TemporaryUploadResponse
 }
 
-export async function deleteTemporaryPhoto(
-  establishmentId: string,
-  uploadId: string,
-): Promise<void> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/temporary-uploads/${uploadId}/`,
-    {
-      method: 'DELETE',
-      headers: getAuthHeaders(null),
-    },
-  )
-
-  if (response.status === 204) {
-    return
-  }
-
-  const payload = await response.json().catch(() => ({}))
-  throw parseError(response, payload)
-}
-
 export async function transcribeAudio(
   establishmentId: string,
   file: Blob,

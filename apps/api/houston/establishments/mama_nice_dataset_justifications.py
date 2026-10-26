@@ -376,7 +376,3 @@ def rewrite_for_topic(*, topic: str, index: int) -> tuple[str, str, str] | None:
     if not rows:
         return None
     return rows[index % len(rows)]
-
-
-def unique_cancel_reason(focus: str, generic: str) -> str:
-    return f"{generic} Sujet : {focus}."

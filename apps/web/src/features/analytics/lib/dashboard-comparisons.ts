@@ -238,36 +238,8 @@ export function observationTransformDelayHint(): string {
   return 'Jusqu’au premier plan. La même observation peut ensuite être résolue ou annulée.'
 }
 
-export function observationCancellationDelayHint(): string {
-  return 'Temps jusqu’à l’annulation. Ce n’est pas un jugement de qualité.'
-}
-
 export function canonicalRoutingVolumeHint(): string {
   return 'Si on reclasse un sujet, il change aussi de pôle sur les périodes passées.'
-}
-
-export function newPatternsVolumeTooltip(): string {
-  return 'Le volume compte depuis la première fois que ce sujet a été vu, pas seulement sur la période affichée.'
-}
-
-export function resolutionStripTooltip(): string {
-  return 'Parmi les observations déjà résolues sur la période, pas le temps d’attente actuel.'
-}
-
-export function planDeadlinesStripTooltip(): string {
-  return 'Uniquement les plans déjà dus ou déjà terminés. Ceux encore dans les délais ne sont pas comptés.'
-}
-
-export function planDeadlinesDenominatorCopy(): string {
-  return 'Parmi les plans déjà dus ou déjà terminés. Les plans encore dans les délais ne sont pas comptés.'
-}
-
-export function operationalResolutionRateHint(): string {
-  return 'Des sujets à traiter sur la période, ceux qui sont résolus maintenant.'
-}
-
-export function reopeningsHint(): string {
-  return 'Résolues puis rouvertes sur la période.'
 }
 
 export function emptyObservationDelayMessage(
@@ -371,36 +343,6 @@ export function formatUnevaluatedPlansNote(unevaluatedCount: number): string | n
     return null
   }
   return formatCountedNoun(unevaluatedCount, 'plan non évalué', 'plans non évalués')
-}
-
-export function delayExclusionNote(undatableInScope: number): string | null {
-  if (undatableInScope <= 0) {
-    return null
-  }
-  const stock = formatCountedNoun(
-    undatableInScope,
-    'dossier sans date fiable, non inclus',
-    'dossiers sans date fiable, non inclus',
-  )
-  return stock
-}
-
-export function closureResolvedShareHint(options: {
-  measuredResolvedCount: number
-  measuredCanceledCount: number
-  undatableResolved: number
-  undatableCanceled: number
-}): string {
-  const undatable = options.undatableResolved + options.undatableCanceled
-  if (undatable > 0) {
-    const excluded = delayExclusionNote(undatable) ?? ''
-    const measured = options.measuredResolvedCount + options.measuredCanceledCount
-    if (measured === 0) {
-      return `${excluded} ; aucun dossier fermé mesurable sur la période.`
-    }
-    return `Parmi les dossiers fermés sur la période. Le stock ouvert n’entre pas. ${excluded}.`
-  }
-  return 'Parmi les dossiers fermés sur la période. Le stock ouvert n’entre pas.'
 }
 
 export function formatDashboardDurationDelta(

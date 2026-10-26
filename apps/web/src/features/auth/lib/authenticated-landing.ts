@@ -87,17 +87,6 @@ export function getAuthenticatedLandingPath(
   return resolveAuthenticatedLanding(bootstrap, context).path
 }
 
-export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
-  '/reporting',
-  '/select-establishment',
-  '/cross',
-  '/cross/signals',
-  '/analytics',
-  '/pending-onboarding',
-  '/no-establishment',
-  '/platform/onboardings',
-])
-
 export function routeAllowsMissingActiveMembership(path: string): boolean {
   return (
     path === '/pending-onboarding' ||

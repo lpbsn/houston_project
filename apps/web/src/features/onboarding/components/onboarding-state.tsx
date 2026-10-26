@@ -2,7 +2,6 @@ import { AlertCircle, LoaderCircle, ShieldAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { OnboardingApiError } from '@/features/onboarding/api'
 import type { ActivationBlocker } from '@/features/onboarding/types'
@@ -126,18 +125,5 @@ export function BlockerList({ blockers }: { blockers: ActivationBlocker[] }) {
         </div>
       ))}
     </div>
-  )
-}
-
-export function RetryButton({ onClick }: { onClick: () => void }) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="h-10 w-full rounded-lg sm:w-auto"
-      onClick={onClick}
-    >
-      Réessayer
-    </Button>
   )
 }

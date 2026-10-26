@@ -401,23 +401,6 @@ def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
     return any(hint.casefold() in folded for hint in hints)
 
 
-def observation_lines(situation: Situation, count: int, slot: int) -> list[str]:
-    lines = [f"{situation.focus}, {situation.proof}."]
-    openers: list[str] = []
-    if count >= 2:
-        openers.append(_SECOND[slot % len(_SECOND)])
-    for offset, pool in enumerate(_LATER, start=2):
-        if len(openers) >= count - 1:
-            break
-        openers.append(pool[(slot + offset) % len(pool)])
-    for opener in openers:
-        lowered = opener[0].lower() + opener[1:]
-        lines.append(f"{situation.focus} : {lowered}, {situation.proof}.")
-    if len(lines) < count:
-        raise ValueError(f"not enough observation lines for {situation.focus}")
-    return lines[:count]
-
-
 def execution_title(focus: str) -> str:
     return focus.strip()
 
@@ -492,13 +475,6 @@ def _shared_prefix(left: str, right: str) -> int:
 
 def informational_texts() -> tuple[str, ...]:
     return _INFO
-
-
-def situation_for(subject: str, slot: int) -> Situation:
-    bank = BANKS[subject]
-    if slot >= len(bank):
-        raise KeyError(f"{subject} has no situation for slot {slot} ({len(bank)} available)")
-    return bank[slot]
 
 
 def bank_errors() -> list[str]:
