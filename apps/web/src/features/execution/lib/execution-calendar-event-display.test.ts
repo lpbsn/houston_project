@@ -2,12 +2,20 @@ import { describe, expect, it } from 'vitest'
 
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
+import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
+
 import {
+  calendarEventDateRangeLabel,
+  calendarEventDesktopAssignees,
   calendarEventOrgBadges,
+  calendarEventPilotLabel,
   calendarEventPresentation,
+  calendarEventScheduleLabel,
+  calendarEventTimeLabel,
   calendarLaneStatusLabelClassName,
   calendarLaneSuiteClassName,
   calendarUnplannedCreatedDateLabel,
+  formatCalendarOverflowLabel,
   resolveCalendarEventChromeDensity,
 } from './execution-calendar-event-display'
 
@@ -107,11 +115,78 @@ describe('execution-calendar-event-display', () => {
     expect(presentation.assigneeInitials).toEqual(['AM'])
     expect(presentation.orgBadges).toEqual(['Restaurant'])
     expect(presentation.chrome.bar).toBe('#3A7A96')
-    expect(calendarEventPresentation(buildItem({ status: 'scheduled' })).statusLabel).toBe(
-      'Planifiée',
-    )
+    expect(calendarEventPresentation(buildItem({ status: 'scheduled' })).statusLabel).toBe('Planifié')
     expect(
       calendarEventPresentation(buildItem({ status: 'pending_validation' })).statusLabel,
-    ).toBe('Validation')
+    ).toBe('À valider')
+    expect(
+      calendarEventPresentation(buildItem({ status: 'done', validated_at: '2026-09-08T12:00:00.000Z' }))
+        .statusLabel,
+    ).toBe('Validé')
+    expect(calendarEventPresentation(buildItem({ status: 'done' })).statusLabel).toBe('Terminé')
+    expect(calendarEventPresentation(buildItem({ status: 'canceled' })).statusLabel).toBe('Annulé')
+  })
+
+  it('uses the pilot pole for planned executions and ignores an involved pole', () => {
+    expect(
+      calendarEventPilotLabel(
+        buildItem({
+          pilot_business_unit: {
+            id: 'bu-1',
+            specific_name: '  Restaurant  ',
+            instance_description: '',
+            active: true,
+            generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+          },
+          involved_poles: [{ business_unit: { specific_name: 'Cuisine' } }],
+        }),
+      ),
+    ).toBe('Restaurant')
+    expect(
+      calendarEventPilotLabel(
+        buildItem({
+          pilot_business_unit: {
+            id: 'bu-1',
+            specific_name: '   ',
+            instance_description: '',
+            active: true,
+            generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+          },
+        }),
+      ),
+    ).toBe('')
+    expect(
+      calendarEventOrgBadges(
+        buildItem({
+          involved_poles: [{ business_unit: { specific_name: 'Cuisine' } }],
+        }),
+      ),
+    ).toEqual(['Cuisine', 'Restaurant'])
+  })
+
+  it('formats a desktop time range, date range, two assignees and the overflow label', () => {
+    const timed = buildItem({
+      start_at: combineCivilDateTimeToIso('2026-10-12', '09:30'),
+      end_at: combineCivilDateTimeToIso('2026-10-12', '11:00'),
+      assignees: [
+        { membership_id: 'm-1', display_name: 'Alice Martin' },
+        { membership_id: 'm-2', display_name: 'Bob Durand' },
+        { membership_id: 'm-3', display_name: 'Chloé Bernard' },
+      ],
+    })
+    expect(calendarEventTimeLabel(timed)).toBe('09:30 – 11:00')
+    expect(calendarEventScheduleLabel(timed)).toBe('09:30 – 11:00')
+    expect(calendarEventDesktopAssignees(timed.assignees)).toEqual({
+      visible: ['Alice Martin', 'Bob Durand'],
+      overflow: 1,
+    })
+    const multi = buildItem({
+      start_at: combineCivilDateTimeToIso('2026-10-12', '23:30'),
+      end_at: combineCivilDateTimeToIso('2026-10-13', '00:30'),
+    })
+    expect(calendarEventDateRangeLabel(multi)).toBe('12 – 13 oct.')
+    expect(calendarEventScheduleLabel(multi)).toBe('12 – 13 oct.')
+    expect(formatCalendarOverflowLabel(1)).toBe('+1 autre')
+    expect(formatCalendarOverflowLabel(4)).toBe('+4 autres')
   })
 })

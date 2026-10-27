@@ -1,7 +1,16 @@
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
-import { formatActionPlanExecutionStatusLabel } from '@/features/action-plans/lib/action-plan-display'
-import { splitIsoToCivil } from '@/lib/business-timezone'
+import { BUSINESS_TIMEZONE, splitIsoToCivil } from '@/lib/business-timezone'
 import { getDisplayNameInitials } from '@/lib/display-names'
+
+import {
+  formatActionPlanFeedCardAssigneeDisplay,
+  formatActionPlanFeedCardStatusLabel,
+} from './action-plan-execution-feed-card-display'
+import {
+  executionCalendarCategory,
+  executionCalendarDateRange,
+  type ExecutionCalendarCategory,
+} from './execution-calendar-layout'
 
 type InvolvedPoleLike = {
   business_unit?: {
@@ -53,14 +62,89 @@ function calendarEventChromeForStatus(status: string): CalendarEventChrome {
   return STATUS_CHROME[status] ?? DEFAULT_CHROME
 }
 
-function calendarEventShortStatusLabel(
-  status: string,
-  validatedAt?: string | null,
+export const CALENDAR_DAY_GROUP_LABEL: Record<ExecutionCalendarCategory, string> = {
+  multi_day: 'Multi-jours',
+  all_day: 'Journée entière',
+  timed: 'Dans la journée',
+}
+
+export function calendarEventStatusLabel(
+  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'validated_at'>,
 ): string {
-  if (status === 'pending_validation') {
-    return 'Validation'
+  return formatActionPlanFeedCardStatusLabel(item)
+}
+
+export function calendarEventPilotLabel(item: ActionPlanExecutionFeedItem): string {
+  return item.pilot_business_unit.specific_name.trim()
+}
+
+export function calendarEventEstablishmentLabel(item: ActionPlanExecutionFeedItem): string {
+  return item.establishment_name?.trim() ?? ''
+}
+
+export function formatCalendarExecutionCount(count: number): string {
+  return count === 1 ? '1 exécution' : `${count} exécutions`
+}
+
+export function formatCalendarOverflowLabel(count: number): string {
+  if (count === 1) return '+1 autre'
+  return `+${count} autres`
+}
+
+export function calendarEventDesktopAssignees(
+  assignees: ActionPlanExecutionFeedItem['assignees'],
+): { visible: string[]; overflow: number } {
+  const display = formatActionPlanFeedCardAssigneeDisplay(assignees)
+  return { visible: display.visible, overflow: display.overflow }
+}
+
+function utcNoon(date: string): Date {
+  return new Date(`${date}T12:00:00.000Z`)
+}
+
+function formatShortCivil(date: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(utcNoon(date))
+}
+
+export function calendarEventDateRangeLabel(
+  item: ActionPlanExecutionFeedItem,
+  timeZone: string = BUSINESS_TIMEZONE,
+): string | null {
+  const range = executionCalendarDateRange(item, timeZone)
+  if (!range || range.start === range.end) return null
+  if (range.start.slice(0, 7) === range.end.slice(0, 7)) {
+    const startDay = new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(utcNoon(range.start))
+    return `${startDay} – ${formatShortCivil(range.end)}`
   }
-  return formatActionPlanExecutionStatusLabel(status, { validatedAt })
+  return `${formatShortCivil(range.start)} – ${formatShortCivil(range.end)}`
+}
+
+export function calendarEventTimeLabel(
+  item: ActionPlanExecutionFeedItem,
+  timeZone: string = BUSINESS_TIMEZONE,
+): string | null {
+  const start = splitIsoToCivil(item.start_at ?? '', timeZone)
+  if (!start.time) return null
+  const end = splitIsoToCivil(item.end_at ?? '', timeZone)
+  if (!end.time || (end.date === start.date && end.time === start.time)) return start.time
+  return `${start.time} – ${end.time}`
+}
+
+export function calendarEventScheduleLabel(
+  item: ActionPlanExecutionFeedItem,
+  timeZone: string = BUSINESS_TIMEZONE,
+): string | null {
+  const category = executionCalendarCategory(item, timeZone)
+  if (category === 'multi_day') return calendarEventDateRangeLabel(item, timeZone)
+  if (category === 'timed') return calendarEventTimeLabel(item, timeZone)
+  return null
 }
 
 export function resolveCalendarEventChromeDensity(input: {
@@ -149,7 +233,7 @@ export function calendarEventPresentation(item: ActionPlanExecutionFeedItem): {
   return {
     title: item.title,
     chrome: calendarEventChromeForStatus(item.status),
-    statusLabel: calendarEventShortStatusLabel(item.status, item.validated_at),
+    statusLabel: calendarEventStatusLabel(item),
     assigneeInitials: calendarEventAssigneeInitials(item.assignees),
     assigneeOverflow: calendarEventAssigneeOverflow(item.assignees),
     orgBadges: calendarEventOrgBadges(item),

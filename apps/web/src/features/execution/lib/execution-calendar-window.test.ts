@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   calendarAnchorToday,
+  formatCalendarPeriodLabel,
+  formatDesktopCalendarPeriodLabel,
   rememberScopedCalendarTimezone,
   resolveCalendarWindow,
   resolveScopedCalendarTimezone,
@@ -42,6 +44,20 @@ describe('execution-calendar-window', () => {
       undefined,
     )
     expect(resolveScopedCalendarTimezone(duringTransition, undefined)).toBe('UTC')
+  })
+
+  it('formats the long desktop period without changing the mobile week label', () => {
+    const day = resolveCalendarWindow('day', '2026-10-12')
+    expect(formatDesktopCalendarPeriodLabel('day', day, '2026-10-12')).toBe('lundi 12 octobre 2026')
+    const week = resolveCalendarWindow('week', '2026-10-14')
+    expect(formatDesktopCalendarPeriodLabel('week', week, '2026-10-14')).toBe('12 – 18 octobre 2026')
+    const crossing = resolveCalendarWindow('week', '2026-10-01')
+    expect(formatDesktopCalendarPeriodLabel('week', crossing, '2026-10-01')).toBe(
+      '28 septembre – 4 octobre 2026',
+    )
+    const month = resolveCalendarWindow('month', '2026-10-14')
+    expect(formatDesktopCalendarPeriodLabel('month', month, '2026-10-14')).toBe('octobre 2026')
+    expect(formatCalendarPeriodLabel('week', week, '2026-10-14')).not.toBe('12 – 18 octobre 2026')
   })
 
   it('forgets a known timezone after an establishment or source change', () => {

@@ -10,7 +10,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { TerrainCollapsibleFeedSection, TerrainErrorState } from '@/components/ui/terrain'
 import { todayCivilDate, BUSINESS_TIMEZONE } from '@/lib/business-timezone'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import type {
@@ -19,7 +18,10 @@ import type {
 } from '@/features/action-plans/types'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
+import { DesktopExecutionCalendar } from './execution-calendar-desktop-view'
 import {
+  calendarEventEstablishmentLabel,
+  calendarEventPilotLabel,
   calendarEventPresentation,
   calendarUnplannedCreatedDateLabel,
 } from '../lib/execution-calendar-event-display'
@@ -31,6 +33,7 @@ import {
   sliceVisibleWeekDays,
   weekVisibleDayCount,
 } from '../lib/execution-calendar-visible-days'
+import { useDesktopCalendarSurface } from '../lib/execution-calendar-surface'
 import type { ExecutionCalendarGranularity } from '../lib/execution-feed-url-state'
 
 const WEEK_SWIPE_MIN_DX = 48
@@ -48,6 +51,8 @@ type ExecutionCalendarViewProps = {
   error: unknown
   onRetry: () => void
   onOpenExecution: (executionId: string) => void
+  onOpenDay?: (anchor: string) => void
+  showEstablishment?: boolean
 }
 
 function weekdayIndexMonday(date: string): number {
@@ -61,11 +66,13 @@ function CalendarBands({
   days,
   items,
   timeZone,
+  showEstablishment,
   onOpenExecution,
 }: {
   days: string[]
   items: ActionPlanExecutionFeedItem[]
   timeZone: string
+  showEstablishment: boolean
   onOpenExecution: (executionId: string) => void
 }) {
   const spans = useMemo(() => buildCalendarSpans(items, days, timeZone), [items, days, timeZone])
@@ -81,8 +88,10 @@ function CalendarBands({
       </div>
       {spans.map((span) => {
         const presentation = calendarEventPresentation(span.item)
+        const pilot = calendarEventPilotLabel(span.item)
+        const establishment = showEstablishment ? calendarEventEstablishmentLabel(span.item) : ''
         const names = span.item.assignees.map((assignee) => assignee.display_name).join(', ')
-        const label = [presentation.title, presentation.statusLabel, names,
+        const label = [presentation.title, presentation.statusLabel, pilot, establishment, names,
           span.continuesBefore ? 'Commencé avant cette période' : '',
           span.continuesAfter ? 'Se poursuit après cette période' : '',
         ].filter(Boolean).join(' · ')
@@ -111,7 +120,15 @@ function CalendarBands({
           >
             {span.continuesBefore ? <ChevronLeft className="h-3 w-3 shrink-0" aria-hidden /> : null}
             <span className="min-w-0 flex-1 truncate text-xs font-semibold">{presentation.title}</span>
-            <span className="sr-only">{presentation.orgBadges.join(', ')}</span>
+            {pilot ? <span className="sr-only">{pilot}</span> : null}
+            {establishment ? (
+              <span
+                data-testid={`calendar-establishment-${span.item.id}`}
+                className="min-w-0 max-w-[40%] truncate text-[11px] font-medium"
+              >
+                {establishment}
+              </span>
+            ) : null}
             {span.endColumn > span.startColumn || days.length === 1 ? (
               <span className="hidden min-w-0 max-w-[40%] truncate text-[11px] lg:block">
                 {[names, presentation.statusLabel].filter(Boolean).join(' · ')}
@@ -213,12 +230,14 @@ export function ExecutionCalendarView({
   error,
   onRetry,
   onOpenExecution,
+  onOpenDay,
+  showEstablishment = false,
 }: ExecutionCalendarViewProps) {
   const timeZone = timeZoneProp ?? data?.timezone ?? BUSINESS_TIMEZONE
   const today = todayCivilDate(timeZone)
-  const isLg = useLgViewport()
+  const desktopCalendar = useDesktopCalendarSurface()
   const daysKey = days.join(',')
-  const weekVisibleCount = weekVisibleDayCount(isLg, days.length)
+  const weekVisibleCount = weekVisibleDayCount(days.length)
   const compactWeek = granularity === 'week' && weekVisibleCount < days.length
   const weekWindowKey = `${daysKey}|${today}|${weekVisibleCount}`
   const [weekWindow, setWeekWindow] = useState(() => ({
@@ -355,12 +374,30 @@ export function ExecutionCalendarView({
     weeks.push(gridDays)
   }
 
+  const gridCardClassName = 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white'
+
   return (
     <div data-testid="calendar-hub-scroller" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden" aria-busy={isPeriodPending}>
       {periodStatus}
+      {desktopCalendar ? (
+        <div data-testid="calendar-grid-card" className={gridCardClassName}>
+          <DesktopExecutionCalendar
+            granularity={granularity}
+            days={days}
+            month={month}
+            items={items}
+            timeZone={timeZone}
+            today={today}
+            showEstablishment={showEstablishment}
+            showEmpty={!isPeriodPending && !isTransitionError}
+            onOpenExecution={onOpenExecution}
+            onOpenDay={onOpenDay ?? (() => undefined)}
+          />
+        </div>
+      ) : (
       <div
         data-testid="calendar-grid-card"
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white touch-pan-y"
+        className={cn(gridCardClassName, 'touch-pan-y')}
         onPointerDown={onWeekPointerDown}
         onPointerUp={onWeekPointerUp}
         onClickCapture={onWeekClickCapture}
@@ -390,7 +427,13 @@ export function ExecutionCalendarView({
                     </div>
                   ))}
                 </div>
-                <CalendarBands days={week} items={items} timeZone={timeZone} onOpenExecution={onOpenExecution} />
+                <CalendarBands
+                  days={week}
+                  items={items}
+                  timeZone={timeZone}
+                  showEstablishment={showEstablishment}
+                  onOpenExecution={onOpenExecution}
+                />
               </div>
             ))}
           </div>
@@ -399,8 +442,14 @@ export function ExecutionCalendarView({
           ) : null}
         </div>
       </div>
-      <UnplannedBanner items={unplanned} expanded={unplannedExpanded}
-        onToggle={() => setUnplannedExpanded((current) => !current)} onOpenExecution={onOpenExecution} />
+      )}
+      <UnplannedBanner
+        items={unplanned}
+        expanded={unplannedExpanded}
+        showEstablishment={showEstablishment}
+        onToggle={() => setUnplannedExpanded((current) => !current)}
+        onOpenExecution={onOpenExecution}
+      />
     </div>
   )
 }
@@ -408,11 +457,13 @@ export function ExecutionCalendarView({
 function UnplannedBanner({
   items,
   expanded,
+  showEstablishment,
   onToggle,
   onOpenExecution,
 }: {
   items: ActionPlanExecutionFeedItem[]
   expanded: boolean
+  showEstablishment: boolean
   onToggle: () => void
   onOpenExecution: (executionId: string) => void
 }) {
@@ -437,6 +488,7 @@ function UnplannedBanner({
           const { orgBadges, assigneeInitials: initials, assigneeOverflow: overflow } =
             calendarEventPresentation(item)
           const createdDate = calendarUnplannedCreatedDateLabel(item.created_at)
+          const establishment = showEstablishment ? calendarEventEstablishmentLabel(item) : ''
           return (
             <button
               key={item.id}
@@ -445,6 +497,14 @@ function UnplannedBanner({
               onClick={() => onOpenExecution(item.id)}
             >
               <span className="block truncate text-sm font-semibold">{item.title}</span>
+              {establishment ? (
+                <span
+                  data-testid={`calendar-establishment-${item.id}`}
+                  className="mt-0.5 block truncate text-[11px] font-medium text-[#57564F]"
+                >
+                  {establishment}
+                </span>
+              ) : null}
               {orgBadges.length > 0 ? (
                 <span className="mt-0.5 flex min-w-0 flex-wrap gap-0.5">
                   {orgBadges.map((badge) => (

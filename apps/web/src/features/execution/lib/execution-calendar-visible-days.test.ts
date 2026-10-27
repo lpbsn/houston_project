@@ -20,10 +20,11 @@ const WEEK = [
 ]
 
 describe('execution-calendar-visible-days', () => {
-  it('uses 3 days under lg and the full week at lg', () => {
+  it('keeps 3 days on every viewport, including a large touch screen', () => {
     expect(COMPACT_WEEK_VISIBLE_DAYS).toBe(3)
-    expect(weekVisibleDayCount(false, 7)).toBe(3)
-    expect(weekVisibleDayCount(true, 7)).toBe(7)
+    expect(weekVisibleDayCount(7)).toBe(3)
+    expect(weekVisibleDayCount(2)).toBe(2)
+    expect(weekVisibleDayCount(0)).toBe(0)
   })
 
   it('clamps the compact start to 0..4 for a 7-day week', () => {
