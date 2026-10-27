@@ -5,7 +5,7 @@ import uuid
 from datetime import date, datetime, timedelta
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -29,8 +29,10 @@ from houston.action_plans.models import (
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionTask,
+    ActionPlanExecutionTeam,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
+    ActionPlanTask,
 )
 from houston.action_plans.permissions import _scope_business_unit_ids
 from houston.action_plans.services import (
@@ -145,6 +147,15 @@ def _assert_can_materialize_from_schedule(
         raise ActionPlanValidationError("Action plan catalog entry is not active.")
     if schedule.establishment_id != action_plan.establishment_id:
         raise ActionPlanValidationError("Schedule establishment does not match action plan.")
+
+
+def _load_plan_tasks_for_materialization(action_plan: ActionPlan) -> list:
+    return list(
+        action_plan.tasks.select_related(
+            "assigned_membership__user",
+            "business_unit",
+        ).order_by("position", "created_at")
+    )
 
 
 def _load_schedule_for_materialization(schedule: ActionPlanSchedule) -> ActionPlanSchedule:
@@ -363,11 +374,18 @@ def materialize_execution_from_schedule(
     occurrence_date: date,
     schedule_assignee: ActionPlanScheduleAssignee | None = None,
     emit_side_effects: bool = True,
+    loaded_schedule: ActionPlanSchedule | None = None,
+    loaded_plan_tasks: list | None = None,
+    known_missing: bool = False,
 ) -> ActionPlanExecution:
     if occurrence_date is None:
         raise ActionPlanValidationError("occurrence_date is required for schedule executions.")
 
-    schedule = _load_schedule_for_materialization(schedule)
+    schedule = (
+        loaded_schedule
+        if loaded_schedule is not None
+        else _load_schedule_for_materialization(schedule)
+    )
     action_plan = schedule.action_plan
 
     if schedule.use_shared_chronology:
@@ -383,11 +401,10 @@ def materialize_execution_from_schedule(
 
     _assert_can_materialize_from_schedule(schedule=schedule, action_plan=action_plan)
 
-    plan_tasks = list(
-        action_plan.tasks.select_related("assigned_membership__user", "business_unit").order_by(
-            "position",
-            "created_at",
-        )
+    plan_tasks = (
+        loaded_plan_tasks
+        if loaded_plan_tasks is not None
+        else _load_plan_tasks_for_materialization(action_plan)
     )
     schedule_assignees = list(schedule.schedule_assignees.all())
     if schedule.use_shared_chronology:
@@ -438,16 +455,17 @@ def materialize_execution_from_schedule(
         assignee_count=len(assignees),
     )
 
-    resolved = _resolve_existing_schedule_execution(
-        schedule=schedule,
-        occurrence_date=occurrence_date,
-        schedule_assignee=schedule_assignee,
-        action_plan=action_plan,
-        plan_tasks=plan_tasks,
-        assignees=assignees,
-    )
-    if resolved is not None:
-        return resolved
+    if not known_missing:
+        resolved = _resolve_existing_schedule_execution(
+            schedule=schedule,
+            occurrence_date=occurrence_date,
+            schedule_assignee=schedule_assignee,
+            action_plan=action_plan,
+            plan_tasks=plan_tasks,
+            assignees=assignees,
+        )
+        if resolved is not None:
+            return resolved
 
     try:
         with transaction.atomic():
@@ -500,7 +518,7 @@ def materialize_execution_from_schedule(
             return recovered
         raise
 
-    _ensure_execution_structure_if_needed(
+    _materialize_execution_structure(
         execution=execution,
         pilot_business_unit=action_plan.pilot_business_unit,
         plan_tasks=plan_tasks,
@@ -530,17 +548,29 @@ def _materialize_occurrence(
     schedule: ActionPlanSchedule,
     occurrence_date: date,
     emit_side_effects: bool = True,
+    loaded_schedule: ActionPlanSchedule | None = None,
+    loaded_plan_tasks: list | None = None,
+    known_missing_shared: bool = False,
+    known_missing_membership_ids: set[uuid.UUID] | None = None,
 ) -> list[ActionPlanExecution]:
-    schedule = _load_schedule_for_materialization(schedule)
+    schedule = (
+        loaded_schedule
+        if loaded_schedule is not None
+        else _load_schedule_for_materialization(schedule)
+    )
     if schedule.use_shared_chronology:
         return [
             materialize_execution_from_schedule(
                 schedule=schedule,
                 occurrence_date=occurrence_date,
                 emit_side_effects=emit_side_effects,
+                loaded_schedule=schedule,
+                loaded_plan_tasks=loaded_plan_tasks,
+                known_missing=known_missing_shared,
             )
         ]
 
+    missing_membership_ids = known_missing_membership_ids or set()
     materialized: list[ActionPlanExecution] = []
     for schedule_assignee in schedule.schedule_assignees.all():
         materialized.append(
@@ -549,6 +579,9 @@ def _materialize_occurrence(
                 occurrence_date=occurrence_date,
                 schedule_assignee=schedule_assignee,
                 emit_side_effects=emit_side_effects,
+                loaded_schedule=schedule,
+                loaded_plan_tasks=loaded_plan_tasks,
+                known_missing=schedule_assignee.membership_id in missing_membership_ids,
             )
         )
     return materialized
@@ -854,6 +887,169 @@ def ensure_visible_action_plan_executions_materialized(
 MATERIALIZATION_PATH_CALENDAR = "calendar"
 
 
+def _calendar_occurrence_rows(
+    *,
+    schedule_occurrence_dates: dict[uuid.UUID, list[date]],
+) -> dict[tuple[uuid.UUID, date], list[tuple]]:
+    """One grouped read of the executions that already cover this window.
+
+    The feed helper only answers whether a date exists. The calendar also has
+    to repair an incomplete execution and reactivate an authorized cancellation,
+    including one row per assignee when the chronology is individual.
+    """
+    schedule_ids = [
+        schedule_id
+        for schedule_id, occurrence_dates in schedule_occurrence_dates.items()
+        if occurrence_dates
+    ]
+    if not schedule_ids:
+        return {}
+
+    all_dates = {
+        occurrence_date
+        for occurrence_dates in schedule_occurrence_dates.values()
+        for occurrence_date in occurrence_dates
+    }
+    rows = (
+        ActionPlanExecution.objects.filter(
+            action_plan_schedule_id__in=schedule_ids,
+            occurrence_date__in=all_dates,
+        )
+        .annotate(
+            has_tasks=Exists(
+                ActionPlanExecutionTask.objects.filter(
+                    action_plan_execution_id=OuterRef("pk"),
+                )
+            ),
+            has_assignees=Exists(
+                ActionPlanAssignee.objects.filter(
+                    action_plan_execution_id=OuterRef("pk"),
+                )
+            ),
+            has_teams=Exists(
+                ActionPlanExecutionTeam.objects.filter(
+                    action_plan_execution_id=OuterRef("pk"),
+                )
+            ),
+        )
+        .values_list(
+            "action_plan_schedule_id",
+            "occurrence_date",
+            "use_shared_chronology",
+            "chronology_owner_membership_id",
+            "status",
+            "has_tasks",
+            "has_assignees",
+            "has_teams",
+        )
+    )
+    grouped: dict[tuple[uuid.UUID, date], list[tuple]] = {}
+    for (
+        schedule_id,
+        occurrence_date,
+        shared,
+        membership_id,
+        status,
+        has_tasks,
+        has_assignees,
+        has_teams,
+    ) in rows:
+        grouped.setdefault((schedule_id, occurrence_date), []).append(
+            (shared, membership_id, status, has_tasks, has_assignees, has_teams)
+        )
+    return grouped
+
+
+def _calendar_row_needs_structure(
+    *,
+    has_tasks: bool,
+    has_assignees: bool,
+    has_teams: bool,
+    plan_has_tasks: bool,
+    schedule_can_supply_assignees: bool,
+) -> bool:
+    """True when another materialize pass could still fill this execution.
+
+    Without teams, materialize rebuilds the structure. With teams, tasks are
+    repaired from the plan and assignees from the current schedule. A row that
+    is already as complete as those sources allow does not need another load.
+    """
+    if not has_teams:
+        return True
+    if plan_has_tasks and not has_tasks:
+        return True
+    if schedule_can_supply_assignees and not has_assignees:
+        return True
+    return False
+
+
+def _calendar_occurrence_is_settled(
+    *,
+    schedule: ActionPlanSchedule,
+    occurrence_date: date,
+    rows_by_slot: dict[tuple[uuid.UUID, date], list[tuple]],
+    plan_ids_with_tasks: set[uuid.UUID],
+) -> bool:
+    rows = rows_by_slot.get((schedule.id, occurrence_date), ())
+    plan_has_tasks = schedule.action_plan_id in plan_ids_with_tasks
+    if schedule.use_shared_chronology:
+        candidates = [
+            (has_tasks, has_assignees, has_teams)
+            for shared, _membership_id, status, has_tasks, has_assignees, has_teams in rows
+            if shared and status != EXECUTION_STATUS_CANCELED
+        ]
+        if not candidates:
+            return False
+        schedule_can_supply_assignees = bool(schedule.schedule_assignees.all())
+        return not any(
+            _calendar_row_needs_structure(
+                has_tasks=has_tasks,
+                has_assignees=has_assignees,
+                has_teams=has_teams,
+                plan_has_tasks=plan_has_tasks,
+                schedule_can_supply_assignees=schedule_can_supply_assignees,
+            )
+            for has_tasks, has_assignees, has_teams in candidates
+        )
+
+    required_membership_ids = {
+        assignee.membership_id for assignee in schedule.schedule_assignees.all()
+    }
+    if not required_membership_ids:
+        return True
+    for membership_id in required_membership_ids:
+        candidates = [
+            (has_tasks, has_assignees, has_teams)
+            for (
+                shared,
+                row_membership_id,
+                status,
+                has_tasks,
+                has_assignees,
+                has_teams,
+            ) in rows
+            if (
+                not shared
+                and row_membership_id == membership_id
+                and status != EXECUTION_STATUS_CANCELED
+            )
+        ]
+        if not candidates:
+            return False
+        if any(
+            _calendar_row_needs_structure(
+                has_tasks=has_tasks,
+                has_assignees=has_assignees,
+                has_teams=has_teams,
+                plan_has_tasks=plan_has_tasks,
+                schedule_can_supply_assignees=True,
+            )
+            for has_tasks, has_assignees, has_teams in candidates
+        ):
+            return False
+    return True
+
+
 def materialize_visible_schedule_occurrences_in_window(
     *,
     membership: EstablishmentMembership,
@@ -866,6 +1062,11 @@ def materialize_visible_schedule_occurrences_in_window(
 
     Dates before local today are skipped (no past backfill). Does not update
     last_materialized_at. Uses emit_side_effects=False.
+
+    A repeated read skips an occurrence when every required execution already
+    exists, is not canceled, and is as complete as the current plan and schedule
+    can make it. Missing dates, rows that can still be repaired, and canceled
+    rows still go through materialization.
     """
     resolved_now = now or timezone.now()
     local_today = establishment_local_date(
@@ -892,29 +1093,77 @@ def materialize_visible_schedule_occurrences_in_window(
         .prefetch_related("schedule_assignees")
         .distinct()
     )
-    count = 0
+    occurrence_dates_by_schedule: dict[uuid.UUID, list[date]] = {}
     for schedule in schedules:
         try:
-            occurrence_dates = iter_occurrence_dates(
-                schedule=schedule,
-                from_date=window_start,
-                until_date=until_date,
-            )
+            occurrence_dates_by_schedule[schedule.id] = [
+                occurrence_date
+                for occurrence_date in iter_occurrence_dates(
+                    schedule=schedule,
+                    from_date=window_start,
+                    until_date=until_date,
+                )
+                if occurrence_date >= local_today
+            ]
         except ActionPlanValidationError as exc:
             _log_skipped_schedule_materialization(
                 schedule=schedule,
                 materialization_path=MATERIALIZATION_PATH_CALENDAR,
                 exc=exc,
             )
+
+    rows_by_slot = _calendar_occurrence_rows(
+        schedule_occurrence_dates=occurrence_dates_by_schedule,
+    )
+    plan_ids_with_tasks = set(
+        ActionPlanTask.objects.filter(
+            action_plan_id__in={schedule.action_plan_id for schedule in schedules},
+        )
+        .values_list("action_plan_id", flat=True)
+        .distinct()
+    )
+    prepared_schedules: dict[uuid.UUID, tuple[ActionPlanSchedule, list]] = {}
+    count = 0
+    for schedule in schedules:
+        occurrence_dates = occurrence_dates_by_schedule.get(schedule.id)
+        if occurrence_dates is None:
             continue
         for occurrence_date in occurrence_dates:
-            if occurrence_date < local_today:
+            if _calendar_occurrence_is_settled(
+                schedule=schedule,
+                occurrence_date=occurrence_date,
+                rows_by_slot=rows_by_slot,
+                plan_ids_with_tasks=plan_ids_with_tasks,
+            ):
                 continue
+            prepared = prepared_schedules.get(schedule.id)
+            if prepared is None:
+                loaded = _load_schedule_for_materialization(schedule)
+                prepared = (loaded, _load_plan_tasks_for_materialization(loaded.action_plan))
+                prepared_schedules[schedule.id] = prepared
+            loaded_schedule, loaded_plan_tasks = prepared
+            slot = rows_by_slot.get((schedule.id, occurrence_date), ())
+            if schedule.use_shared_chronology:
+                known_missing_shared = not any(row[0] for row in slot)
+                known_missing_membership_ids = None
+            else:
+                known_missing_shared = False
+                present_membership_ids = {
+                    row[1] for row in slot if not row[0] and row[1] is not None
+                }
+                known_missing_membership_ids = {
+                    assignee.membership_id
+                    for assignee in schedule.schedule_assignees.all()
+                } - present_membership_ids
             try:
                 created = _materialize_occurrence(
-                    schedule=schedule,
+                    schedule=loaded_schedule,
                     occurrence_date=occurrence_date,
                     emit_side_effects=False,
+                    loaded_schedule=loaded_schedule,
+                    loaded_plan_tasks=loaded_plan_tasks,
+                    known_missing_shared=known_missing_shared,
+                    known_missing_membership_ids=known_missing_membership_ids,
                 )
                 count += len(created)
             except ActionPlanValidationError as exc:
