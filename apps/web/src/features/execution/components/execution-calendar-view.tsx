@@ -35,10 +35,10 @@ import {
 } from '../lib/execution-calendar-visible-days'
 import { useDesktopCalendarSurface } from '../lib/execution-calendar-surface'
 import type { ExecutionCalendarGranularity } from '../lib/execution-feed-url-state'
+import { calendarWeekdayLabel } from '../lib/execution-calendar-window'
 
 const WEEK_SWIPE_MIN_DX = 48
 const WEEK_SWIPE_CLICK_SUPPRESS_MS = 50
-const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 
 type ExecutionCalendarViewProps = {
   granularity: ExecutionCalendarGranularity
@@ -53,12 +53,6 @@ type ExecutionCalendarViewProps = {
   onOpenExecution: (executionId: string) => void
   onOpenDay?: (anchor: string) => void
   showEstablishment?: boolean
-}
-
-function weekdayIndexMonday(date: string): number {
-  const [year, month, day] = date.split('-').map((part) => Number.parseInt(part, 10))
-  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
-  return weekday === 0 ? 6 : weekday - 1
 }
 
 /** One CSS grid item per execution, spanning all occupied civil days in this row. */
@@ -420,7 +414,7 @@ export function ExecutionCalendarView({
                       'border-l border-[#E8E6DF] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a] first:border-l-0',
                       granularity === 'month' && !day.startsWith(month) && 'bg-[#F5F4F0]',
                     )}>
-                      <div className="text-[10px] uppercase text-[#57564F]">{WEEKDAY_LABELS[weekdayIndexMonday(day)]}</div>
+                      <div className="text-[10px] uppercase text-[#57564F]">{calendarWeekdayLabel(day)}</div>
                       <div className={cn('mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full', day === today && 'bg-[#114660] text-white')}>
                         {Number.parseInt(day.slice(8, 10), 10)}
                       </div>

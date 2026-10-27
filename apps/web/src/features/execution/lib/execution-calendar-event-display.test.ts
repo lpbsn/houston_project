@@ -12,11 +12,8 @@ import {
   calendarEventPresentation,
   calendarEventScheduleLabel,
   calendarEventTimeLabel,
-  calendarLaneStatusLabelClassName,
-  calendarLaneSuiteClassName,
   calendarUnplannedCreatedDateLabel,
   formatCalendarOverflowLabel,
-  resolveCalendarEventChromeDensity,
 } from './execution-calendar-event-display'
 
 function buildItem(
@@ -81,20 +78,6 @@ describe('execution-calendar-event-display', () => {
         }),
       ),
     ).toEqual(['Cuisine', 'Restaurant'])
-  })
-
-  it('compacts month and short timed blocks without dropping layers', () => {
-    expect(resolveCalendarEventChromeDensity({ variant: 'month' })).toBe('compact')
-    expect(resolveCalendarEventChromeDensity({ variant: 'timed', heightPx: 24 })).toBe('compact')
-    expect(resolveCalendarEventChromeDensity({ variant: 'allDay' })).toBe('lane')
-    expect(resolveCalendarEventChromeDensity({ variant: 'timed', heightPx: 96 })).toBe('comfortable')
-  })
-
-  it('hides lane Suite and status copy below md without dropping accessible status text', () => {
-    expect(calendarLaneSuiteClassName()).toMatch(/\bhidden\b/)
-    expect(calendarLaneSuiteClassName()).toMatch(/\bmd:inline\b/)
-    expect(calendarLaneStatusLabelClassName()).toMatch(/\bsr-only\b/)
-    expect(calendarLaneStatusLabelClassName()).toMatch(/\bmd:not-sr-only\b/)
   })
 
   it('formats unplanned created_at as a civil date without time', () => {

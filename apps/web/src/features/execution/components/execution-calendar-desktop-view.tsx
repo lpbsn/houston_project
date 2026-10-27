@@ -23,8 +23,8 @@ import {
   type DesktopMonthRowLayout,
 } from '../lib/execution-calendar-layout'
 import type { ExecutionCalendarGranularity } from '../lib/execution-feed-url-state'
+import { calendarWeekdayLabel } from '../lib/execution-calendar-window'
 
-const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 const DESKTOP_WEEK_COLUMN_MIN_REM = 11
 
 type DesktopExecutionCalendarProps = {
@@ -39,12 +39,6 @@ type DesktopExecutionCalendarProps = {
   showEmpty: boolean
   onOpenExecution: (executionId: string) => void
   onOpenDay: (anchor: string) => void
-}
-
-function weekdayIndexMonday(date: string): number {
-  const [year, month, day] = date.split('-').map((part) => Number.parseInt(part, 10))
-  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
-  return weekday === 0 ? 6 : weekday - 1
 }
 
 function eventAccessibleLabel(
@@ -67,16 +61,16 @@ function eventAccessibleLabel(
     .join(' · ')
 }
 
-function EventLines({
+function EventCard({
   item,
   timeZone,
   showEstablishment,
-  showAssignees,
+  onOpenExecution,
 }: {
   item: ActionPlanExecutionFeedItem
   timeZone: string
   showEstablishment: boolean
-  showAssignees: boolean
+  onOpenExecution: (executionId: string) => void
 }) {
   const presentation = calendarEventPresentation(item)
   const schedule = calendarEventScheduleLabel(item, timeZone)
@@ -90,39 +84,6 @@ function EventLines({
         ? `${assignees.visible.join(', ')} +${assignees.overflow}`
         : assignees.visible.join(', ')
   return (
-    <>
-      <span className="block truncate text-xs font-semibold">{presentation.title}</span>
-      <span className="block truncate text-[11px] font-medium">{presentation.statusLabel}</span>
-      {schedule ? <span className="block truncate text-[11px] tabular-nums">{schedule}</span> : null}
-      {pilot ? <span className="block truncate text-[11px]">{pilot}</span> : null}
-      {showAssignees && assigneeLabel ? (
-        <span className="block truncate text-[11px]">{assigneeLabel}</span>
-      ) : null}
-      {establishment ? (
-        <span
-          data-testid={`calendar-establishment-${item.id}`}
-          className="block truncate text-[11px] font-medium"
-        >
-          {establishment}
-        </span>
-      ) : null}
-    </>
-  )
-}
-
-function EventCard({
-  item,
-  timeZone,
-  showEstablishment,
-  onOpenExecution,
-}: {
-  item: ActionPlanExecutionFeedItem
-  timeZone: string
-  showEstablishment: boolean
-  onOpenExecution: (executionId: string) => void
-}) {
-  const presentation = calendarEventPresentation(item)
-  return (
     <button
       type="button"
       data-testid={`calendar-event-${item.id}`}
@@ -135,7 +96,19 @@ function EventCard({
       aria-label={eventAccessibleLabel(item, timeZone, showEstablishment)}
       onClick={() => onOpenExecution(item.id)}
     >
-      <EventLines item={item} timeZone={timeZone} showEstablishment={showEstablishment} showAssignees />
+      <span className="block truncate text-xs font-semibold">{presentation.title}</span>
+      <span className="block truncate text-[11px] font-medium">{presentation.statusLabel}</span>
+      {schedule ? <span className="block truncate text-[11px] tabular-nums">{schedule}</span> : null}
+      {pilot ? <span className="block truncate text-[11px]">{pilot}</span> : null}
+      {assigneeLabel ? <span className="block truncate text-[11px]">{assigneeLabel}</span> : null}
+      {establishment ? (
+        <span
+          data-testid={`calendar-establishment-${item.id}`}
+          className="block truncate text-[11px] font-medium"
+        >
+          {establishment}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -350,7 +323,7 @@ function WeekdayHeader({
             outsideMonth && !day.startsWith(month) && 'bg-[#F5F4F0]',
           )}
         >
-          <div className="text-[10px] uppercase text-[#57564F]">{WEEKDAY_LABELS[weekdayIndexMonday(day)]}</div>
+          <div className="text-[10px] uppercase text-[#57564F]">{calendarWeekdayLabel(day)}</div>
           <div
             className={cn(
               'mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full',
@@ -450,7 +423,7 @@ function DesktopWeek({
               index > 0 && 'border-l border-[#E8E6DF]',
             )}
           >
-            <div className="text-[10px] uppercase text-[#57564F]">{WEEKDAY_LABELS[weekdayIndexMonday(day)]}</div>
+            <div className="text-[10px] uppercase text-[#57564F]">{calendarWeekdayLabel(day)}</div>
             <div
               className={cn(
                 'mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full',

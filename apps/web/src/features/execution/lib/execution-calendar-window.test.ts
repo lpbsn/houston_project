@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   calendarAnchorToday,
+  calendarWeekdayLabel,
   formatCalendarPeriodLabel,
   formatDesktopCalendarPeriodLabel,
   rememberScopedCalendarTimezone,
@@ -48,6 +49,8 @@ describe('execution-calendar-window', () => {
 
   it('formats the long desktop period without changing the mobile week label', () => {
     const day = resolveCalendarWindow('day', '2026-10-12')
+    expect(calendarWeekdayLabel('2026-10-12')).toBe('lun.')
+    expect(calendarWeekdayLabel('2026-10-18')).toBe('dim.')
     expect(formatDesktopCalendarPeriodLabel('day', day, '2026-10-12')).toBe('lundi 12 octobre 2026')
     const week = resolveCalendarWindow('week', '2026-10-14')
     expect(formatDesktopCalendarPeriodLabel('week', week, '2026-10-14')).toBe('12 – 18 octobre 2026')
