@@ -10,7 +10,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { TerrainCollapsibleFeedSection, TerrainErrorState } from '@/components/ui/terrain'
 import { todayCivilDate, BUSINESS_TIMEZONE } from '@/lib/business-timezone'
-import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import type {
@@ -19,11 +18,14 @@ import type {
 } from '@/features/action-plans/types'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
+import { DesktopExecutionCalendar } from './execution-calendar-desktop-view'
 import {
+  calendarEventEstablishmentLabel,
+  calendarEventPilotLabel,
   calendarEventPresentation,
   calendarUnplannedCreatedDateLabel,
 } from '../lib/execution-calendar-event-display'
-import { buildCalendarSpans } from '../lib/execution-calendar-layout'
+import { buildCalendarSpansFromPlaced, placeCalendarItems } from '../lib/execution-calendar-layout'
 import { calendarUnplannedSectionHeader } from '../lib/execution-calendar-unplanned'
 import {
   initialWeekStartIndex,
@@ -31,11 +33,12 @@ import {
   sliceVisibleWeekDays,
   weekVisibleDayCount,
 } from '../lib/execution-calendar-visible-days'
+import { useDesktopCalendarSurface } from '../lib/execution-calendar-surface'
 import type { ExecutionCalendarGranularity } from '../lib/execution-feed-url-state'
+import { calendarWeekdayLabel } from '../lib/execution-calendar-window'
 
 const WEEK_SWIPE_MIN_DX = 48
 const WEEK_SWIPE_CLICK_SUPPRESS_MS = 50
-const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 
 type ExecutionCalendarViewProps = {
   granularity: ExecutionCalendarGranularity
@@ -48,27 +51,23 @@ type ExecutionCalendarViewProps = {
   error: unknown
   onRetry: () => void
   onOpenExecution: (executionId: string) => void
-}
-
-function weekdayIndexMonday(date: string): number {
-  const [year, month, day] = date.split('-').map((part) => Number.parseInt(part, 10))
-  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
-  return weekday === 0 ? 6 : weekday - 1
+  onOpenDay?: (anchor: string) => void
+  showEstablishment?: boolean
 }
 
 /** One CSS grid item per execution, spanning all occupied civil days in this row. */
 function CalendarBands({
   days,
-  items,
-  timeZone,
+  placed,
+  showEstablishment,
   onOpenExecution,
 }: {
   days: string[]
-  items: ActionPlanExecutionFeedItem[]
-  timeZone: string
+  placed: ReturnType<typeof placeCalendarItems>
+  showEstablishment: boolean
   onOpenExecution: (executionId: string) => void
 }) {
-  const spans = useMemo(() => buildCalendarSpans(items, days, timeZone), [items, days, timeZone])
+  const spans = useMemo(() => buildCalendarSpansFromPlaced(placed, days), [placed, days])
   return (
     <div
       data-testid="calendar-bands"
@@ -81,8 +80,10 @@ function CalendarBands({
       </div>
       {spans.map((span) => {
         const presentation = calendarEventPresentation(span.item)
+        const pilot = calendarEventPilotLabel(span.item)
+        const establishment = showEstablishment ? calendarEventEstablishmentLabel(span.item) : ''
         const names = span.item.assignees.map((assignee) => assignee.display_name).join(', ')
-        const label = [presentation.title, presentation.statusLabel, names,
+        const label = [presentation.title, presentation.statusLabel, pilot, establishment, names,
           span.continuesBefore ? 'Commencé avant cette période' : '',
           span.continuesAfter ? 'Se poursuit après cette période' : '',
         ].filter(Boolean).join(' · ')
@@ -111,7 +112,15 @@ function CalendarBands({
           >
             {span.continuesBefore ? <ChevronLeft className="h-3 w-3 shrink-0" aria-hidden /> : null}
             <span className="min-w-0 flex-1 truncate text-xs font-semibold">{presentation.title}</span>
-            <span className="sr-only">{presentation.orgBadges.join(', ')}</span>
+            {pilot ? <span className="sr-only">{pilot}</span> : null}
+            {establishment ? (
+              <span
+                data-testid={`calendar-establishment-${span.item.id}`}
+                className="min-w-0 max-w-[40%] truncate text-[11px] font-medium"
+              >
+                {establishment}
+              </span>
+            ) : null}
             {span.endColumn > span.startColumn || days.length === 1 ? (
               <span className="hidden min-w-0 max-w-[40%] truncate text-[11px] lg:block">
                 {[names, presentation.statusLabel].filter(Boolean).join(' · ')}
@@ -213,12 +222,14 @@ export function ExecutionCalendarView({
   error,
   onRetry,
   onOpenExecution,
+  onOpenDay,
+  showEstablishment = false,
 }: ExecutionCalendarViewProps) {
   const timeZone = timeZoneProp ?? data?.timezone ?? BUSINESS_TIMEZONE
   const today = todayCivilDate(timeZone)
-  const isLg = useLgViewport()
+  const desktopCalendar = useDesktopCalendarSurface()
   const daysKey = days.join(',')
-  const weekVisibleCount = weekVisibleDayCount(isLg, days.length)
+  const weekVisibleCount = weekVisibleDayCount(days.length)
   const compactWeek = granularity === 'week' && weekVisibleCount < days.length
   const weekWindowKey = `${daysKey}|${today}|${weekVisibleCount}`
   const [weekWindow, setWeekWindow] = useState(() => ({
@@ -238,6 +249,7 @@ export function ExecutionCalendarView({
     () => (data ? unwrapActionPlanExecutionFeedItems(data.items) : []),
     [data],
   )
+  const placed = useMemo(() => placeCalendarItems(items, timeZone), [items, timeZone])
   const unplanned = useMemo(
     () => (data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []),
     [data],
@@ -355,12 +367,31 @@ export function ExecutionCalendarView({
     weeks.push(gridDays)
   }
 
+  const gridCardClassName = 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white'
+
   return (
     <div data-testid="calendar-hub-scroller" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden" aria-busy={isPeriodPending}>
       {periodStatus}
+      {desktopCalendar ? (
+        <div data-testid="calendar-grid-card" className={gridCardClassName}>
+          <DesktopExecutionCalendar
+            granularity={granularity}
+            days={days}
+            month={month}
+            items={items}
+            placed={placed}
+            timeZone={timeZone}
+            today={today}
+            showEstablishment={showEstablishment}
+            showEmpty={!isPeriodPending && !isTransitionError}
+            onOpenExecution={onOpenExecution}
+            onOpenDay={onOpenDay ?? (() => undefined)}
+          />
+        </div>
+      ) : (
       <div
         data-testid="calendar-grid-card"
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white touch-pan-y"
+        className={cn(gridCardClassName, 'touch-pan-y')}
         onPointerDown={onWeekPointerDown}
         onPointerUp={onWeekPointerUp}
         onClickCapture={onWeekClickCapture}
@@ -383,14 +414,19 @@ export function ExecutionCalendarView({
                       'border-l border-[#E8E6DF] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a] first:border-l-0',
                       granularity === 'month' && !day.startsWith(month) && 'bg-[#F5F4F0]',
                     )}>
-                      <div className="text-[10px] uppercase text-[#57564F]">{WEEKDAY_LABELS[weekdayIndexMonday(day)]}</div>
+                      <div className="text-[10px] uppercase text-[#57564F]">{calendarWeekdayLabel(day)}</div>
                       <div className={cn('mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full', day === today && 'bg-[#114660] text-white')}>
                         {Number.parseInt(day.slice(8, 10), 10)}
                       </div>
                     </div>
                   ))}
                 </div>
-                <CalendarBands days={week} items={items} timeZone={timeZone} onOpenExecution={onOpenExecution} />
+                <CalendarBands
+                  days={week}
+                  placed={placed}
+                  showEstablishment={showEstablishment}
+                  onOpenExecution={onOpenExecution}
+                />
               </div>
             ))}
           </div>
@@ -399,8 +435,14 @@ export function ExecutionCalendarView({
           ) : null}
         </div>
       </div>
-      <UnplannedBanner items={unplanned} expanded={unplannedExpanded}
-        onToggle={() => setUnplannedExpanded((current) => !current)} onOpenExecution={onOpenExecution} />
+      )}
+      <UnplannedBanner
+        items={unplanned}
+        expanded={unplannedExpanded}
+        showEstablishment={showEstablishment}
+        onToggle={() => setUnplannedExpanded((current) => !current)}
+        onOpenExecution={onOpenExecution}
+      />
     </div>
   )
 }
@@ -408,11 +450,13 @@ export function ExecutionCalendarView({
 function UnplannedBanner({
   items,
   expanded,
+  showEstablishment,
   onToggle,
   onOpenExecution,
 }: {
   items: ActionPlanExecutionFeedItem[]
   expanded: boolean
+  showEstablishment: boolean
   onToggle: () => void
   onOpenExecution: (executionId: string) => void
 }) {
@@ -437,6 +481,7 @@ function UnplannedBanner({
           const { orgBadges, assigneeInitials: initials, assigneeOverflow: overflow } =
             calendarEventPresentation(item)
           const createdDate = calendarUnplannedCreatedDateLabel(item.created_at)
+          const establishment = showEstablishment ? calendarEventEstablishmentLabel(item) : ''
           return (
             <button
               key={item.id}
@@ -445,6 +490,14 @@ function UnplannedBanner({
               onClick={() => onOpenExecution(item.id)}
             >
               <span className="block truncate text-sm font-semibold">{item.title}</span>
+              {establishment ? (
+                <span
+                  data-testid={`calendar-establishment-${item.id}`}
+                  className="mt-0.5 block truncate text-[11px] font-medium text-[#57564F]"
+                >
+                  {establishment}
+                </span>
+              ) : null}
               {orgBadges.length > 0 ? (
                 <span className="mt-0.5 flex min-w-0 flex-wrap gap-0.5">
                   {orgBadges.map((badge) => (

@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { testMediaMatches } from '@/test/viewport-match-media'
+import { installTestMatchMedia, testMediaMatches } from '@/test/viewport-match-media'
 
 import type {
   ActionPlanExecutionFeedItemWrapper,
@@ -28,6 +28,11 @@ import {
 } from '@/features/action-plans/lib/action-plan-execution-feed-cache'
 
 import { ExecutionFeedPage } from './execution-feed-page'
+import {
+  formatCalendarPeriodLabel,
+  formatDesktopCalendarPeriodLabel,
+  resolveCalendarWindow,
+} from '../lib/execution-calendar-window'
 
 const planFetchNextPage = vi.fn()
 const planRetryStalledContinuation = vi.fn()
@@ -1404,6 +1409,93 @@ describe('ExecutionFeedPage plan feed', () => {
       expect.stringContaining('anchor=2026-09-09'),
       { replace: true },
     )
+  })
+
+  it('keeps the compact week and the mobile label on a large touch screen', () => {
+    installTestMatchMedia(true, 'coarse')
+    executionRouteState.search = '?layout=calendar&granularity=week&anchor=2026-09-08'
+    renderExecutionFeedPage()
+
+    expect(screen.queryByTestId('calendar-desktop-week-grid')).toBeNull()
+    expect(screen.getByTestId('calendar-week-next-days')).toBeTruthy()
+    expect(screen.getByTestId('calendar-weekday-2026-09-07')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-weekday-2026-09-13')).toBeNull()
+    const week = resolveCalendarWindow('week', '2026-09-08')
+    expect(screen.getByText(formatCalendarPeriodLabel('week', week, '2026-09-08'))).toBeTruthy()
+  })
+
+  it('uses the seven-column desktop week and the long label on a narrow computer pointer', () => {
+    installTestMatchMedia(false, 'fine')
+    executionRouteState.search = '?layout=calendar&granularity=week&anchor=2026-10-14'
+    renderExecutionFeedPage()
+
+    const grid = screen.getByTestId('calendar-desktop-week-grid')
+    expect(grid.style.gridTemplateColumns).toBe('repeat(7, minmax(11rem, 1fr))')
+    expect(screen.queryByTestId('calendar-week-next-days')).toBeNull()
+    const week = resolveCalendarWindow('week', '2026-10-14')
+    expect(
+      screen.getByText(formatDesktopCalendarPeriodLabel('week', week, '2026-10-14')),
+    ).toBeTruthy()
+  })
+
+  it('opens an outside-month day from overflow without dropping filters', () => {
+    installTestMatchMedia(true, 'fine')
+    executionRouteState.search =
+      '?layout=calendar&granularity=month&anchor=2026-09-15&view_mode=general&category=pending_validation'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('out-1', 'Dehors 1', {
+              start_at: '2026-08-31T07:00:00.000Z',
+              end_at: '2026-08-31T08:00:00.000Z',
+            }),
+            buildPlanFeedWrapper('out-2', 'Dehors 2', {
+              start_at: '2026-08-31T09:00:00.000Z',
+              end_at: '2026-08-31T10:00:00.000Z',
+            }),
+            buildPlanFeedWrapper('out-3', 'Dehors 3', {
+              start_at: '2026-08-31T11:00:00.000Z',
+              end_at: '2026-08-31T12:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+    fireEvent.click(screen.getByTestId('calendar-month-overflow-2026-08-31'))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      '/execution?layout=calendar&granularity=day&anchor=2026-08-31&view_mode=general&category=pending_validation',
+      { replace: true },
+    )
+  })
+
+  it('shows the establishment name on a cross month execution', () => {
+    serializeAppRouteMockPath = '/cross/execution'
+    executionRouteState.search = '?layout=calendar&granularity=month&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              establishment_name: 'Hôtel du Parc',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ source: 'cross' })
+    const establishment = screen.getByTestId('calendar-establishment-exec-cal')
+    expect(establishment.textContent).toBe('Hôtel du Parc')
+    expect(establishment.className).not.toContain('sr-only')
   })
 })
 

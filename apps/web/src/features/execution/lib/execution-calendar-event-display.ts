@@ -1,15 +1,22 @@
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
-import { formatActionPlanExecutionStatusLabel } from '@/features/action-plans/lib/action-plan-display'
-import { splitIsoToCivil } from '@/lib/business-timezone'
+import { BUSINESS_TIMEZONE, splitIsoToCivil } from '@/lib/business-timezone'
 import { getDisplayNameInitials } from '@/lib/display-names'
+
+import {
+  formatActionPlanFeedCardAssigneeDisplay,
+  formatActionPlanFeedCardStatusLabel,
+} from './action-plan-execution-feed-card-display'
+import {
+  executionCalendarCategory,
+  executionCalendarDateRange,
+  type ExecutionCalendarCategory,
+} from './execution-calendar-layout'
 
 type InvolvedPoleLike = {
   business_unit?: {
     specific_name?: string
   }
 }
-
-export type CalendarEventChromeDensity = 'comfortable' | 'compact' | 'lane'
 
 type CalendarEventChrome = {
   bar: string
@@ -53,40 +60,92 @@ function calendarEventChromeForStatus(status: string): CalendarEventChrome {
   return STATUS_CHROME[status] ?? DEFAULT_CHROME
 }
 
-function calendarEventShortStatusLabel(
-  status: string,
-  validatedAt?: string | null,
-): string {
-  if (status === 'pending_validation') {
-    return 'Validation'
-  }
-  return formatActionPlanExecutionStatusLabel(status, { validatedAt })
+export const CALENDAR_DAY_GROUP_LABEL: Record<ExecutionCalendarCategory, string> = {
+  multi_day: 'Multi-jours',
+  all_day: 'Journée entière',
+  timed: 'Dans la journée',
 }
 
-export function resolveCalendarEventChromeDensity(input: {
-  variant: 'timed' | 'allDay' | 'month'
-  heightPx?: number
-  narrow?: boolean
-}): CalendarEventChromeDensity {
-  if (input.variant === 'month') {
-    return 'compact'
-  }
-  if (input.variant === 'allDay') {
-    return 'lane'
-  }
-  const height = input.heightPx ?? 0
-  if (input.narrow) {
-    return height < 56 ? 'compact' : 'comfortable'
-  }
-  return height < 44 ? 'compact' : 'comfortable'
+export function calendarEventPilotLabel(item: ActionPlanExecutionFeedItem): string {
+  return item.pilot_business_unit.specific_name.trim()
 }
 
-export function calendarLaneSuiteClassName(): string {
-  return 'hidden shrink-0 text-[9px] font-medium opacity-70 md:inline'
+export function calendarEventEstablishmentLabel(item: ActionPlanExecutionFeedItem): string {
+  return item.establishment_name?.trim() ?? ''
 }
 
-export function calendarLaneStatusLabelClassName(): string {
-  return 'sr-only md:not-sr-only md:truncate'
+export function formatCalendarExecutionCount(count: number): string {
+  return count === 1 ? '1 exécution' : `${count} exécutions`
+}
+
+export function formatCalendarOverflowLabel(count: number): string {
+  if (count === 1) return '+1 autre'
+  return `+${count} autres`
+}
+
+export function calendarEventDesktopAssignees(
+  assignees: ActionPlanExecutionFeedItem['assignees'],
+): { visible: string[]; overflow: number } {
+  const display = formatActionPlanFeedCardAssigneeDisplay(assignees)
+  return { visible: display.visible, overflow: display.overflow }
+}
+
+function utcNoon(date: string): Date {
+  return new Date(`${date}T12:00:00.000Z`)
+}
+
+const shortCivilFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+})
+const civilDayFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  timeZone: 'UTC',
+})
+const createdCivilFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
+function formatShortCivil(date: string): string {
+  return shortCivilFormatter.format(utcNoon(date))
+}
+
+export function calendarEventDateRangeLabel(
+  item: ActionPlanExecutionFeedItem,
+  timeZone: string = BUSINESS_TIMEZONE,
+): string | null {
+  const range = executionCalendarDateRange(item, timeZone)
+  if (!range || range.start === range.end) return null
+  if (range.start.slice(0, 7) === range.end.slice(0, 7)) {
+    const startDay = civilDayFormatter.format(utcNoon(range.start))
+    return `${startDay} – ${formatShortCivil(range.end)}`
+  }
+  return `${formatShortCivil(range.start)} – ${formatShortCivil(range.end)}`
+}
+
+export function calendarEventTimeLabel(
+  item: ActionPlanExecutionFeedItem,
+  timeZone: string = BUSINESS_TIMEZONE,
+): string | null {
+  const start = splitIsoToCivil(item.start_at ?? '', timeZone)
+  if (!start.time) return null
+  const end = splitIsoToCivil(item.end_at ?? '', timeZone)
+  if (!end.time || (end.date === start.date && end.time === start.time)) return start.time
+  return `${start.time} – ${end.time}`
+}
+
+export function calendarEventScheduleLabel(
+  item: ActionPlanExecutionFeedItem,
+  timeZone: string = BUSINESS_TIMEZONE,
+): string | null {
+  const category = executionCalendarCategory(item, timeZone)
+  if (category === 'multi_day') return calendarEventDateRangeLabel(item, timeZone)
+  if (category === 'timed') return calendarEventTimeLabel(item, timeZone)
+  return null
 }
 
 function assigneeNames(assignees: ActionPlanExecutionFeedItem['assignees']): string[] {
@@ -95,7 +154,7 @@ function assigneeNames(assignees: ActionPlanExecutionFeedItem['assignees']): str
     .filter((name) => name.length > 0)
 }
 
-export function calendarEventAssigneeInitials(
+function calendarEventAssigneeInitials(
   assignees: ActionPlanExecutionFeedItem['assignees'],
 ): string[] {
   return assigneeNames(assignees)
@@ -103,7 +162,7 @@ export function calendarEventAssigneeInitials(
     .map((name) => getDisplayNameInitials(name))
 }
 
-export function calendarEventAssigneeOverflow(
+function calendarEventAssigneeOverflow(
   assignees: ActionPlanExecutionFeedItem['assignees'],
 ): number {
   return Math.max(0, assigneeNames(assignees).length - MAX_ASSIGNEE_AVATARS)
@@ -114,12 +173,7 @@ export function calendarUnplannedCreatedDateLabel(createdAt: string | null | und
   if (!date) {
     return null
   }
-  const formatted = new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${date}T12:00:00.000Z`))
+  const formatted = createdCivilFormatter.format(new Date(`${date}T12:00:00.000Z`))
   return `Créé le ${formatted}`
 }
 
@@ -149,7 +203,7 @@ export function calendarEventPresentation(item: ActionPlanExecutionFeedItem): {
   return {
     title: item.title,
     chrome: calendarEventChromeForStatus(item.status),
-    statusLabel: calendarEventShortStatusLabel(item.status, item.validated_at),
+    statusLabel: formatActionPlanFeedCardStatusLabel(item),
     assigneeInitials: calendarEventAssigneeInitials(item.assignees),
     assigneeOverflow: calendarEventAssigneeOverflow(item.assignees),
     orgBadges: calendarEventOrgBadges(item),
