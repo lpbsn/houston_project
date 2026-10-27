@@ -228,8 +228,9 @@ function WeekEventLine({
     <button
       type="button"
       data-testid={`calendar-event-${item.id}`}
-      className="flex w-full min-w-0 items-start gap-1.5 px-1 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
+      className="flex w-full min-w-0 items-start gap-1 px-1 py-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
       aria-label={eventAccessibleLabel(item, timeZone, showEstablishment)}
+      title={item.title}
       onClick={() => onOpenExecution(item.id)}
     >
       <span
@@ -239,15 +240,17 @@ function WeekEventLine({
         aria-hidden
       />
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold leading-snug">{item.title}</span>
+        <span className="block line-clamp-2 break-words text-xs font-semibold leading-snug text-[#1a1a1a]">
+          {item.title}
+        </span>
         {hasMeta ? (
-          <span className="mt-0.5 block text-[11px] leading-snug text-[#57564F]">
+          <span className="mt-px block text-[11px] leading-tight text-[#7D7B75]">
             {schedule ? <span className="tabular-nums">{schedule}</span> : null}
             {schedule && (pilot || establishment) ? ' · ' : null}
             {pilot ? <span>{pilot}</span> : null}
             {pilot && establishment ? ' · ' : null}
             {establishment ? (
-              <span data-testid={`calendar-establishment-${item.id}`} className="font-medium">
+              <span data-testid={`calendar-establishment-${item.id}`} className="font-medium text-[#57564F]">
                 {establishment}
               </span>
             ) : null}
