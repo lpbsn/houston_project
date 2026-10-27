@@ -1225,13 +1225,13 @@ describe('ExecutionCalendarView', () => {
       />,
     )
     const dayHeader = screen.getByTestId('calendar-weekday-2026-09-10')
-    expect(dayHeader.className).toContain('bg-[#F7F7F4]')
+    expect(dayHeader.className).toContain('bg-[#FAFAF8]')
     expect(dayHeader.className).toContain('px-1')
     expect(dayHeader.className).toContain('py-2')
     const dayPill = dayHeader.querySelector('.rounded-full')
     expect(dayPill?.className).toContain('h-7')
     expect(dayPill?.className).toContain('bg-[#114660]')
-    expect(screen.getByText('Aucune exécution').className).not.toContain('bg-[#F7F7F4]')
+    expect(screen.getByText('Aucune exécution').className).not.toContain('bg-[#FAFAF8]')
 
     rerender(
       <ExecutionCalendarView
@@ -1258,9 +1258,9 @@ describe('ExecutionCalendarView', () => {
     )
     for (const day of MONDAY_WEEK) {
       const header = screen.getByTestId(`calendar-weekday-${day}`)
-      expect(header.className).toContain('bg-[#F7F7F4]')
+      expect(header.className).toContain('bg-[#FAFAF8]')
       expect(header.className).toContain('border-b')
-      expect(screen.getByTestId(`calendar-desktop-column-${day}`).className).not.toContain('bg-[#F7F7F4]')
+      expect(screen.getByTestId(`calendar-desktop-column-${day}`).className).not.toContain('bg-[#FAFAF8]')
     }
     expect(screen.getByTestId('calendar-weekday-2026-09-10').querySelector('.rounded-full')?.className).toContain('bg-[#114660]')
     expect(screen.getByTestId('calendar-bands').className).toContain('bg-white')
@@ -1296,18 +1296,18 @@ describe('ExecutionCalendarView', () => {
       />,
     )
     const inMonthHeader = screen.getByTestId('calendar-weekday-2026-09-15')
-    expect(inMonthHeader.className).toContain('bg-[#F7F7F4]')
+    expect(inMonthHeader.className).toContain('bg-[#FAFAF8]')
     expect(inMonthHeader.className).not.toContain('bg-[#F5F4F0]')
     expect(inMonthHeader.querySelector('.rounded-full')?.className).not.toContain('bg-[#114660]')
     const outsideHeader = screen.getByTestId('calendar-weekday-2026-08-31')
     expect(outsideHeader.className).toContain('bg-[#F5F4F0]')
-    expect(outsideHeader.className).not.toContain('bg-[#F7F7F4]')
+    expect(outsideHeader.className).not.toContain('bg-[#FAFAF8]')
     const executionCell = screen.getByTestId('calendar-event-month-single').parentElement
-    expect(executionCell?.className).not.toContain('bg-[#F7F7F4]')
+    expect(executionCell?.className).not.toContain('bg-[#FAFAF8]')
     expect(executionCell?.className).not.toContain('bg-[#F5F4F0]')
     const outsideCell = screen.getByTestId('calendar-event-month-outside').parentElement
     expect(outsideCell?.className).toContain('bg-[#F5F4F0]')
-    expect(outsideCell?.className).not.toContain('bg-[#F7F7F4]')
+    expect(outsideCell?.className).not.toContain('bg-[#FAFAF8]')
   })
 
   it('shows an empty desktop day and a mixed day in group order', () => {

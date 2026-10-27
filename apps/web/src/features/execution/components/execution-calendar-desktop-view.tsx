@@ -322,7 +322,7 @@ function WeekdayHeader({
           key={day}
           data-testid={`calendar-weekday-${day}`}
           className={cn(
-            'border-l border-[#E8E6DF] bg-[#F7F7F4] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a] first:border-l-0',
+            'border-l border-[#E8E6DF] bg-[#FAFAF8] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a] first:border-l-0',
             outsideMonth && !day.startsWith(month) && 'bg-[#F5F4F0]',
           )}
         >
@@ -422,7 +422,7 @@ function DesktopWeek({
             key={day}
             data-testid={`calendar-weekday-${day}`}
             className={cn(
-              'border-b border-[#E8E6DF] bg-[#F7F7F4] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a]',
+              'border-b border-[#E8E6DF] bg-[#FAFAF8] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a]',
               index > 0 && 'border-l border-[#E8E6DF]',
             )}
           >
