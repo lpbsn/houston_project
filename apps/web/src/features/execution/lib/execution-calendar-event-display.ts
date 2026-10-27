@@ -102,12 +102,24 @@ function utcNoon(date: string): Date {
   return new Date(`${date}T12:00:00.000Z`)
 }
 
+const shortCivilFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+})
+const civilDayFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  timeZone: 'UTC',
+})
+const createdCivilFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
 function formatShortCivil(date: string): string {
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(utcNoon(date))
+  return shortCivilFormatter.format(utcNoon(date))
 }
 
 export function calendarEventDateRangeLabel(
@@ -117,10 +129,7 @@ export function calendarEventDateRangeLabel(
   const range = executionCalendarDateRange(item, timeZone)
   if (!range || range.start === range.end) return null
   if (range.start.slice(0, 7) === range.end.slice(0, 7)) {
-    const startDay = new Intl.DateTimeFormat('fr-FR', {
-      day: 'numeric',
-      timeZone: 'UTC',
-    }).format(utcNoon(range.start))
+    const startDay = civilDayFormatter.format(utcNoon(range.start))
     return `${startDay} – ${formatShortCivil(range.end)}`
   }
   return `${formatShortCivil(range.start)} – ${formatShortCivil(range.end)}`
@@ -198,12 +207,7 @@ export function calendarUnplannedCreatedDateLabel(createdAt: string | null | und
   if (!date) {
     return null
   }
-  const formatted = new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${date}T12:00:00.000Z`))
+  const formatted = createdCivilFormatter.format(new Date(`${date}T12:00:00.000Z`))
   return `Créé le ${formatted}`
 }
 

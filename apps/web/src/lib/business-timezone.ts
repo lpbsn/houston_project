@@ -1,6 +1,10 @@
 export const BUSINESS_TIMEZONE = 'Europe/Paris'
 
-function partsInTimeZone(instant: Date, timeZone: string): Record<string, string> {
+const civilPartFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function civilPartFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = civilPartFormatters.get(timeZone)
+  if (cached) return cached
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -11,6 +15,12 @@ function partsInTimeZone(instant: Date, timeZone: string): Record<string, string
     second: '2-digit',
     hourCycle: 'h23',
   })
+  civilPartFormatters.set(timeZone, formatter)
+  return formatter
+}
+
+function partsInTimeZone(instant: Date, timeZone: string): Record<string, string> {
+  const formatter = civilPartFormatter(timeZone)
   const parts: Record<string, string> = {}
   for (const part of formatter.formatToParts(instant)) {
     if (part.type !== 'literal') {

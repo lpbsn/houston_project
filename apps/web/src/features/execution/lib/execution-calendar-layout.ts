@@ -87,53 +87,85 @@ function compareByStartThenId(
   return a.id.localeCompare(b.id)
 }
 
-function splitByCategory(
+export type CalendarPlacement = {
+  item: ActionPlanExecutionFeedItem
+  start: string
+  end: string
+  category: ExecutionCalendarCategory
+}
+
+/** One civil interval per execution. Later views only compare those dates to the grid. */
+export function placeCalendarItems(
   items: ActionPlanExecutionFeedItem[],
-  timeZone: string,
-): { multiDay: ActionPlanExecutionFeedItem[]; singleDay: ActionPlanExecutionFeedItem[] } {
-  const multiDay: ActionPlanExecutionFeedItem[] = []
-  const singleDay: ActionPlanExecutionFeedItem[] = []
+  timeZone: string = BUSINESS_TIMEZONE,
+): CalendarPlacement[] {
+  const placed: CalendarPlacement[] = []
   for (const item of items) {
-    const category = executionCalendarCategory(item, timeZone)
-    if (category === 'multi_day') multiDay.push(item)
-    else if (category != null) singleDay.push(item)
+    const range = executionCalendarDateRange(item, timeZone)
+    if (!range) continue
+    placed.push({
+      item,
+      start: range.start,
+      end: range.end,
+      category: range.start === range.end ? (item.all_day ? 'all_day' : 'timed') : 'multi_day',
+    })
+  }
+  return placed
+}
+
+function splitPlaced(placed: CalendarPlacement[]) {
+  const multiDay: CalendarPlacement[] = []
+  const singleDay: CalendarPlacement[] = []
+  for (const placement of placed) {
+    if (placement.category === 'multi_day') multiDay.push(placement)
+    else singleDay.push(placement)
   }
   return { multiDay, singleDay }
 }
 
-/** Multi-day bands keep lanes. Other executions stay in their column, ordered by start then id. */
-export function buildDesktopWeekLayout(
-  items: ActionPlanExecutionFeedItem[],
-  days: string[],
-  timeZone: string = BUSINESS_TIMEZONE,
-): DesktopWeekLayout {
-  const { multiDay, singleDay } = splitByCategory(items, timeZone)
+function layoutSpans(placed: CalendarPlacement[], days: string[]): CalendarSpan[] {
+  if (days.length === 0) return []
+  const candidates = placed.flatMap((placement) => {
+    const startColumn = days.findIndex((day) => day >= placement.start && day <= placement.end)
+    if (startColumn < 0) return []
+    let endColumn = startColumn
+    while (endColumn + 1 < days.length && days[endColumn + 1] <= placement.end) endColumn += 1
+    return [{
+      item: placement.item,
+      startColumn,
+      endColumn,
+      startDate: placement.start,
+      endDate: placement.end,
+      continuesBefore: placement.start < days[0],
+      continuesAfter: placement.end > days[days.length - 1],
+    }]
+  }).sort((a, b) => a.startDate.localeCompare(b.startDate) || b.endDate.localeCompare(a.endDate) || a.item.id.localeCompare(b.item.id))
+  const laneEnds: number[] = []
+  return candidates.map((candidate) => {
+    let lane = laneEnds.findIndex((end) => end < candidate.startColumn)
+    if (lane < 0) lane = laneEnds.length
+    laneEnds[lane] = candidate.endColumn
+    return { ...candidate, lane }
+  })
+}
+
+function weekLayoutFromPlaced(placed: CalendarPlacement[], days: string[]): DesktopWeekLayout {
+  const { multiDay, singleDay } = splitPlaced(placed)
   return {
-    bands: buildCalendarSpans(multiDay, days, timeZone),
+    bands: layoutSpans(multiDay, days),
     columns: days.map((day) => ({
       day,
       items: singleDay
-        .filter((item) => {
-          const range = executionCalendarDateRange(item, timeZone)
-          return range != null && range.start <= day && range.end >= day
-        })
-        .sort(compareByStartThenId),
+        .filter((placement) => placement.start <= day && placement.end >= day)
+        .sort((a, b) => compareByStartThenId(a.item, b.item))
+        .map((placement) => placement.item),
     })),
   }
 }
 
-/**
- * Keep the first three multi-day lanes across the whole row.
- * Each hidden execution counts once on every civil day it occupies.
- * Two single-day executions stay visible; the rest join that count.
- */
-export function buildDesktopMonthRow(
-  items: ActionPlanExecutionFeedItem[],
-  days: string[],
-  timeZone: string = BUSINESS_TIMEZONE,
-): DesktopMonthRowLayout {
-  const { multiDay, singleDay } = splitByCategory(items, timeZone)
-  const spans = buildCalendarSpans(multiDay, days, timeZone)
+function monthRowFromPlaced(placed: CalendarPlacement[], days: string[]): DesktopMonthRowLayout {
+  const { multiDay, singleDay } = splitPlaced(placed)
+  const spans = layoutSpans(multiDay, days)
   const hiddenBands = Array.from({ length: days.length }, () => 0)
   for (const span of spans) {
     if (span.lane < DESKTOP_MONTH_VISIBLE_BANDS) continue
@@ -142,7 +174,7 @@ export function buildDesktopMonthRow(
     }
   }
   const singlesByDay: CalendarSpan[][] = days.map(() => [])
-  for (const span of buildCalendarSpans(singleDay, days, timeZone)) {
+  for (const span of layoutSpans(singleDay, days)) {
     singlesByDay[span.startColumn]?.push(span)
   }
   return {
@@ -159,57 +191,88 @@ export function buildDesktopMonthRow(
   }
 }
 
-/** Non-empty groups only, in multi-day, all-day, then timed order. */
-export function buildDesktopDayLayout(
-  items: ActionPlanExecutionFeedItem[],
-  day: string,
-  timeZone: string = BUSINESS_TIMEZONE,
-): DesktopDayLayout {
-  const present = items.flatMap((item) => {
-    const range = executionCalendarDateRange(item, timeZone)
-    const category = executionCalendarCategory(item, timeZone)
-    if (!range || !category || day < range.start || day > range.end) return []
-    return [{ item, category }]
-  })
+function dayLayoutFromPlaced(placed: CalendarPlacement[], day: string): DesktopDayLayout {
+  const present = placed.filter((placement) => day >= placement.start && day <= placement.end)
   return {
     count: present.length,
     groups: DAY_GROUP_ORDER.flatMap((category) => {
       const grouped = present
-        .filter((entry) => entry.category === category)
-        .map((entry) => entry.item)
+        .filter((placement) => placement.category === category)
+        .map((placement) => placement.item)
         .sort(compareByStartThenId)
       return grouped.length > 0 ? [{ category, items: grouped }] : []
     }),
   }
 }
 
+/** Multi-day bands keep lanes. Other executions stay in their column, ordered by start then id. */
+export function buildDesktopWeekLayoutFromPlaced(
+  placed: CalendarPlacement[],
+  days: string[],
+): DesktopWeekLayout {
+  return weekLayoutFromPlaced(placed, days)
+}
+
+export function buildDesktopWeekLayout(
+  items: ActionPlanExecutionFeedItem[],
+  days: string[],
+  timeZone: string = BUSINESS_TIMEZONE,
+): DesktopWeekLayout {
+  return weekLayoutFromPlaced(placeCalendarItems(items, timeZone), days)
+}
+
+/**
+ * Keep the first three multi-day lanes across the whole row.
+ * Each hidden execution counts once on every civil day it occupies.
+ * Two single-day executions stay visible; the rest join that count.
+ */
+export function buildDesktopMonthRowsFromPlaced(
+  placed: CalendarPlacement[],
+  days: string[],
+): DesktopMonthRowLayout[] {
+  const rows: DesktopMonthRowLayout[] = []
+  for (let index = 0; index < days.length; index += 7) {
+    rows.push(monthRowFromPlaced(placed, days.slice(index, index + 7)))
+  }
+  return rows
+}
+
+export function buildDesktopMonthRow(
+  items: ActionPlanExecutionFeedItem[],
+  days: string[],
+  timeZone: string = BUSINESS_TIMEZONE,
+): DesktopMonthRowLayout {
+  return monthRowFromPlaced(placeCalendarItems(items, timeZone), days)
+}
+
+/** Non-empty groups only, in multi-day, all-day, then timed order. */
+export function buildDesktopDayLayoutFromPlaced(
+  placed: CalendarPlacement[],
+  day: string,
+): DesktopDayLayout {
+  return dayLayoutFromPlaced(placed, day)
+}
+
+export function buildDesktopDayLayout(
+  items: ActionPlanExecutionFeedItem[],
+  day: string,
+  timeZone: string = BUSINESS_TIMEZONE,
+): DesktopDayLayout {
+  return dayLayoutFromPlaced(placeCalendarItems(items, timeZone), day)
+}
+
 /** One segment per execution and visible row, with deterministic non-overlapping lanes. */
+export function buildCalendarSpansFromPlaced(
+  placed: CalendarPlacement[],
+  days: string[],
+): CalendarSpan[] {
+  return layoutSpans(placed, days)
+}
+
 export function buildCalendarSpans(
   items: ActionPlanExecutionFeedItem[],
   days: string[],
   timeZone: string = BUSINESS_TIMEZONE,
 ): CalendarSpan[] {
-  if (days.length === 0) return []
-  const candidates = items.flatMap((item) => {
-    const range = executionCalendarDateRange(item, timeZone)
-    if (!range) return []
-    const startColumn = days.findIndex((day) => day >= range.start && day <= range.end)
-    if (startColumn < 0) return []
-    let endColumn = startColumn
-    while (endColumn + 1 < days.length && days[endColumn + 1] <= range.end) endColumn++
-    return [{
-      item, startColumn, endColumn,
-      startDate: range.start,
-      endDate: range.end,
-      continuesBefore: range.start < days[0],
-      continuesAfter: range.end > days[days.length - 1],
-    }]
-  }).sort((a, b) => a.startDate.localeCompare(b.startDate) || b.endDate.localeCompare(a.endDate) || a.item.id.localeCompare(b.item.id))
-  const laneEnds: number[] = []
-  return candidates.map((candidate) => {
-    let lane = laneEnds.findIndex((end) => end < candidate.startColumn)
-    if (lane < 0) lane = laneEnds.length
-    laneEnds[lane] = candidate.endColumn
-    return { ...candidate, lane }
-  })
+  return layoutSpans(placeCalendarItems(items, timeZone), days)
 }

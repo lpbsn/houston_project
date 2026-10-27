@@ -1287,6 +1287,9 @@ describe('ExecutionCalendarView', () => {
         title: `Plan ${index}`,
         start_at: combineCivilDateTimeToIso('2026-09-08', '09:00'),
         end_at: combineCivilDateTimeToIso('2026-09-08', '10:00'),
+        assignees:
+          index === 0 ? [{ membership_id: 'm-1', display_name: 'Alice Martin' }] : [],
+        establishment_name: index === 0 ? 'Hôtel du Parc' : undefined,
       }),
     )
     render(
@@ -1294,6 +1297,7 @@ describe('ExecutionCalendarView', () => {
         granularity="week"
         days={[...MONDAY_WEEK]}
         month="2026-09"
+        showEstablishment
         isLoading={false}
         isError={false}
         error={null}
@@ -1311,6 +1315,20 @@ describe('ExecutionCalendarView', () => {
     expect(screen.queryByTestId('calendar-week-next-days')).toBeNull()
     expect(screen.queryByText(/\+\d+ autre/)).toBeNull()
     expect(screen.getAllByRole('button', { name: /Plan / })).toHaveLength(6)
+    const line = screen.getByTestId('calendar-event-plan-0')
+    expect(line.className).toContain('items-start')
+    const title = line.querySelector('span.font-semibold')
+    expect(title?.textContent).toBe('Plan 0')
+    expect(title?.className).not.toContain('truncate')
+    expect(line.textContent).toContain('09:00')
+    expect(line.textContent).toContain('Restaurant')
+    expect(line.textContent).toContain('Hôtel du Parc')
+    expect(line.textContent).not.toContain('Alice Martin')
+    expect(line.getAttribute('aria-label')).toContain('Alice Martin')
+    expect(screen.queryByTestId('calendar-status-pill-plan-0')).toBeNull()
+    const dot = screen.getByTestId('calendar-status-dot-plan-0')
+    expect(dot.className).toContain('rounded-full')
+    expect(dot.style.backgroundColor).toBe('rgb(58, 122, 150)')
   })
 
   it('opens the desktop day of an outside-month date from the overflow control', () => {
@@ -1361,7 +1379,10 @@ describe('ExecutionCalendarView', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: /Dehors 1/ }).textContent).toContain('Hôtel du Parc')
+    const outside = screen.getByRole('button', { name: /Dehors 1/ })
+    expect(outside.textContent).toContain('Hôtel du Parc')
+    expect(outside.textContent).not.toContain('En cours')
+    expect(screen.getByTestId('calendar-status-dot-out-1').getAttribute('style')).toContain('background-color')
     expect(screen.getByTestId('calendar-establishment-out-1').className).not.toContain('sr-only')
     expect(screen.queryByRole('button', { name: /Dehors 3/ })).toBeNull()
     fireEvent.click(screen.getByTestId('calendar-month-overflow-2026-08-31'))
