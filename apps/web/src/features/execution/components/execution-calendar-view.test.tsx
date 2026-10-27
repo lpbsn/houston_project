@@ -1402,6 +1402,129 @@ describe('ExecutionCalendarView', () => {
     expect(onOpen).toHaveBeenCalledWith('out-1')
   })
 
+  it('collapses desktop month weeks that have no executions', () => {
+    installTestMatchMedia(true, 'fine')
+    const monthWindow = resolveCalendarWindow('month', '2026-09-15')
+    const onOpenDay = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={monthWindow.days}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        onOpenDay={onOpenDay}
+        data={{
+          ...emptyCalendarData,
+          items: [
+            wrap({
+              id: 'out-1',
+              title: 'Dehors 1',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '10:00'),
+            }),
+            wrap({
+              id: 'out-2',
+              title: 'Dehors 2',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '11:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '12:00'),
+            }),
+            wrap({
+              id: 'out-3',
+              title: 'Dehors 3',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '13:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '14:00'),
+            }),
+            wrap({
+              id: 'span',
+              title: 'Chantier',
+              start_at: combineCivilDateTimeToIso('2026-09-08', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-10', '18:00'),
+            }),
+            wrap({
+              id: 'single',
+              title: 'Brief',
+              start_at: combineCivilDateTimeToIso('2026-09-15', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-15', '10:00'),
+            }),
+          ],
+        }}
+      />,
+    )
+
+    for (const day of monthWindow.days) {
+      expect(screen.getByTestId(`calendar-weekday-${day}`)).toBeTruthy()
+    }
+
+    const outsideWeek = screen.getByTestId('calendar-desktop-month-week-2026-08-31')
+    expect(outsideWeek.getAttribute('data-empty')).toBe('false')
+    expect(outsideWeek.querySelector('[data-testid="calendar-desktop-month-days"]')).toBeTruthy()
+    expect(screen.getByTestId('calendar-weekday-2026-08-31').className).toContain('bg-[#F5F4F0]')
+    fireEvent.click(screen.getByTestId('calendar-month-overflow-2026-08-31'))
+    expect(onOpenDay).toHaveBeenCalledWith('2026-08-31')
+
+    const bandWeek = screen.getByTestId('calendar-desktop-month-week-2026-09-07')
+    expect(bandWeek.getAttribute('data-empty')).toBe('false')
+    expect(bandWeek.querySelector('[data-testid="calendar-span-span"]')).toBeTruthy()
+    expect(bandWeek.querySelector('[data-testid="calendar-desktop-month-days"]')).toBeNull()
+    expect(bandWeek.className).not.toContain('flex-1')
+    expect(bandWeek.className).not.toContain('min-h-')
+
+    const busyWeek = screen.getByTestId('calendar-desktop-month-week-2026-09-14')
+    expect(busyWeek.getAttribute('data-empty')).toBe('false')
+    expect(busyWeek.querySelector('[data-testid="calendar-event-single"]')).toBeTruthy()
+    expect(busyWeek.querySelector('[data-testid="calendar-desktop-month-days"]')).toBeTruthy()
+    expect(busyWeek.className).not.toContain('flex-1')
+    expect(busyWeek.className).not.toContain('min-h-')
+
+    for (const start of ['2026-09-21', '2026-09-28']) {
+      const emptyWeek = screen.getByTestId(`calendar-desktop-month-week-${start}`)
+      expect(emptyWeek.getAttribute('data-empty')).toBe('true')
+      expect(emptyWeek.querySelector('[data-testid="calendar-desktop-month-days"]')).toBeNull()
+      expect(emptyWeek.querySelector('[data-testid="calendar-bands"]')).toBeNull()
+      expect(emptyWeek.className).not.toContain('flex-1')
+      expect(emptyWeek.className).not.toContain('min-h-')
+    }
+    expect(screen.getByTestId('calendar-weekday-2026-10-04').className).toContain('bg-[#F5F4F0]')
+    expect(screen.queryByTestId('calendar-desktop-month-empty')).toBeNull()
+  })
+
+  it('shows one discreet message when the desktop month has no executions', () => {
+    installTestMatchMedia(true, 'fine')
+    const monthWindow = resolveCalendarWindow('month', '2026-09-15')
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={monthWindow.days}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    const message = screen.getByTestId('calendar-desktop-month-empty')
+    expect(message.textContent).toBe('Aucun plan sur cette période.')
+    expect(message.className).toContain('text-xs')
+    expect(message.className).not.toContain('py-6')
+    expect(screen.getAllByText('Aucun plan sur cette période.')).toHaveLength(1)
+    const weekStarts = monthWindow.days.filter((_, index) => index % 7 === 0)
+    expect(weekStarts.length).toBeGreaterThan(1)
+    for (const start of weekStarts) {
+      const week = screen.getByTestId(`calendar-desktop-month-week-${start}`)
+      expect(week.getAttribute('data-empty')).toBe('true')
+      expect(week.querySelector('[data-testid="calendar-desktop-month-days"]')).toBeNull()
+      expect(week.querySelectorAll('[data-testid^="calendar-weekday-"]')).toHaveLength(7)
+    }
+    expect(screen.getByTestId('calendar-weekday-2026-08-31').className).toContain('bg-[#F5F4F0]')
+  })
+
   it('shows the establishment on a mobile cross month band', () => {
     render(
       <ExecutionCalendarView
