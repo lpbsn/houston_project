@@ -104,19 +104,86 @@ function utcNoon(date: string): Date {
   return new Date(`${date}T12:00:00.000Z`)
 }
 
+const CALENDAR_WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
+
+export function calendarWeekdayLabel(date: string): string {
+  const [year, month, day] = date.split('-').map((part) => Number.parseInt(part, 10))
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+  const index = weekday === 0 ? 6 : weekday - 1
+  return CALENDAR_WEEKDAY_LABELS[index] ?? ''
+}
+
+const longDayPeriodFormatter = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+const monthPeriodFormatter = new Intl.DateTimeFormat('fr-FR', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
+function formatCalendarDayPeriodLabel(date: string): string {
+  return longDayPeriodFormatter.format(utcNoon(date))
+}
+
+function formatCalendarMonthPeriodLabel(anchor: string): string {
+  return monthPeriodFormatter.format(utcNoon(`${anchor.slice(0, 7)}-01`))
+}
+
+/** Long desktop label. The mobile toolbar keeps formatCalendarPeriodLabel. */
+export function formatDesktopCalendarPeriodLabel(
+  granularity: ExecutionCalendarGranularity,
+  window: CalendarWindow,
+  anchor: string,
+): string {
+  if (granularity === 'day') {
+    return formatCalendarDayPeriodLabel(window.from)
+  }
+  if (granularity === 'week') {
+    const sameMonth = window.from.slice(0, 7) === window.to.slice(0, 7)
+    const sameYear = window.from.slice(0, 4) === window.to.slice(0, 4)
+    if (sameMonth) {
+      const startDay = new Intl.DateTimeFormat('fr-FR', {
+        day: 'numeric',
+        timeZone: 'UTC',
+      }).format(utcNoon(window.from))
+      const end = new Intl.DateTimeFormat('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(utcNoon(window.to))
+      return `${startDay} – ${end}`
+    }
+    const startOptions: Intl.DateTimeFormatOptions = {
+      day: 'numeric',
+      month: 'long',
+      timeZone: 'UTC',
+    }
+    if (!sameYear) startOptions.year = 'numeric'
+    const start = new Intl.DateTimeFormat('fr-FR', startOptions).format(utcNoon(window.from))
+    const end = new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(utcNoon(window.to))
+    return `${start} – ${end}`
+  }
+  return formatCalendarMonthPeriodLabel(anchor)
+}
+
 export function formatCalendarPeriodLabel(
   granularity: ExecutionCalendarGranularity,
   window: CalendarWindow,
   anchor: string,
 ): string {
   if (granularity === 'day') {
-    return new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(utcNoon(window.from))
+    return formatCalendarDayPeriodLabel(window.from)
   }
   if (granularity === 'week') {
     const start = new Intl.DateTimeFormat('fr-FR', {
@@ -132,9 +199,5 @@ export function formatCalendarPeriodLabel(
     }).format(utcNoon(window.to))
     return `${start} – ${end}`
   }
-  return new Intl.DateTimeFormat('fr-FR', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(utcNoon(`${anchor.slice(0, 7)}-01`))
+  return formatCalendarMonthPeriodLabel(anchor)
 }

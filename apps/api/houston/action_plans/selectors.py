@@ -698,6 +698,26 @@ def hydrate_action_plan_execution_feed_items(
     prefetch_related_objects(executions, *_EXECUTION_FEED_CARD_PREFETCH)
 
 
+def _action_plan_execution_calendar_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+) -> QuerySet[ActionPlanExecution]:
+    """Dated grid and unplanned share visibility, operational status, and scheduled rows."""
+    now = timezone.now()
+    visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
+    operational = Q(status__in=EXECUTION_CALENDAR_CURSOR_STATUSES) & (
+        Q(visible_from__isnull=True) | Q(visible_from__lte=now)
+    )
+    return (
+        ActionPlanExecution.objects.filter(visibility)
+        .filter(operational | Q(status=EXECUTION_STATUS_SCHEDULED))
+        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
+        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
+        .distinct()
+    )
+
+
 def action_plan_execution_calendar_items_queryset(
     *,
     membership: EstablishmentMembership,
@@ -705,20 +725,10 @@ def action_plan_execution_calendar_items_queryset(
     window_start: datetime,
     window_end: datetime,
 ) -> QuerySet[ActionPlanExecution]:
-    now = timezone.now()
-    visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
-    operational = Q(status__in=EXECUTION_CALENDAR_CURSOR_STATUSES) & (
-        Q(visible_from__isnull=True) | Q(visible_from__lte=now)
-    )
-    scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)
     window = Q(start_at__lte=window_end) & (Q(end_at__isnull=True) | Q(end_at__gt=window_start))
     return (
-        ActionPlanExecution.objects.filter(visibility)
-        .filter(operational | scheduled)
+        _action_plan_execution_calendar_queryset(membership=membership, view_mode=view_mode)
         .filter(window)
-        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
-        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
-        .distinct()
         .order_by("start_at", "id")
     )
 
@@ -728,19 +738,9 @@ def action_plan_execution_calendar_unplanned_queryset(
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
 ) -> QuerySet[ActionPlanExecution]:
-    now = timezone.now()
-    visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
-    operational = Q(status__in=EXECUTION_CALENDAR_CURSOR_STATUSES) & (
-        Q(visible_from__isnull=True) | Q(visible_from__lte=now)
-    )
-    scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)
     return (
-        ActionPlanExecution.objects.filter(visibility)
-        .filter(operational | scheduled)
+        _action_plan_execution_calendar_queryset(membership=membership, view_mode=view_mode)
         .filter(start_at__isnull=True)
-        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
-        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
-        .distinct()
         .order_by("-last_activity_at", "id")
     )
 

@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { testMediaMatches } from '@/test/viewport-match-media'
+import { installTestMatchMedia, testMediaMatches } from '@/test/viewport-match-media'
 
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
@@ -13,6 +13,7 @@ import * as businessTimezone from '@/lib/business-timezone'
 import { collectOverflowYScrollElements } from '@/lib/terrain-scroll-layout'
 
 import { ExecutionCalendarView } from './execution-calendar-view'
+import { resolveCalendarWindow } from '../lib/execution-calendar-window'
 
 const MONDAY_WEEK = [
   '2026-09-07',
@@ -100,6 +101,7 @@ function visibleWeekDays() {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   vi.useRealTimers()
   Reflect.deleteProperty(window, 'matchMedia')
 })
@@ -286,10 +288,10 @@ describe('ExecutionCalendarView', () => {
 
     const scheduled = screen.getByRole('button', { name: /Brief planifié/ })
     const pending = screen.getByRole('button', { name: /Brief à valider/ })
-    expect(scheduled.textContent).toContain('Planifiée')
-    expect(scheduled.getAttribute('aria-label')).toContain('Planifiée')
-    expect(pending.textContent).toContain('Validation')
-    expect(pending.getAttribute('aria-label')).toContain('Validation')
+    expect(scheduled.textContent).toContain('Planifié')
+    expect(scheduled.getAttribute('aria-label')).toContain('Planifié')
+    expect(pending.textContent).toContain('À valider')
+    expect(pending.getAttribute('aria-label')).toContain('À valider')
   })
 
   it('keeps status and org on month chips', () => {
@@ -841,8 +843,8 @@ describe('ExecutionCalendarView', () => {
     expect(onOpen).toHaveBeenCalledWith('exec-later')
   })
 
-  it('shows all seven weekdays at the lg breakpoint without in-week controls', () => {
-    stubMatchMedia(true)
+  it('keeps the compact 3-day week on a large touch screen', () => {
+    installTestMatchMedia(true, 'coarse')
     mockToday('2026-09-10')
     render(
       <ExecutionCalendarView
@@ -858,8 +860,9 @@ describe('ExecutionCalendarView', () => {
       />,
     )
 
-    expect(visibleWeekDays()).toEqual([...MONDAY_WEEK])
-    expect(screen.queryByTestId('calendar-week-next-days')).toBeNull()
+    expect(visibleWeekDays()).toEqual(['2026-09-09', '2026-09-10', '2026-09-11'])
+    expect(screen.getByTestId('calendar-week-next-days')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-desktop-week-grid')).toBeNull()
   })
 
   it('keeps one, two, and three overlapping plans independently clickable in the compact week', () => {
@@ -1038,7 +1041,7 @@ describe('ExecutionCalendarView', () => {
     )
 
     expect(screen.getByTestId('calendar-weekday-2026-09-07')).toBeTruthy()
-    expect(screen.getByTestId('calendar-weekday-2026-09-13')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-weekday-2026-09-13')).toBeNull()
     expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
     expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
   })
@@ -1203,6 +1206,248 @@ describe('ExecutionCalendarView', () => {
       />,
     )
     expect(spy).toHaveBeenCalledWith('UTC')
+  })
+
+  it('shows an empty desktop day and a mixed day in group order', () => {
+    installTestMatchMedia(false, 'fine')
+    const { rerender } = render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-10-13']}
+        month="2026-10"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+    expect(screen.getByText('Aucune exécution')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-desktop-day-count')).toBeNull()
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-10-13']}
+        month="2026-10"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          ...emptyCalendarData,
+          items: [
+            wrap({
+              id: 'timed',
+              title: 'Brief planifié',
+              status: 'scheduled',
+              start_at: combineCivilDateTimeToIso('2026-10-13', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-10-13', '10:00'),
+              involved_poles: [{ business_unit: { specific_name: 'Cuisine' } }],
+            }),
+            wrap({
+              id: 'all',
+              title: 'Inventaire',
+              all_day: true,
+              start_at: combineCivilDateTimeToIso('2026-10-13', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-10-13', '23:59'),
+            }),
+            wrap({
+              id: 'multi',
+              title: 'Chantier',
+              status: 'pending_validation',
+              start_at: combineCivilDateTimeToIso('2026-10-12', '18:00'),
+              end_at: combineCivilDateTimeToIso('2026-10-14', '09:00'),
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const headings = screen.getAllByRole('heading').map((heading) => heading.textContent)
+    expect(headings).toEqual(['Multi-jours', 'Journée entière', 'Dans la journée'])
+    expect(screen.getByTestId('calendar-desktop-day-count').textContent).toBe('3 exécutions')
+    const timed = screen.getByRole('button', { name: /Brief planifié/ })
+    expect(timed.textContent).toContain('Planifié')
+    expect(timed.textContent).toContain('Restaurant')
+    expect(timed.textContent).not.toContain('Cuisine')
+    expect(timed.textContent).toContain('09:00')
+    expect(screen.getByRole('button', { name: /Chantier/ }).textContent).toContain('À valider')
+    expect(screen.queryByText(/\+\d+ autre/)).toBeNull()
+  })
+
+  it('keeps seven readable desktop week columns on a narrow computer window', () => {
+    installTestMatchMedia(false, 'fine')
+    mockToday('2026-09-10')
+    const items = Array.from({ length: 6 }, (_, index) =>
+      wrap({
+        id: `plan-${index}`,
+        title: `Plan ${index}`,
+        start_at: combineCivilDateTimeToIso('2026-09-08', '09:00'),
+        end_at: combineCivilDateTimeToIso('2026-09-08', '10:00'),
+        assignees:
+          index === 0 ? [{ membership_id: 'm-1', display_name: 'Alice Martin' }] : [],
+        establishment_name: index === 0 ? 'Hôtel du Parc' : undefined,
+      }),
+    )
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        showEstablishment
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{ ...emptyCalendarData, items }}
+      />,
+    )
+
+    const grid = screen.getByTestId('calendar-desktop-week-grid')
+    expect(grid.style.gridTemplateColumns).toBe('repeat(7, minmax(11rem, 1fr))')
+    expect(grid.style.minWidth).toBe('77rem')
+    expect(screen.getByTestId('calendar-desktop-week-scroller').className).toContain('overflow-auto')
+    expect(visibleWeekDays()).toEqual([...MONDAY_WEEK])
+    expect(screen.queryByTestId('calendar-week-next-days')).toBeNull()
+    expect(screen.queryByText(/\+\d+ autre/)).toBeNull()
+    expect(screen.getAllByRole('button', { name: /Plan / })).toHaveLength(6)
+    const line = screen.getByTestId('calendar-event-plan-0')
+    expect(line.className).toContain('items-start')
+    const title = line.querySelector('span.font-semibold')
+    expect(title?.textContent).toBe('Plan 0')
+    expect(title?.className).not.toContain('truncate')
+    expect(line.textContent).toContain('09:00')
+    expect(line.textContent).toContain('Restaurant')
+    expect(line.textContent).toContain('Hôtel du Parc')
+    expect(line.textContent).not.toContain('Alice Martin')
+    expect(line.getAttribute('aria-label')).toContain('Alice Martin')
+    expect(screen.queryByTestId('calendar-status-pill-plan-0')).toBeNull()
+    const dot = screen.getByTestId('calendar-status-dot-plan-0')
+    expect(dot.className).toContain('rounded-full')
+    expect(dot.style.backgroundColor).toBe('rgb(58, 122, 150)')
+  })
+
+  it('opens the desktop day of an outside-month date from the overflow control', () => {
+    installTestMatchMedia(true, 'fine')
+    const onOpenDay = vi.fn()
+    const onOpen = vi.fn()
+    const monthWindow = resolveCalendarWindow('month', '2026-09-15')
+    const outsideDay = monthWindow.days.find((day) => !day.startsWith('2026-09'))
+    expect(outsideDay).toBe('2026-08-31')
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={monthWindow.days}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        onOpenDay={onOpenDay}
+        showEstablishment
+        data={{
+          ...emptyCalendarData,
+          items: [
+            wrap({
+              id: 'out-1',
+              title: 'Dehors 1',
+              establishment_name: 'Hôtel du Parc',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '10:00'),
+            }),
+            wrap({
+              id: 'out-2',
+              title: 'Dehors 2',
+              establishment_name: 'Hôtel du Parc',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '11:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '12:00'),
+            }),
+            wrap({
+              id: 'out-3',
+              title: 'Dehors 3',
+              establishment_name: 'Hôtel du Parc',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '13:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '14:00'),
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const outside = screen.getByRole('button', { name: /Dehors 1/ })
+    expect(outside.textContent).toContain('Hôtel du Parc')
+    expect(outside.textContent).not.toContain('En cours')
+    expect(screen.getByTestId('calendar-status-dot-out-1').getAttribute('style')).toContain('background-color')
+    expect(screen.getByTestId('calendar-establishment-out-1').className).not.toContain('sr-only')
+    expect(screen.queryByRole('button', { name: /Dehors 3/ })).toBeNull()
+    fireEvent.click(screen.getByTestId('calendar-month-overflow-2026-08-31'))
+    expect(onOpenDay).toHaveBeenCalledWith('2026-08-31')
+    expect(onOpen).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /Dehors 1/ }))
+    expect(onOpen).toHaveBeenCalledWith('out-1')
+  })
+
+  it('shows the establishment on a mobile cross month band', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']}
+        month="2026-09"
+        showEstablishment
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          ...emptyCalendarData,
+          items: [
+            wrap({
+              id: 'exec-cross',
+              title: 'Brief cuisine',
+              establishment_name: 'Hôtel du Parc',
+              involved_poles: [{ business_unit: { specific_name: 'Cuisine' } }],
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const establishment = screen.getByTestId('calendar-establishment-exec-cross')
+    expect(establishment.textContent).toBe('Hôtel du Parc')
+    expect(establishment.className).not.toContain('sr-only')
+    const chip = screen.getByRole('button', { name: /Brief cuisine/ })
+    expect(chip.textContent).toContain('Restaurant')
+    expect(chip.textContent).not.toContain('Cuisine')
+  })
+
+  it('keeps the compact week in the native runtime even with a fine pointer', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    installTestMatchMedia(true, 'fine')
+    mockToday('2026-09-10')
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    expect(screen.queryByTestId('calendar-desktop-week-grid')).toBeNull()
+    expect(visibleWeekDays()).toEqual(['2026-09-09', '2026-09-10', '2026-09-11'])
   })
 })
 

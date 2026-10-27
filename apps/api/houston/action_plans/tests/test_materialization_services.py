@@ -4,25 +4,31 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
-from django.db import close_old_connections, connections
+from django.db import close_old_connections, connection, connections
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from houston.action_plans.constants import (
+    CANCEL_ORIGIN_SCHEDULE_SYNC,
     EXECUTION_LIFECYCLE_EVENT_CREATED,
     EXECUTION_LIFECYCLE_EVENT_STARTED,
+    EXECUTION_STATUS_CANCELED,
 )
 from houston.action_plans.materialization import (
     MATERIALIZATION_HORIZON_DAYS,
     VISIBLE_FROM_OFFSET,
+    _load_schedule_for_materialization,
     ensure_visible_action_plan_executions_materialized,
     materialize_execution_from_schedule,
     materialize_schedule_occurrences_in_horizon,
     materialize_schedules_horizon,
+    materialize_visible_schedule_occurrences_in_window,
 )
 from houston.action_plans.models import (
     ActionPlanExecution,
     ActionPlanExecutionLifecycleEvent,
     ActionPlanSchedule,
+    ActionPlanScheduleAssignee,
 )
 from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
@@ -34,6 +40,7 @@ from houston.action_plans.tests.helpers import (
     visible_schedule_window,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.timezone_utils import establishment_local_date
 from houston.notifications.models import Notification
 from houston.testing.factories import create_membership
 from houston.testing.taxonomy import create_membership_with_business_unit_scope
@@ -468,3 +475,283 @@ def test_materialize_schedules_horizon_counts_executions(
         establishment_id=owner_membership.establishment_id,
     )
     assert created > 0
+
+
+def _calendar_window(membership, *, days: int = 10, view_mode: str = "general"):
+    today = establishment_local_date(establishment=membership.establishment)
+    return {
+        "membership": membership,
+        "view_mode": view_mode,
+        "from_date": today,
+        "until_date": today + timezone.timedelta(days=days),
+    }
+
+
+def test_calendar_window_skips_settled_occurrences_and_keeps_repairs(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=21)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday", "tuesday", "wednesday", "thursday", "friday"],
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    stamped = ActionPlanSchedule.objects.get(pk=schedule.pk).last_materialized_at
+    call = _calendar_window(owner_membership)
+
+    created = materialize_visible_schedule_occurrences_in_window(**call)
+    assert created > 0
+    schedule.refresh_from_db()
+    assert schedule.last_materialized_at == stamped
+    occurrence_ids = set(
+        ActionPlanExecution.objects.filter(action_plan_schedule=schedule).values_list(
+            "id",
+            flat=True,
+        )
+    )
+
+    with CaptureQueriesContext(connection) as ctx:
+        with patch(
+            "houston.action_plans.materialization._materialize_occurrence"
+        ) as materialize_occurrence:
+            again = materialize_visible_schedule_occurrences_in_window(**call)
+    assert again == 0
+    materialize_occurrence.assert_not_called()
+    assert len(ctx.captured_queries) < 12
+
+    incomplete = (
+        ActionPlanExecution.objects.filter(action_plan_schedule=schedule)
+        .order_by("occurrence_date")
+        .first()
+    )
+    incomplete.task_executions.all().delete()
+    repaired = materialize_visible_schedule_occurrences_in_window(**call)
+    assert repaired >= 1
+    assert incomplete.task_executions.exists()
+
+    missing_date = incomplete.occurrence_date
+    incomplete.delete()
+    materialize_visible_schedule_occurrences_in_window(**call)
+    recreated = ActionPlanExecution.objects.get(
+        action_plan_schedule=schedule,
+        occurrence_date=missing_date,
+    )
+    assert recreated.id not in occurrence_ids
+    assert recreated.task_executions.exists()
+    assert recreated.assignees.exists()
+
+    future = (
+        ActionPlanExecution.objects.filter(
+            action_plan_schedule=schedule,
+            start_at__gt=timezone.now(),
+        )
+        .order_by("start_at")
+        .first()
+    )
+    assert future is not None
+    future.status = EXECUTION_STATUS_CANCELED
+    future.cancel_origin = CANCEL_ORIGIN_SCHEDULE_SYNC
+    future.canceled_at = timezone.now()
+    future.save(update_fields=["status", "cancel_origin", "canceled_at", "updated_at"])
+    materialize_visible_schedule_occurrences_in_window(**call)
+    future.refresh_from_db()
+    assert future.status != EXECUTION_STATUS_CANCELED
+    assert future.cancel_origin is None
+
+
+def test_calendar_window_materializes_a_new_individual_assignee(
+    owner_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    staff_a = _create_staff(owner_membership.establishment, business_unit)
+    staff_b = _create_staff(owner_membership.establishment, business_unit)
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=21)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday", "wednesday", "friday"],
+        assignees=[
+            build_schedule_assignee_payload(membership=staff_a, business_unit=business_unit),
+        ],
+        use_shared_chronology=False,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    call = _calendar_window(owner_membership)
+    assert materialize_visible_schedule_occurrences_in_window(**call) > 0
+    assert not ActionPlanExecution.objects.filter(
+        action_plan_schedule=schedule,
+        chronology_owner_membership=staff_b,
+    ).exists()
+
+    ActionPlanScheduleAssignee.objects.create(
+        action_plan_schedule=schedule,
+        membership=staff_b,
+        business_unit=business_unit,
+    )
+    materialize_visible_schedule_occurrences_in_window(**call)
+    created_for_b = ActionPlanExecution.objects.filter(
+        action_plan_schedule=schedule,
+        chronology_owner_membership=staff_b,
+    )
+    assert created_for_b.exists()
+    assert all(execution.task_executions.exists() for execution in created_for_b)
+    assert all(execution.assignees.exists() for execution in created_for_b)
+
+    with patch(
+        "houston.action_plans.materialization._materialize_occurrence"
+    ) as materialize_occurrence:
+        assert materialize_visible_schedule_occurrences_in_window(**call) == 0
+    materialize_occurrence.assert_not_called()
+
+
+def test_calendar_window_personal_view_stays_on_assigned_schedules(
+    owner_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    staff_a = _create_staff(owner_membership.establishment, business_unit)
+    staff_b = _create_staff(owner_membership.establishment, business_unit)
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=14)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday", "wednesday", "friday"],
+        assignees=[
+            build_schedule_assignee_payload(membership=staff_a, business_unit=business_unit),
+        ],
+        use_shared_chronology=True,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    hidden = materialize_visible_schedule_occurrences_in_window(
+        **_calendar_window(staff_b, view_mode="personal"),
+    )
+    assert hidden == 0
+    assert not ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+    visible = materialize_visible_schedule_occurrences_in_window(
+        **_calendar_window(staff_a, view_mode="personal"),
+    )
+    assert visible > 0
+    assert ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+
+def test_calendar_window_repairs_assignees_only_when_the_schedule_can_supply_them(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=21)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday", "wednesday", "friday"],
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    call = _calendar_window(owner_membership)
+    assert materialize_visible_schedule_occurrences_in_window(**call) > 0
+    execution = ActionPlanExecution.objects.filter(action_plan_schedule=schedule).earliest(
+        "occurrence_date"
+    )
+    execution.assignees.all().delete()
+    assert execution.task_executions.exists()
+    assert execution.execution_teams.exists()
+
+    repaired = materialize_visible_schedule_occurrences_in_window(**call)
+    assert repaired >= 1
+    assert execution.assignees.filter(membership=staff_membership).exists()
+
+    execution.assignees.all().delete()
+    schedule.schedule_assignees.all().delete()
+    with patch(
+        "houston.action_plans.materialization._materialize_occurrence"
+    ) as materialize_occurrence:
+        assert materialize_visible_schedule_occurrences_in_window(**call) == 0
+    materialize_occurrence.assert_not_called()
+
+    ActionPlanScheduleAssignee.objects.create(
+        action_plan_schedule=schedule,
+        membership=staff_membership,
+        business_unit=business_unit,
+    )
+    materialize_visible_schedule_occurrences_in_window(**call)
+    assert execution.assignees.filter(membership=staff_membership).exists()
+
+
+def test_calendar_window_loads_each_schedule_once_while_creating_occurrences(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=21)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday", "tuesday", "wednesday", "thursday", "friday"],
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    loads = {"count": 0}
+    real_load = _load_schedule_for_materialization
+
+    def counting_load(candidate):
+        loads["count"] += 1
+        return real_load(candidate)
+
+    call = _calendar_window(owner_membership)
+    with patch(
+        "houston.action_plans.materialization._load_schedule_for_materialization",
+        side_effect=counting_load,
+    ):
+        created = materialize_visible_schedule_occurrences_in_window(**call)
+    assert created > 1
+    assert loads["count"] == 1
+    executions = list(ActionPlanExecution.objects.filter(action_plan_schedule=schedule))
+    assert len(executions) == created
+    assert len({execution.occurrence_date for execution in executions}) == created
+    assert all(execution.task_executions.exists() for execution in executions)
+    assert all(execution.assignees.exists() for execution in executions)
+
+    loads["count"] = 0
+    with patch(
+        "houston.action_plans.materialization._load_schedule_for_materialization",
+        side_effect=counting_load,
+    ):
+        assert materialize_visible_schedule_occurrences_in_window(**call) == 0
+    assert loads["count"] == 0

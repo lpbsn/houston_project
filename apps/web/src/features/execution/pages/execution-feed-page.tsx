@@ -111,12 +111,14 @@ import {
   calendarAnchorToday,
   calendarTimezoneScopeKey,
   formatCalendarPeriodLabel,
+  formatDesktopCalendarPeriodLabel,
   rememberScopedCalendarTimezone,
   resolveCalendarWindow,
   resolveScopedCalendarTimezone,
   shiftCalendarAnchor,
   type RememberedCalendarTimezone,
 } from '../lib/execution-calendar-window'
+import { useDesktopCalendarSurface } from '../lib/execution-calendar-surface'
 
 type ExecutionFeedPageProps = {
   onNavigate?: (pathname: string) => void
@@ -209,6 +211,7 @@ function ExecutionFeedPageContent({
   const { route, search, navigate } = useAppRoute()
   const isCross = source === 'cross'
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const desktopCalendar = useDesktopCalendarSurface()
   const readingScopeKey = executionFeedReadingScopeKey(source, establishmentId)
   const [initialReading] = useState(() => readExecutionFeedReading(readingScopeKey))
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -832,8 +835,13 @@ function ExecutionFeedPageContent({
           </TerrainHubViewToolbar>
           {layout === 'calendar' ? (
             <CalendarPeriodToolbar
+              desktop={desktopCalendar}
               granularity={granularity}
-              periodLabel={formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)}
+              periodLabel={
+                desktopCalendar
+                  ? formatDesktopCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)
+                  : formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)
+              }
               onGranularityChange={(next) => replaceFeedUrl({ granularity: next })}
               onPrevious={() =>
                 replaceFeedUrl({
@@ -901,6 +909,8 @@ function ExecutionFeedPageContent({
               error={calendarQuery.error}
               onRetry={() => void calendarQuery.refetch()}
               onOpenExecution={openExecution}
+              onOpenDay={(anchor) => replaceFeedUrl({ granularity: 'day', anchor })}
+              showEstablishment={isCross}
             />
           </div>
         ) : (
@@ -1108,6 +1118,7 @@ function ExecutionFeedPageContent({
 }
 
 function CalendarPeriodToolbar({
+  desktop,
   granularity,
   periodLabel,
   onGranularityChange,
@@ -1115,6 +1126,7 @@ function CalendarPeriodToolbar({
   onToday,
   onNext,
 }: {
+  desktop: boolean
   granularity: ExecutionCalendarGranularity
   periodLabel: string
   onGranularityChange: (value: ExecutionCalendarGranularity) => void
@@ -1162,23 +1174,21 @@ function CalendarPeriodToolbar({
     </div>
   )
 
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
-
   return (
     <div className="px-3 pb-2">
       <div
         className={cn(
           'flex flex-wrap items-center gap-2',
-          isDesktopWeb && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+          desktop && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
         )}
       >
         <p className="min-w-0 flex-1 truncate text-sm font-semibold capitalize text-[#1a1a1a]">
           {periodLabel}
         </p>
-        <div className={cn('order-3 w-full', isDesktopWeb && 'order-none w-auto justify-self-center')}>
+        <div className={cn('order-3 w-full', desktop && 'order-none w-auto justify-self-center')}>
           {granularityControl}
         </div>
-        <div className={cn('ml-auto', isDesktopWeb && 'ml-0 justify-self-end')}>{nav}</div>
+        <div className={cn('ml-auto', desktop && 'ml-0 justify-self-end')}>{nav}</div>
       </div>
     </div>
   )
