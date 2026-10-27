@@ -1208,6 +1208,108 @@ describe('ExecutionCalendarView', () => {
     expect(spy).toHaveBeenCalledWith('UTC')
   })
 
+  it('tints desktop date headers without changing execution or outside-month surfaces', () => {
+    installTestMatchMedia(true, 'fine')
+    mockToday('2026-09-10')
+    const { rerender } = render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-10']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+    const dayHeader = screen.getByTestId('calendar-weekday-2026-09-10')
+    expect(dayHeader.className).toContain('bg-[#F7F7F4]')
+    expect(dayHeader.className).toContain('px-1')
+    expect(dayHeader.className).toContain('py-2')
+    const dayPill = dayHeader.querySelector('.rounded-full')
+    expect(dayPill?.className).toContain('h-7')
+    expect(dayPill?.className).toContain('bg-[#114660]')
+    expect(screen.getByText('Aucune exécution').className).not.toContain('bg-[#F7F7F4]')
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          ...emptyCalendarData,
+          items: [
+            wrap({
+              id: 'week-span',
+              title: 'Chantier',
+              start_at: combineCivilDateTimeToIso('2026-09-08', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-10', '18:00'),
+            }),
+          ],
+        }}
+      />,
+    )
+    for (const day of MONDAY_WEEK) {
+      const header = screen.getByTestId(`calendar-weekday-${day}`)
+      expect(header.className).toContain('bg-[#F7F7F4]')
+      expect(header.className).toContain('border-b')
+      expect(screen.getByTestId(`calendar-desktop-column-${day}`).className).not.toContain('bg-[#F7F7F4]')
+    }
+    expect(screen.getByTestId('calendar-weekday-2026-09-10').querySelector('.rounded-full')?.className).toContain('bg-[#114660]')
+    expect(screen.getByTestId('calendar-bands').className).toContain('bg-white')
+
+    const monthWindow = resolveCalendarWindow('month', '2026-09-15')
+    rerender(
+      <ExecutionCalendarView
+        granularity="month"
+        days={monthWindow.days}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          ...emptyCalendarData,
+          items: [
+            wrap({
+              id: 'month-single',
+              title: 'Brief',
+              start_at: combineCivilDateTimeToIso('2026-09-15', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-15', '10:00'),
+            }),
+            wrap({
+              id: 'month-outside',
+              title: 'Dehors',
+              start_at: combineCivilDateTimeToIso('2026-08-31', '09:00'),
+              end_at: combineCivilDateTimeToIso('2026-08-31', '10:00'),
+            }),
+          ],
+        }}
+      />,
+    )
+    const inMonthHeader = screen.getByTestId('calendar-weekday-2026-09-15')
+    expect(inMonthHeader.className).toContain('bg-[#F7F7F4]')
+    expect(inMonthHeader.className).not.toContain('bg-[#F5F4F0]')
+    expect(inMonthHeader.querySelector('.rounded-full')?.className).not.toContain('bg-[#114660]')
+    const outsideHeader = screen.getByTestId('calendar-weekday-2026-08-31')
+    expect(outsideHeader.className).toContain('bg-[#F5F4F0]')
+    expect(outsideHeader.className).not.toContain('bg-[#F7F7F4]')
+    const executionCell = screen.getByTestId('calendar-event-month-single').parentElement
+    expect(executionCell?.className).not.toContain('bg-[#F7F7F4]')
+    expect(executionCell?.className).not.toContain('bg-[#F5F4F0]')
+    const outsideCell = screen.getByTestId('calendar-event-month-outside').parentElement
+    expect(outsideCell?.className).toContain('bg-[#F5F4F0]')
+    expect(outsideCell?.className).not.toContain('bg-[#F7F7F4]')
+  })
+
   it('shows an empty desktop day and a mixed day in group order', () => {
     installTestMatchMedia(false, 'fine')
     const { rerender } = render(
