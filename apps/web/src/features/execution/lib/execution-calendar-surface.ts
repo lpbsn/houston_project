@@ -16,7 +16,7 @@ export function useDesktopCalendarSurface(): boolean {
       return
     }
     const media = window.matchMedia(COMPUTER_POINTER_QUERY)
-    const update = () => setDesktop(getAppRuntime() === 'web' && media.matches)
+    const update = () => setDesktop(isDesktopCalendarSurface())
     update()
     if (typeof media.addEventListener === 'function') {
       media.addEventListener('change', update)

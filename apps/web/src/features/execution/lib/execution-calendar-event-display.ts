@@ -18,8 +18,6 @@ type InvolvedPoleLike = {
   }
 }
 
-export type CalendarEventChromeDensity = 'comfortable' | 'compact' | 'lane'
-
 type CalendarEventChrome = {
   bar: string
   background: string
@@ -66,12 +64,6 @@ export const CALENDAR_DAY_GROUP_LABEL: Record<ExecutionCalendarCategory, string>
   multi_day: 'Multi-jours',
   all_day: 'Journée entière',
   timed: 'Dans la journée',
-}
-
-export function calendarEventStatusLabel(
-  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'validated_at'>,
-): string {
-  return formatActionPlanFeedCardStatusLabel(item)
 }
 
 export function calendarEventPilotLabel(item: ActionPlanExecutionFeedItem): string {
@@ -156,39 +148,13 @@ export function calendarEventScheduleLabel(
   return null
 }
 
-export function resolveCalendarEventChromeDensity(input: {
-  variant: 'timed' | 'allDay' | 'month'
-  heightPx?: number
-  narrow?: boolean
-}): CalendarEventChromeDensity {
-  if (input.variant === 'month') {
-    return 'compact'
-  }
-  if (input.variant === 'allDay') {
-    return 'lane'
-  }
-  const height = input.heightPx ?? 0
-  if (input.narrow) {
-    return height < 56 ? 'compact' : 'comfortable'
-  }
-  return height < 44 ? 'compact' : 'comfortable'
-}
-
-export function calendarLaneSuiteClassName(): string {
-  return 'hidden shrink-0 text-[9px] font-medium opacity-70 md:inline'
-}
-
-export function calendarLaneStatusLabelClassName(): string {
-  return 'sr-only md:not-sr-only md:truncate'
-}
-
 function assigneeNames(assignees: ActionPlanExecutionFeedItem['assignees']): string[] {
   return assignees
     .map((assignee) => assignee.display_name.trim())
     .filter((name) => name.length > 0)
 }
 
-export function calendarEventAssigneeInitials(
+function calendarEventAssigneeInitials(
   assignees: ActionPlanExecutionFeedItem['assignees'],
 ): string[] {
   return assigneeNames(assignees)
@@ -196,7 +162,7 @@ export function calendarEventAssigneeInitials(
     .map((name) => getDisplayNameInitials(name))
 }
 
-export function calendarEventAssigneeOverflow(
+function calendarEventAssigneeOverflow(
   assignees: ActionPlanExecutionFeedItem['assignees'],
 ): number {
   return Math.max(0, assigneeNames(assignees).length - MAX_ASSIGNEE_AVATARS)
@@ -237,7 +203,7 @@ export function calendarEventPresentation(item: ActionPlanExecutionFeedItem): {
   return {
     title: item.title,
     chrome: calendarEventChromeForStatus(item.status),
-    statusLabel: calendarEventStatusLabel(item),
+    statusLabel: formatActionPlanFeedCardStatusLabel(item),
     assigneeInitials: calendarEventAssigneeInitials(item.assignees),
     assigneeOverflow: calendarEventAssigneeOverflow(item.assignees),
     orgBadges: calendarEventOrgBadges(item),

@@ -36,26 +36,33 @@ export type CalendarSpan = {
 /** Two distinct civil dates are multi-day, including spans under 24h. */
 export type ExecutionCalendarCategory = 'multi_day' | 'all_day' | 'timed'
 
+function executionCalendarCategoryForRange(
+  item: ActionPlanExecutionFeedItem,
+  range: { start: string; end: string },
+): ExecutionCalendarCategory {
+  if (range.start !== range.end) return 'multi_day'
+  if (item.all_day) return 'all_day'
+  return 'timed'
+}
+
 export function executionCalendarCategory(
   item: ActionPlanExecutionFeedItem,
   timeZone: string = BUSINESS_TIMEZONE,
 ): ExecutionCalendarCategory | null {
   const range = executionCalendarDateRange(item, timeZone)
   if (!range) return null
-  if (range.start !== range.end) return 'multi_day'
-  if (item.all_day) return 'all_day'
-  return 'timed'
+  return executionCalendarCategoryForRange(item, range)
 }
 
-export const DESKTOP_MONTH_VISIBLE_BANDS = 3
-export const DESKTOP_MONTH_VISIBLE_SINGLES = 2
+const DESKTOP_MONTH_VISIBLE_BANDS = 3
+const DESKTOP_MONTH_VISIBLE_SINGLES = 2
 
-export type DesktopWeekLayout = {
+type DesktopWeekLayout = {
   bands: CalendarSpan[]
   columns: Array<{ day: string; items: ActionPlanExecutionFeedItem[] }>
 }
 
-export type DesktopMonthDayCell = {
+type DesktopMonthDayCell = {
   day: string
   singles: CalendarSpan[]
   overflowCount: number
@@ -66,12 +73,12 @@ export type DesktopMonthRowLayout = {
   days: DesktopMonthDayCell[]
 }
 
-export type DesktopDayGroup = {
+type DesktopDayGroup = {
   category: ExecutionCalendarCategory
   items: ActionPlanExecutionFeedItem[]
 }
 
-export type DesktopDayLayout = {
+type DesktopDayLayout = {
   count: number
   groups: DesktopDayGroup[]
 }
@@ -107,7 +114,7 @@ export function placeCalendarItems(
       item,
       start: range.start,
       end: range.end,
-      category: range.start === range.end ? (item.all_day ? 'all_day' : 'timed') : 'multi_day',
+      category: executionCalendarCategoryForRange(item, range),
     })
   }
   return placed
@@ -123,7 +130,11 @@ function splitPlaced(placed: CalendarPlacement[]) {
   return { multiDay, singleDay }
 }
 
-function layoutSpans(placed: CalendarPlacement[], days: string[]): CalendarSpan[] {
+/** One segment per execution and visible row, with deterministic non-overlapping lanes. */
+export function buildCalendarSpansFromPlaced(
+  placed: CalendarPlacement[],
+  days: string[],
+): CalendarSpan[] {
   if (days.length === 0) return []
   const candidates = placed.flatMap((placement) => {
     const startColumn = days.findIndex((day) => day >= placement.start && day <= placement.end)
@@ -149,10 +160,22 @@ function layoutSpans(placed: CalendarPlacement[], days: string[]): CalendarSpan[
   })
 }
 
-function weekLayoutFromPlaced(placed: CalendarPlacement[], days: string[]): DesktopWeekLayout {
+export function buildCalendarSpans(
+  items: ActionPlanExecutionFeedItem[],
+  days: string[],
+  timeZone: string = BUSINESS_TIMEZONE,
+): CalendarSpan[] {
+  return buildCalendarSpansFromPlaced(placeCalendarItems(items, timeZone), days)
+}
+
+/** Multi-day bands keep lanes. Other executions stay in their column, ordered by start then id. */
+export function buildDesktopWeekLayoutFromPlaced(
+  placed: CalendarPlacement[],
+  days: string[],
+): DesktopWeekLayout {
   const { multiDay, singleDay } = splitPlaced(placed)
   return {
-    bands: layoutSpans(multiDay, days),
+    bands: buildCalendarSpansFromPlaced(multiDay, days),
     columns: days.map((day) => ({
       day,
       items: singleDay
@@ -163,9 +186,17 @@ function weekLayoutFromPlaced(placed: CalendarPlacement[], days: string[]): Desk
   }
 }
 
+export function buildDesktopWeekLayout(
+  items: ActionPlanExecutionFeedItem[],
+  days: string[],
+  timeZone: string = BUSINESS_TIMEZONE,
+): DesktopWeekLayout {
+  return buildDesktopWeekLayoutFromPlaced(placeCalendarItems(items, timeZone), days)
+}
+
 function monthRowFromPlaced(placed: CalendarPlacement[], days: string[]): DesktopMonthRowLayout {
   const { multiDay, singleDay } = splitPlaced(placed)
-  const spans = layoutSpans(multiDay, days)
+  const spans = buildCalendarSpansFromPlaced(multiDay, days)
   const hiddenBands = Array.from({ length: days.length }, () => 0)
   for (const span of spans) {
     if (span.lane < DESKTOP_MONTH_VISIBLE_BANDS) continue
@@ -174,7 +205,7 @@ function monthRowFromPlaced(placed: CalendarPlacement[], days: string[]): Deskto
     }
   }
   const singlesByDay: CalendarSpan[][] = days.map(() => [])
-  for (const span of layoutSpans(singleDay, days)) {
+  for (const span of buildCalendarSpansFromPlaced(singleDay, days)) {
     singlesByDay[span.startColumn]?.push(span)
   }
   return {
@@ -189,36 +220,6 @@ function monthRowFromPlaced(placed: CalendarPlacement[], days: string[]): Deskto
       }
     }),
   }
-}
-
-function dayLayoutFromPlaced(placed: CalendarPlacement[], day: string): DesktopDayLayout {
-  const present = placed.filter((placement) => day >= placement.start && day <= placement.end)
-  return {
-    count: present.length,
-    groups: DAY_GROUP_ORDER.flatMap((category) => {
-      const grouped = present
-        .filter((placement) => placement.category === category)
-        .map((placement) => placement.item)
-        .sort(compareByStartThenId)
-      return grouped.length > 0 ? [{ category, items: grouped }] : []
-    }),
-  }
-}
-
-/** Multi-day bands keep lanes. Other executions stay in their column, ordered by start then id. */
-export function buildDesktopWeekLayoutFromPlaced(
-  placed: CalendarPlacement[],
-  days: string[],
-): DesktopWeekLayout {
-  return weekLayoutFromPlaced(placed, days)
-}
-
-export function buildDesktopWeekLayout(
-  items: ActionPlanExecutionFeedItem[],
-  days: string[],
-  timeZone: string = BUSINESS_TIMEZONE,
-): DesktopWeekLayout {
-  return weekLayoutFromPlaced(placeCalendarItems(items, timeZone), days)
 }
 
 /**
@@ -250,7 +251,17 @@ export function buildDesktopDayLayoutFromPlaced(
   placed: CalendarPlacement[],
   day: string,
 ): DesktopDayLayout {
-  return dayLayoutFromPlaced(placed, day)
+  const present = placed.filter((placement) => day >= placement.start && day <= placement.end)
+  return {
+    count: present.length,
+    groups: DAY_GROUP_ORDER.flatMap((category) => {
+      const grouped = present
+        .filter((placement) => placement.category === category)
+        .map((placement) => placement.item)
+        .sort(compareByStartThenId)
+      return grouped.length > 0 ? [{ category, items: grouped }] : []
+    }),
+  }
 }
 
 export function buildDesktopDayLayout(
@@ -258,21 +269,5 @@ export function buildDesktopDayLayout(
   day: string,
   timeZone: string = BUSINESS_TIMEZONE,
 ): DesktopDayLayout {
-  return dayLayoutFromPlaced(placeCalendarItems(items, timeZone), day)
-}
-
-/** One segment per execution and visible row, with deterministic non-overlapping lanes. */
-export function buildCalendarSpansFromPlaced(
-  placed: CalendarPlacement[],
-  days: string[],
-): CalendarSpan[] {
-  return layoutSpans(placed, days)
-}
-
-export function buildCalendarSpans(
-  items: ActionPlanExecutionFeedItem[],
-  days: string[],
-  timeZone: string = BUSINESS_TIMEZONE,
-): CalendarSpan[] {
-  return layoutSpans(placeCalendarItems(items, timeZone), days)
+  return buildDesktopDayLayoutFromPlaced(placeCalendarItems(items, timeZone), day)
 }

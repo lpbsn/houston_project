@@ -1751,36 +1751,27 @@ class ActionPlanExecutionCalendarView(EstablishmentScopedActionPlanMixin, APIVie
             to_date=to_date,
         )
         as_of = calendar["as_of"]
+
+        def serialize_bucket(executions):
+            return [
+                {
+                    "item_type": "action_plan_execution",
+                    "action_plan_execution": serialize_action_plan_execution_feed_item(
+                        execution=execution,
+                        membership=membership,
+                        is_overdue=action_plan_execution_overdue(
+                            execution=execution,
+                            now=as_of,
+                        ),
+                    ),
+                }
+                for execution in executions
+            ]
+
         payload = {
             "timezone": calendar["timezone"],
-            "items": [
-                {
-                    "item_type": "action_plan_execution",
-                    "action_plan_execution": serialize_action_plan_execution_feed_item(
-                        execution=execution,
-                        membership=membership,
-                        is_overdue=action_plan_execution_overdue(
-                            execution=execution,
-                            now=as_of,
-                        ),
-                    ),
-                }
-                for execution in calendar["items"]
-            ],
-            "unplanned": [
-                {
-                    "item_type": "action_plan_execution",
-                    "action_plan_execution": serialize_action_plan_execution_feed_item(
-                        execution=execution,
-                        membership=membership,
-                        is_overdue=action_plan_execution_overdue(
-                            execution=execution,
-                            now=as_of,
-                        ),
-                    ),
-                }
-                for execution in calendar["unplanned"]
-            ],
+            "items": serialize_bucket(calendar["items"]),
+            "unplanned": serialize_bucket(calendar["unplanned"]),
         }
         return Response(ActionPlanExecutionCalendarResponseSerializer(payload).data)
 
