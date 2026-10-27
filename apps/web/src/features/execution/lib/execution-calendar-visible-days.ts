@@ -1,11 +1,9 @@
 export const COMPACT_WEEK_VISIBLE_DAYS = 3
 
-export function weekVisibleDayCount(isLg: boolean, dayCount: number): number {
+/** Band calendar week. Desktop week is a separate seven-column surface. */
+export function weekVisibleDayCount(dayCount: number): number {
   if (dayCount <= 0) {
     return 0
-  }
-  if (isLg) {
-    return dayCount
   }
   return Math.min(COMPACT_WEEK_VISIBLE_DAYS, dayCount)
 }

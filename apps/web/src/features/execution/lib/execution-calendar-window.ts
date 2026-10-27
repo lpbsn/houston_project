@@ -104,6 +104,59 @@ function utcNoon(date: string): Date {
   return new Date(`${date}T12:00:00.000Z`)
 }
 
+/** Long desktop label. The mobile toolbar keeps formatCalendarPeriodLabel. */
+export function formatDesktopCalendarPeriodLabel(
+  granularity: ExecutionCalendarGranularity,
+  window: CalendarWindow,
+  anchor: string,
+): string {
+  if (granularity === 'day') {
+    return new Intl.DateTimeFormat('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(utcNoon(window.from))
+  }
+  if (granularity === 'week') {
+    const sameMonth = window.from.slice(0, 7) === window.to.slice(0, 7)
+    const sameYear = window.from.slice(0, 4) === window.to.slice(0, 4)
+    if (sameMonth) {
+      const startDay = new Intl.DateTimeFormat('fr-FR', {
+        day: 'numeric',
+        timeZone: 'UTC',
+      }).format(utcNoon(window.from))
+      const end = new Intl.DateTimeFormat('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(utcNoon(window.to))
+      return `${startDay} – ${end}`
+    }
+    const startOptions: Intl.DateTimeFormatOptions = {
+      day: 'numeric',
+      month: 'long',
+      timeZone: 'UTC',
+    }
+    if (!sameYear) startOptions.year = 'numeric'
+    const start = new Intl.DateTimeFormat('fr-FR', startOptions).format(utcNoon(window.from))
+    const end = new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(utcNoon(window.to))
+    return `${start} – ${end}`
+  }
+  return new Intl.DateTimeFormat('fr-FR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(utcNoon(`${anchor.slice(0, 7)}-01`))
+}
+
 export function formatCalendarPeriodLabel(
   granularity: ExecutionCalendarGranularity,
   window: CalendarWindow,
