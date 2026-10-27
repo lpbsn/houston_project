@@ -495,8 +495,13 @@ function DesktopMonthRow({
   onOpenDay: (anchor: string) => void
 }) {
   const days = row.days.map((cell) => cell.day)
+  const hasDayContent = row.days.some((cell) => cell.singles.length > 0 || cell.overflowCount > 0)
   return (
-    <div className="border-b border-[#E8E6DF] last:border-b-0">
+    <div
+      data-testid={`calendar-desktop-month-week-${days[0] ?? 'empty'}`}
+      data-empty={row.bands.length === 0 && !hasDayContent ? 'true' : 'false'}
+      className="border-b border-[#E8E6DF] last:border-b-0"
+    >
       <WeekdayHeader days={days} month={month} today={today} outsideMonth />
       {row.bands.length > 0 ? (
         <BandGrid
@@ -507,40 +512,43 @@ function DesktopMonthRow({
           onOpenExecution={onOpenExecution}
         />
       ) : null}
-      <div
-        className="grid"
-        style={{ gridTemplateColumns: `repeat(${days.length || 1}, minmax(0, 1fr))` }}
-      >
-        {row.days.map((cell) => (
-          <div
-            key={cell.day}
-            className={cn(
-              'flex min-w-0 flex-col gap-0.5 border-l border-[#E8E6DF] px-1 py-1 first:border-l-0',
-              !cell.day.startsWith(month) && 'bg-[#F5F4F0]',
-            )}
-          >
-            {cell.singles.map((span) => (
-              <MonthEventLine
-                key={span.item.id}
-                item={span.item}
-                timeZone={timeZone}
-                showEstablishment={showEstablishment}
-                onOpenExecution={onOpenExecution}
-              />
-            ))}
-            {cell.overflowCount > 0 ? (
-              <button
-                type="button"
-                data-testid={`calendar-month-overflow-${cell.day}`}
-                className="w-full truncate px-0.5 py-0.5 text-left text-[11px] font-semibold text-[#114660]"
-                onClick={() => onOpenDay(cell.day)}
-              >
-                {formatCalendarOverflowLabel(cell.overflowCount)}
-              </button>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      {hasDayContent ? (
+        <div
+          data-testid="calendar-desktop-month-days"
+          className="grid"
+          style={{ gridTemplateColumns: `repeat(${days.length || 1}, minmax(0, 1fr))` }}
+        >
+          {row.days.map((cell) => (
+            <div
+              key={cell.day}
+              className={cn(
+                'flex min-w-0 flex-col gap-0.5 border-l border-[#E8E6DF] px-1 py-1 first:border-l-0',
+                !cell.day.startsWith(month) && 'bg-[#F5F4F0]',
+              )}
+            >
+              {cell.singles.map((span) => (
+                <MonthEventLine
+                  key={span.item.id}
+                  item={span.item}
+                  timeZone={timeZone}
+                  showEstablishment={showEstablishment}
+                  onOpenExecution={onOpenExecution}
+                />
+              ))}
+              {cell.overflowCount > 0 ? (
+                <button
+                  type="button"
+                  data-testid={`calendar-month-overflow-${cell.day}`}
+                  className="w-full truncate px-0.5 py-0.5 text-left text-[11px] font-semibold text-[#114660]"
+                  onClick={() => onOpenDay(cell.day)}
+                >
+                  {formatCalendarOverflowLabel(cell.overflowCount)}
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -579,7 +587,12 @@ function DesktopMonth({
         />
       ))}
       {showEmpty && items.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-[#57564F]">Aucun plan sur cette période.</p>
+        <p
+          data-testid="calendar-desktop-month-empty"
+          className="px-3 py-2 text-center text-xs text-[#7D7B75]"
+        >
+          Aucun plan sur cette période.
+        </p>
       ) : null}
     </div>
   )
