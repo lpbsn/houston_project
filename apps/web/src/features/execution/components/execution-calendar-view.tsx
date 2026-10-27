@@ -25,7 +25,7 @@ import {
   calendarEventPresentation,
   calendarUnplannedCreatedDateLabel,
 } from '../lib/execution-calendar-event-display'
-import { buildCalendarSpans } from '../lib/execution-calendar-layout'
+import { buildCalendarSpansFromPlaced, placeCalendarItems } from '../lib/execution-calendar-layout'
 import { calendarUnplannedSectionHeader } from '../lib/execution-calendar-unplanned'
 import {
   initialWeekStartIndex,
@@ -64,18 +64,16 @@ function weekdayIndexMonday(date: string): number {
 /** One CSS grid item per execution, spanning all occupied civil days in this row. */
 function CalendarBands({
   days,
-  items,
-  timeZone,
+  placed,
   showEstablishment,
   onOpenExecution,
 }: {
   days: string[]
-  items: ActionPlanExecutionFeedItem[]
-  timeZone: string
+  placed: ReturnType<typeof placeCalendarItems>
   showEstablishment: boolean
   onOpenExecution: (executionId: string) => void
 }) {
-  const spans = useMemo(() => buildCalendarSpans(items, days, timeZone), [items, days, timeZone])
+  const spans = useMemo(() => buildCalendarSpansFromPlaced(placed, days), [placed, days])
   return (
     <div
       data-testid="calendar-bands"
@@ -257,6 +255,7 @@ export function ExecutionCalendarView({
     () => (data ? unwrapActionPlanExecutionFeedItems(data.items) : []),
     [data],
   )
+  const placed = useMemo(() => placeCalendarItems(items, timeZone), [items, timeZone])
   const unplanned = useMemo(
     () => (data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []),
     [data],
@@ -386,6 +385,7 @@ export function ExecutionCalendarView({
             days={days}
             month={month}
             items={items}
+            placed={placed}
             timeZone={timeZone}
             today={today}
             showEstablishment={showEstablishment}
@@ -429,8 +429,7 @@ export function ExecutionCalendarView({
                 </div>
                 <CalendarBands
                   days={week}
-                  items={items}
-                  timeZone={timeZone}
+                  placed={placed}
                   showEstablishment={showEstablishment}
                   onOpenExecution={onOpenExecution}
                 />

@@ -15,9 +15,10 @@ import {
   formatCalendarOverflowLabel,
 } from '../lib/execution-calendar-event-display'
 import {
-  buildDesktopDayLayout,
-  buildDesktopMonthRow,
-  buildDesktopWeekLayout,
+  buildDesktopDayLayoutFromPlaced,
+  buildDesktopMonthRowsFromPlaced,
+  buildDesktopWeekLayoutFromPlaced,
+  type CalendarPlacement,
   type CalendarSpan,
   type DesktopMonthRowLayout,
 } from '../lib/execution-calendar-layout'
@@ -31,6 +32,7 @@ type DesktopExecutionCalendarProps = {
   days: string[]
   month: string
   items: ActionPlanExecutionFeedItem[]
+  placed: CalendarPlacement[]
   timeZone: string
   today: string
   showEstablishment: boolean
@@ -150,6 +152,9 @@ function BandButton({
   onOpenExecution: (executionId: string) => void
 }) {
   const presentation = calendarEventPresentation(span.item)
+  const schedule = calendarEventScheduleLabel(span.item, timeZone)
+  const pilot = calendarEventPilotLabel(span.item)
+  const establishment = showEstablishment ? calendarEventEstablishmentLabel(span.item) : ''
   const continuesBefore = span.continuesBefore ? 'Commencé avant cette période' : ''
   const continuesAfter = span.continuesAfter ? 'Se poursuit après cette période' : ''
   const label = [eventAccessibleLabel(span.item, timeZone, showEstablishment), continuesBefore, continuesAfter]
@@ -177,13 +182,18 @@ function BandButton({
       onClick={() => onOpenExecution(span.item.id)}
     >
       {span.continuesBefore ? <ChevronLeft className="h-3 w-3 shrink-0" aria-hidden /> : null}
-      <span className="min-w-0 flex-1">
-        <EventLines
-          item={span.item}
-          timeZone={timeZone}
-          showEstablishment={showEstablishment}
-          showAssignees={false}
-        />
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold">{presentation.title}</span>
+        {schedule ? <span className="shrink-0 truncate text-[11px] tabular-nums">{schedule}</span> : null}
+        {pilot ? <span className="min-w-0 max-w-[34%] truncate text-[11px]">{pilot}</span> : null}
+        {establishment ? (
+          <span
+            data-testid={`calendar-establishment-${span.item.id}`}
+            className="min-w-0 max-w-[34%] truncate text-[11px] font-medium"
+          >
+            {establishment}
+          </span>
+        ) : null}
       </span>
       {span.continuesAfter ? <ChevronRight className="h-3 w-3 shrink-0" aria-hidden /> : null}
     </button>
@@ -222,6 +232,96 @@ function BandGrid({
         />
       ))}
     </div>
+  )
+}
+
+function WeekEventLine({
+  item,
+  timeZone,
+  showEstablishment,
+  onOpenExecution,
+}: {
+  item: ActionPlanExecutionFeedItem
+  timeZone: string
+  showEstablishment: boolean
+  onOpenExecution: (executionId: string) => void
+}) {
+  const presentation = calendarEventPresentation(item)
+  const schedule = calendarEventScheduleLabel(item, timeZone)
+  const pilot = calendarEventPilotLabel(item)
+  const establishment = showEstablishment ? calendarEventEstablishmentLabel(item) : ''
+  const hasMeta = Boolean(schedule || pilot || establishment)
+  return (
+    <button
+      type="button"
+      data-testid={`calendar-event-${item.id}`}
+      className="flex w-full min-w-0 items-start gap-1.5 px-1 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
+      aria-label={eventAccessibleLabel(item, timeZone, showEstablishment)}
+      onClick={() => onOpenExecution(item.id)}
+    >
+      <span
+        data-testid={`calendar-status-dot-${item.id}`}
+        className="mt-1 h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: presentation.chrome.bar }}
+        aria-hidden
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold leading-snug">{item.title}</span>
+        {hasMeta ? (
+          <span className="mt-0.5 block text-[11px] leading-snug text-[#57564F]">
+            {schedule ? <span className="tabular-nums">{schedule}</span> : null}
+            {schedule && (pilot || establishment) ? ' · ' : null}
+            {pilot ? <span>{pilot}</span> : null}
+            {pilot && establishment ? ' · ' : null}
+            {establishment ? (
+              <span data-testid={`calendar-establishment-${item.id}`} className="font-medium">
+                {establishment}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  )
+}
+
+function MonthEventLine({
+  item,
+  timeZone,
+  showEstablishment,
+  onOpenExecution,
+}: {
+  item: ActionPlanExecutionFeedItem
+  timeZone: string
+  showEstablishment: boolean
+  onOpenExecution: (executionId: string) => void
+}) {
+  const presentation = calendarEventPresentation(item)
+  const establishment = showEstablishment ? calendarEventEstablishmentLabel(item) : ''
+  return (
+    <button
+      type="button"
+      data-testid={`calendar-event-${item.id}`}
+      className="flex w-full min-w-0 items-center gap-1 rounded px-0.5 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
+      aria-label={eventAccessibleLabel(item, timeZone, showEstablishment)}
+      onClick={() => onOpenExecution(item.id)}
+    >
+      <span
+        data-testid={`calendar-status-dot-${item.id}`}
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: presentation.chrome.bar }}
+        aria-hidden
+      />
+      <span className="min-w-0 flex-1 truncate text-xs font-medium">{presentation.title}</span>
+      {establishment ? (
+        <span
+          data-testid={`calendar-establishment-${item.id}`}
+          className="min-w-0 max-w-[45%] truncate text-[11px] font-medium"
+        >
+          {establishment}
+        </span>
+      ) : null}
+    </button>
   )
 }
 
@@ -267,7 +367,7 @@ function WeekdayHeader({
 
 function DesktopDay({
   days,
-  items,
+  placed,
   month,
   timeZone,
   today,
@@ -277,8 +377,8 @@ function DesktopDay({
 }: DesktopExecutionCalendarProps) {
   const day = days[0] ?? ''
   const layout = useMemo(
-    () => buildDesktopDayLayout(items, day, timeZone),
-    [items, day, timeZone],
+    () => buildDesktopDayLayoutFromPlaced(placed, day),
+    [placed, day],
   )
   return (
     <div data-testid="calendar-desktop-day" className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
@@ -317,6 +417,7 @@ function DesktopDay({
 function DesktopWeek({
   days,
   items,
+  placed,
   timeZone,
   today,
   showEstablishment,
@@ -324,8 +425,8 @@ function DesktopWeek({
   onOpenExecution,
 }: DesktopExecutionCalendarProps) {
   const layout = useMemo(
-    () => buildDesktopWeekLayout(items, days, timeZone),
-    [items, days, timeZone],
+    () => buildDesktopWeekLayoutFromPlaced(placed, days),
+    [placed, days],
   )
   return (
     <div
@@ -377,12 +478,12 @@ function DesktopWeek({
             key={column.day}
             data-testid={`calendar-desktop-column-${column.day}`}
             className={cn(
-              'flex min-w-0 flex-col gap-1 px-1 py-1',
+              'flex min-w-0 flex-col divide-y divide-[#E8E6DF] px-1',
               index > 0 && 'border-l border-[#E8E6DF]',
             )}
           >
             {column.items.map((item) => (
-              <EventCard
+              <WeekEventLine
                 key={item.id}
                 item={item}
                 timeZone={timeZone}
@@ -442,27 +543,15 @@ function DesktopMonthRow({
               !cell.day.startsWith(month) && 'bg-[#F5F4F0]',
             )}
           >
-            {cell.singles.map((span) => {
-              const presentation = calendarEventPresentation(span.item)
-              return (
-                <button
-                  key={span.item.id}
-                  type="button"
-                  data-testid={`calendar-event-${span.item.id}`}
-                  className="flex w-full min-w-0 flex-col rounded px-0.5 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
-                  style={{ color: presentation.chrome.text }}
-                  aria-label={eventAccessibleLabel(span.item, timeZone, showEstablishment)}
-                  onClick={() => onOpenExecution(span.item.id)}
-                >
-                  <EventLines
-                    item={span.item}
-                    timeZone={timeZone}
-                    showEstablishment={showEstablishment}
-                    showAssignees={false}
-                  />
-                </button>
-              )
-            })}
+            {cell.singles.map((span) => (
+              <MonthEventLine
+                key={span.item.id}
+                item={span.item}
+                timeZone={timeZone}
+                showEstablishment={showEstablishment}
+                onOpenExecution={onOpenExecution}
+              />
+            ))}
             {cell.overflowCount > 0 ? (
               <button
                 type="button"
@@ -483,6 +572,7 @@ function DesktopMonthRow({
 function DesktopMonth({
   days,
   items,
+  placed,
   month,
   timeZone,
   today,
@@ -491,13 +581,10 @@ function DesktopMonth({
   onOpenExecution,
   onOpenDay,
 }: DesktopExecutionCalendarProps) {
-  const rows = useMemo(() => {
-    const next: DesktopMonthRowLayout[] = []
-    for (let index = 0; index < days.length; index += 7) {
-      next.push(buildDesktopMonthRow(items, days.slice(index, index + 7), timeZone))
-    }
-    return next
-  }, [days, items, timeZone])
+  const rows = useMemo(
+    () => buildDesktopMonthRowsFromPlaced(placed, days),
+    [placed, days],
+  )
   return (
     <div
       data-testid="calendar-desktop-month"

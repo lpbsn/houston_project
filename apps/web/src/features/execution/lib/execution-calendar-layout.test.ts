@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
+import { addCivilDays, combineCivilDateTimeToIso } from '@/lib/business-timezone'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import {
   buildCalendarSpans,
   buildDesktopDayLayout,
   buildDesktopMonthRow,
+  buildDesktopMonthRowsFromPlaced,
   buildDesktopWeekLayout,
   executionCalendarCategory,
   executionCalendarDateRange,
+  placeCalendarItems,
 } from './execution-calendar-layout'
 
 function item(id: string, start: string | null, end: string | null, allDay = false) {
@@ -135,6 +137,18 @@ describe('date-only execution calendar', () => {
     const monday = buildDesktopMonthRow(plans, days).days[1]
     expect(monday?.singles.map((span) => span.item.id)).toEqual(['s1', 's2'])
     expect(monday?.overflowCount).toBe(2)
+  })
+
+  it('keeps the same month rows when the civil interval is placed once', () => {
+    const plans = [
+      item('a', civil('2026-10-12', '08:00'), civil('2026-10-20', '18:00')),
+      item('s1', civil('2026-10-13', '09:00'), civil('2026-10-13', '10:00')),
+    ]
+    const twoWeeks = [...days, ...days.map((day) => addCivilDays(day, 7))]
+    expect(buildDesktopMonthRowsFromPlaced(placeCalendarItems(plans), twoWeeks)).toEqual([
+      buildDesktopMonthRow(plans, twoWeeks.slice(0, 7)),
+      buildDesktopMonthRow(plans, twoWeeks.slice(7)),
+    ])
   })
 
   it('bounds a very long plan to the visible month row', () => {
