@@ -919,7 +919,10 @@ _INVITATION_ACCEPT_ROLES = frozenset(
 def preview_establishment_invitation(*, raw_token: str) -> dict:
     token_digest = auth_tokens.digest_token(raw_token.strip())
     invitation = (
-        EstablishmentInvitation.objects.select_related("membership__user")
+        EstablishmentInvitation.objects.select_related(
+            "membership__user",
+            "membership__establishment",
+        )
         .filter(token_digest=token_digest)
         .first()
     )
@@ -934,6 +937,7 @@ def preview_establishment_invitation(*, raw_token: str) -> dict:
         raise EstablishmentInvitationExpiredError
     return {
         "requires_password": invitation.membership.user.status != User.Status.ACTIVE,
+        "establishment_name": invitation.membership.establishment.name or "",
     }
 
 
@@ -1273,6 +1277,7 @@ def _membership_activated_without_session(
         payload={
             "requires_login": requires_login,
             "establishment_id": establishment_id,
+            "user_id": user.id,
         },
         requires_login=requires_login,
     )

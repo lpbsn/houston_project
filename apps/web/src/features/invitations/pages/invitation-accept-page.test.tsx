@@ -105,6 +105,15 @@ describe('InvitationAcceptPage', () => {
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 
+  it('names the establishment on the password screen', async () => {
+    previewDirectorInvitation.mockResolvedValue({
+      requiresPassword: true,
+      establishmentName: 'Hôtel des Mésanges',
+    })
+    renderPage('/invitations#invite-token')
+    expect(await screen.findByText(/Hôtel des Mésanges/)).toBeTruthy()
+  })
+
   it('submits the remembered fragment token in the accept call', async () => {
     renderPage('/invitations#invite-token')
 
@@ -141,6 +150,8 @@ describe('InvitationAcceptPage', () => {
     acceptDirectorInvitation.mockResolvedValue({
       kind: 'membership_only',
       requiresLogin: true,
+      userId: 'user-2',
+      establishmentId: 'est-2',
     })
     const { history, onAccepted } = renderPage('/invitations#invite-token')
 
@@ -153,7 +164,12 @@ describe('InvitationAcceptPage', () => {
     })
     expect(history.getHref()).toBe('/invitations')
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter à Spore' }))
-    expect(history.getHref()).toBe('/login')
+    expect(history.getHref()).toBe('/login?next=%2Facces')
+    expect(JSON.parse(sessionStorage.getItem('spore.access-arrival') ?? 'null')).toEqual({
+      userId: 'user-2',
+      arrival: 'joined',
+      establishmentId: 'est-2',
+    })
     expect(onAccepted).not.toHaveBeenCalled()
     expect(logout).not.toHaveBeenCalled()
   })
@@ -164,6 +180,8 @@ describe('InvitationAcceptPage', () => {
     acceptDirectorInvitation.mockResolvedValue({
       kind: 'membership_only',
       requiresLogin: true,
+      userId: 'user-2',
+      establishmentId: 'est-2',
     })
     const { history, onAccepted } = renderPage('/invitations#invite-token')
 
@@ -180,7 +198,12 @@ describe('InvitationAcceptPage', () => {
     await vi.waitFor(() => {
       expect(logout).toHaveBeenCalledOnce()
       expect(clearAuthState).toHaveBeenCalledOnce()
-      expect(history.getHref()).toBe('/login')
+      expect(history.getHref()).toBe('/login?next=%2Facces')
+    })
+    expect(JSON.parse(sessionStorage.getItem('spore.access-arrival') ?? 'null')).toEqual({
+      userId: 'user-2',
+      arrival: 'joined',
+      establishmentId: 'est-2',
     })
   })
 
@@ -189,14 +212,58 @@ describe('InvitationAcceptPage', () => {
     acceptDirectorInvitation.mockResolvedValue({
       kind: 'membership_only',
       requiresLogin: false,
+      userId: 'user-1',
+      establishmentId: 'est-1',
     })
     const { onAccepted } = renderPage('/invitations#invite-token')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
 
-    await screen.findByText('Bienvenue dans votre équipe !')
-    expect(onAccepted).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir mon espace Spore' }))
+    await vi.waitFor(() => {
+      expect(onAccepted).toHaveBeenCalledOnce()
+    })
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
+    expect(JSON.parse(sessionStorage.getItem('spore.access-arrival') ?? 'null')).toEqual({
+      userId: 'user-1',
+      arrival: 'joined',
+      establishmentId: 'est-1',
+    })
+    const pendingSubmit = screen.getByRole('button', { name: /activation en cours/i })
+    expect(pendingSubmit).toHaveProperty('disabled', true)
+    fireEvent.submit(pendingSubmit.closest('form')!)
+    expect(acceptDirectorInvitation).toHaveBeenCalledTimes(1)
+    expect(onAccepted).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the join form inactive after a new account session is created', async () => {
+    acceptDirectorInvitation.mockResolvedValue({
+      kind: 'session',
+      userId: 'user-1',
+      establishmentId: 'est-1',
+    })
+    const { onAccepted } = renderPage('/invitations#invite-token')
+
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+
+    await vi.waitFor(() => {
+      expect(onAccepted).toHaveBeenCalledOnce()
+    })
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
+    expect(JSON.parse(sessionStorage.getItem('spore.access-arrival') ?? 'null')).toEqual({
+      userId: 'user-1',
+      arrival: 'activated',
+      establishmentId: 'est-1',
+    })
+    const pendingSubmit = screen.getByRole('button', { name: /activation en cours/i })
+    expect(pendingSubmit).toHaveProperty('disabled', true)
+    fireEvent.submit(pendingSubmit.closest('form')!)
+    expect(acceptDirectorInvitation).toHaveBeenCalledTimes(1)
     expect(onAccepted).toHaveBeenCalledOnce()
   })
 
@@ -260,12 +327,15 @@ describe('InvitationAcceptPage', () => {
   it('does not show success after a rejected acceptance and permits retry', async () => {
     previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
     acceptDirectorInvitation.mockRejectedValueOnce(new Error('Network unavailable'))
-    renderPage('/invitations#invite-token')
+    const { onAccepted } = renderPage('/invitations#invite-token')
     fireEvent.click(await screen.findByRole('button', { name: 'Rejoindre mon équipe' }))
     expect((await screen.findByRole('alert')).textContent).toContain('Vérifiez votre connexion')
     expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
-    await screen.findByText('Bienvenue dans votre équipe !')
+    await vi.waitFor(() => {
+      expect(onAccepted).toHaveBeenCalledOnce()
+    })
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
     expect(acceptDirectorInvitation).toHaveBeenCalledTimes(2)
   })
 

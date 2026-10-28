@@ -15,6 +15,7 @@ from houston.accounts.api.views import (
     PasswordChangeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    PlayStoreAccessView,
     RefreshView,
     SwitchEstablishmentView,
     TermsAcceptView,
@@ -28,6 +29,11 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="auth-logout"),
     path("bootstrap/", BootstrapView.as_view(), name="auth-bootstrap"),
     path("me/", UserProfileView.as_view(), name="auth-profile"),
+    path(
+        "me/play-store-access/",
+        PlayStoreAccessView.as_view(),
+        name="auth-play-store-access",
+    ),
     path(
         "email-change/",
         EmailChangeRequestView.as_view(),

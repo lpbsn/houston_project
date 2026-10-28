@@ -96,6 +96,33 @@ class EmailChangeRequest(BaseModel):
         return f"Email change for {self.user_id}"
 
 
+class PlayStoreAccessRequest(BaseModel):
+    """One current Google Play access request per user.
+
+    The Resend payload and idempotency key stay frozen until a new explicit send
+    replaces them. provider_accepted_at is set only when Resend accepts that key.
+    """
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="play_store_access_request",
+    )
+    google_play_email = models.EmailField()
+    idempotency_key = models.UUIDField(unique=True)
+    idempotency_key_created_at = models.DateTimeField()
+    mail_to = models.CharField(max_length=254)
+    mail_from = models.CharField(max_length=255)
+    mail_subject = models.CharField(max_length=255)
+    mail_html = models.TextField()
+    mail_text = models.TextField()
+    provider_accepted_at = models.DateTimeField(null=True, blank=True)
+    is_address_correction = models.BooleanField(default=False)
+
+    def __str__(self) -> str:
+        return f"Play Store access for {self.user_id}"
+
+
 class PasswordResetRequest(BaseModel):
     user = models.ForeignKey(
         "accounts.User",

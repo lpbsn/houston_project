@@ -66,6 +66,8 @@ describe('usesTerrainShell', () => {
 
   it('returns false for non-terrain routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/login' })).toBe(false)
+    expect(usesTerrainShell({ kind: 'static', path: '/acces' })).toBe(false)
+    expect(usesTerrainShell({ kind: 'static', path: '/installer' })).toBe(false)
     expect(usesTerrainShell({ kind: 'invitation' })).toBe(false)
   })
 
@@ -631,6 +633,7 @@ describe('isProtectedRoute', () => {
       '/select-establishment',
       '/no-establishment',
       '/analytics',
+      '/acces',
     ] as const) {
       expect(isProtectedRoute({ kind: 'static', path })).toBe(true)
     }
@@ -659,6 +662,7 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute({ kind: 'email-change' })).toBe(false)
     expect(isProtectedRoute({ kind: 'password-reset' })).toBe(false)
     expect(isProtectedRoute({ kind: 'static', path: '/forgot-password' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'static', path: '/installer' })).toBe(false)
     expect(isProtectedRoute({ kind: 'unknown', pathname: '/foo' })).toBe(false)
   })
 })
@@ -741,5 +745,7 @@ describe('requiresActiveMembership', () => {
     expect(requiresActiveMembership({ kind: 'static', path: '/pending-onboarding' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/select-establishment' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/no-establishment' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/acces' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/installer' })).toBe(false)
   })
 })

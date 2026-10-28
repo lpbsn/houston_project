@@ -188,6 +188,9 @@ def _revoke_push_devices(*, user: User) -> None:
 
 
 def _anonymize_user(*, user: User) -> None:
+    from houston.accounts.models import PlayStoreAccessRequest
+
+    PlayStoreAccessRequest.objects.filter(user=user).delete()
     user.status = User.Status.ANONYMIZED
     user.is_active = False
     user.email = None

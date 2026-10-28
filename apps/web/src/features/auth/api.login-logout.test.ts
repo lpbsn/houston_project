@@ -797,7 +797,12 @@ describe('auth api login logout', () => {
 
     await expect(
       acceptInvitationSession('invite-token', {}),
-    ).resolves.toEqual({ kind: 'membership_only', requiresLogin: true })
+    ).resolves.toEqual({
+      kind: 'membership_only',
+      requiresLogin: true,
+      userId: '',
+      establishmentId: 'est-1',
+    })
 
     expect(apiClientPostMock).toHaveBeenCalledWith(
       '/api/v1/invitations/accept/',
@@ -839,6 +844,8 @@ describe('auth api login logout', () => {
     await expect(acceptInvitationSession('invite-token', {})).resolves.toEqual({
       kind: 'membership_only',
       requiresLogin: false,
+      userId: '',
+      establishmentId: 'est-1',
     })
 
     expect(apiClientPostMock).toHaveBeenNthCalledWith(
@@ -938,7 +945,7 @@ describe('auth api login logout', () => {
         password: 'secret',
         password_confirmation: 'secret',
       }),
-    ).resolves.toEqual({ kind: 'session' })
+    ).resolves.toEqual({ kind: 'session', userId: 'invitee', establishmentId: '' })
 
     expect(apiClientPostMock).toHaveBeenNthCalledWith(
       1,
@@ -1136,6 +1143,8 @@ describe('auth api login logout', () => {
     await expect(acceptPromise).resolves.toEqual({
       kind: 'membership_only',
       requiresLogin: false,
+      userId: '',
+      establishmentId: 'est-1',
     })
 
     refreshResponse.resolve({
@@ -1199,6 +1208,8 @@ describe('auth api login logout', () => {
     await expect(acceptPromise).resolves.toEqual({
       kind: 'membership_only',
       requiresLogin: true,
+      userId: '',
+      establishmentId: 'est-1',
     })
 
     refreshResponse.resolve({
@@ -1272,7 +1283,11 @@ describe('auth api login logout', () => {
       },
       error: undefined,
     })
-    await expect(acceptPromise).resolves.toEqual({ kind: 'session' })
+    await expect(acceptPromise).resolves.toEqual({
+      kind: 'session',
+      userId: 'invitee',
+      establishmentId: '',
+    })
 
     refreshResponse.resolve({
       response: { status: 200 },
@@ -1366,7 +1381,11 @@ describe('auth api login logout', () => {
       },
       error: undefined,
     })
-    await expect(acceptPromise).resolves.toEqual({ kind: 'session' })
+    await expect(acceptPromise).resolves.toEqual({
+      kind: 'session',
+      userId: 'invitee',
+      establishmentId: '',
+    })
 
     expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-old-access')
     expect(setAccessTokenMock).toHaveBeenLastCalledWith('invitation-access')
