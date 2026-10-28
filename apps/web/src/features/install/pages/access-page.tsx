@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import { ArrowLeft, Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -6,6 +6,7 @@ import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAuthenticatedLandingPath, isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { AccessWebLink } from '@/features/install/components/access-web-link'
 import { AndroidAccess } from '@/features/install/components/android-access'
 import { InstallFrame } from '@/features/install/components/install-frame'
 import {
@@ -20,9 +21,7 @@ import {
   iosAppStoreUrl,
   resolveAndroidChoice,
 } from '@/features/install/distribution'
-import { terrain } from '@/lib/terrain-styles'
 import { useLgViewport } from '@/lib/lg-viewport'
-import { cn } from '@/lib/utils'
 
 const installHintClassName =
   'flex items-start gap-2.5 rounded-lg bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]'
@@ -56,6 +55,16 @@ export function AccessPage() {
     <InstallFrame>
       <Card className="rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-xl">
         <CardHeader className="gap-3">
+          {destination === 'android' ? (
+            <button
+              type="button"
+              aria-label="Retour"
+              className="-ml-2 inline-flex size-8 items-center justify-center rounded-full text-[#6b8076] hover:bg-[#edf6f0] hover:text-[#172e27]"
+              onClick={() => navigate('/acces')}
+            >
+              <ArrowLeft aria-hidden="true" className="size-4" />
+            </button>
+          ) : null}
           <CardTitle className="text-2xl font-bold">Bienvenue sur SPORE</CardTitle>
           {copy.lines.map((line) => (
             <p key={line} className="text-sm leading-6 text-[#40564d]">
@@ -72,7 +81,6 @@ export function AccessPage() {
               choice={androidChoice}
               establishmentId={playRequestEstablishmentId(bootstrap, arrival)}
               onContinueWeb={openSpace}
-              onChooseAnother={() => navigate('/acces')}
             />
           ) : null}
           {destination === null ? (
@@ -98,7 +106,7 @@ function ChoiceActions({
     <div className="space-y-4">
       <Button asChild className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]">
         <a href={iosAppStoreUrl} target="_blank" rel="noopener noreferrer">
-          Télécharger sur l’App Store
+          Télécharger sur iPhone
         </a>
       </Button>
       <Button
@@ -119,15 +127,7 @@ function ChoiceActions({
           <strong className="font-bold">Général → Installer SPORE</strong>.
         </span>
       </p>
-      <div className="border-t border-[#dce8e2] pt-4 text-center">
-        <button
-          type="button"
-          className={cn('text-sm underline underline-offset-4', terrain.success)}
-          onClick={onWeb}
-        >
-          Accéder au site web
-        </button>
-      </div>
+      <AccessWebLink onClick={onWeb} />
     </div>
   )
 }

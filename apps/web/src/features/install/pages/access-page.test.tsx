@@ -91,10 +91,11 @@ afterEach(() => {
 describe('AccessPage', () => {
   it('opens the stores from the choice and points back to Général', () => {
     const history = renderAt('/acces', createElement(AccessPage))
-    const iphone = screen.getByRole('link', { name: 'Télécharger sur l’App Store' })
+    const iphone = screen.getByRole('link', { name: 'Télécharger sur iPhone' })
     expect(iphone.getAttribute('href')).toBe(IOS_URL)
     expect(iphone.getAttribute('target')).toBe('_blank')
     expect(screen.getByRole('button', { name: 'Télécharger sur Android' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Accéder à SPORE sur le Web' })).toBeNull()
     expect(screen.queryByText(/QR code/i)).toBeNull()
     const hint = screen.getByText('Général → Installer SPORE')
@@ -109,7 +110,7 @@ describe('AccessPage', () => {
   })
 
   it('shows the android request form without the SPORE email or Play links', async () => {
-    renderAt('/acces?destination=android', createElement(AccessPage))
+    const history = renderAt('/acces?destination=android', createElement(AccessPage))
     const input = await screen.findByLabelText(/compte Google utilisé sur le Play Store/i)
     expect((input as HTMLInputElement).value).toBe('')
     expect((input as HTMLInputElement).value).not.toBe('spore@example.com')
@@ -124,6 +125,30 @@ describe('AccessPage', () => {
     expect(screen.queryByRole('link', { name: /Google Play/i })).toBeNull()
     expect(document.body.textContent).not.toContain(CLOSED_JOIN)
     expect(document.body.textContent).not.toContain(CLOSED_INSTALL)
+    expect(screen.queryByRole('button', { name: 'Continuer sur le Web' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Choisir un autre appareil' })).toBeNull()
+    const web = screen.getByRole('button', { name: 'Accéder au site web' })
+    expect(web.className).toContain('underline')
+    expect(web.parentElement?.className).toContain('border-t')
+    fireEvent.click(web)
+    expect(history.getHref()).toBe('/reporting')
+  })
+
+  it('returns from Android to the device choice and reopens a received request', async () => {
+    fetchPlayStoreAccess.mockResolvedValue('accepted')
+    renderAt('/acces?destination=android', createElement(AccessPage))
+    const correct = await screen.findByRole('button', { name: 'Corriger le mail' })
+    expect(correct.className).toContain('bg-[#004d3b]')
+    expect(correct.className).toContain('rounded-2xl')
+    expect(screen.queryByRole('button', { name: 'Corriger l’adresse' })).toBeNull()
+    fireEvent.click(correct)
+    expect(await screen.findByLabelText(/compte Google utilisé sur le Play Store/i)).toBeTruthy()
+    cleanup()
+    fetchPlayStoreAccess.mockResolvedValue('accepted')
+    const back = renderAt('/acces?destination=android', createElement(AccessPage))
+    await screen.findByRole('button', { name: 'Corriger le mail' })
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+    expect(back.getHref()).toBe('/acces')
   })
 
   it('shows a matching welcome once', async () => {
@@ -157,7 +182,7 @@ describe('AccessPage', () => {
 
   it('keeps a former computer link on the device choice', () => {
     renderAt('/acces?destination=ordinateur', createElement(AccessPage))
-    expect(screen.getByRole('link', { name: 'Télécharger sur l’App Store' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Télécharger sur iPhone' })).toBeTruthy()
     expect(screen.queryByText(/QR code/i)).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Votre espace SPORE est prêt' })).toBeNull()
   })
@@ -169,12 +194,13 @@ describe('AndroidAccess distribution', () => {
       createElement(AndroidAccess, {
         choice: { kind: 'store', href: 'https://play.google.com/store/apps/details?id=app.spore' },
         onContinueWeb: () => undefined,
-        onChooseAnother: () => undefined,
       }),
     )
     const link = screen.getByRole('link', { name: 'Ouvrir Google Play' })
     expect(link.getAttribute('href')).toBe('https://play.google.com/store/apps/details?id=app.spore')
     expect(screen.queryByLabelText(/Play Store/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Accéder au site web' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Choisir un autre appareil' })).toBeNull()
   })
 
   it('shows an unavailable state without a form when the public URL is empty', () => {
@@ -182,7 +208,6 @@ describe('AndroidAccess distribution', () => {
       createElement(AndroidAccess, {
         choice: { kind: 'unavailable' },
         onContinueWeb: () => undefined,
-        onChooseAnother: () => undefined,
       }),
     )
     expect(screen.getByText(/Lien Android indisponible/)).toBeTruthy()
