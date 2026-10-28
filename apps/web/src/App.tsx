@@ -57,6 +57,8 @@ import { LegalEntryGates } from '@/features/auth/components/legal-entry-gates'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
+import { AccessPage } from '@/features/install/pages/access-page'
+import { InstallerPage } from '@/features/install/pages/installer-page'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
@@ -680,21 +682,16 @@ function App() {
         <InvitationAcceptPage
           onAccepted={() => {
             void (async () => {
-              let bootstrap =
-                queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
               try {
-                bootstrap = await queryClient.fetchQuery({
+                await queryClient.fetchQuery({
                   queryKey: bootstrapQueryKey,
                   queryFn: fetchBootstrap,
+                  staleTime: 0,
                 })
               } catch {
                 // The membership is already active. Keep the session bootstrap in hand.
               }
-              navigate(
-                getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
-                  '/pending-onboarding',
-                { replace: true },
-              )
+              navigate('/acces', { replace: true })
             })()
           }}
         />
@@ -1103,8 +1100,23 @@ function App() {
     return <LoginPage onNavigate={navigate} />
   }
 
+  if (route.kind === 'static' && route.path === '/installer') {
+    return <InstallerPage />
+  }
+
+  if (route.kind === 'static' && route.path === '/acces') {
+    if (!auth.isAuthenticated) {
+      return <AuthRoutingLoading />
+    }
+    return <AccessPage />
+  }
+
   if (route.kind === 'static' && route.path === '/forgot-password') {
     return <ForgotPasswordPage onNavigate={navigate} />
+  }
+
+  if (route.kind === 'invitation') {
+    return routeContent
   }
 
   const signOutAction = (
@@ -1147,15 +1159,8 @@ function App() {
   )
 
   const routeCopy =
-    route.kind === 'invitation'
+    route.kind === 'email-change'
       ? {
-          headingBadge: 'Invitation',
-          title: 'Rejoignez votre équipe',
-          description: 'Partagez vos observations et avancez ensemble avec Spore.',
-          actions: null,
-        }
-      : route.kind === 'email-change'
-        ? {
             headingBadge: 'Compte',
             title: 'Confirmer l’e-mail',
             description:

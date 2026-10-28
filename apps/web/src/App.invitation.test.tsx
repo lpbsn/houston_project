@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
 import { bootstrapQueryKey } from '@/features/auth/api'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 
@@ -174,9 +173,8 @@ afterEach(() => {
 })
 
 describe('App invitation landing', () => {
-  it('navigates to the landing derived from hydrated bootstrap, not pending-onboarding', async () => {
+  it('refreshes bootstrap then opens the access choice', async () => {
     const bootstrap = operationalBootstrap()
-    const landingPath = getAuthenticatedLandingPath(bootstrap)
     fetchBootstrap.mockResolvedValue(bootstrap)
     queryClient.setQueryData(bootstrapQueryKey, bootstrap)
     authState.bootstrap = null
@@ -185,14 +183,13 @@ describe('App invitation landing', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
 
-    expect(landingPath).toBe('/reporting')
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/reporting', { replace: true })
+      expect(fetchBootstrap).toHaveBeenCalled()
+      expect(navigate).toHaveBeenCalledWith('/acces', { replace: true })
     })
     expect(navigate).not.toHaveBeenCalledWith('/pending-onboarding', { replace: true })
-    expect(navigate).not.toHaveBeenCalledWith(
-      expect.stringMatching(/\/install-app/),
-      expect.anything(),
-    )
+    expect(navigate).not.toHaveBeenCalledWith('/reporting', { replace: true })
+    expect(screen.queryByTestId('app-shell')).toBeNull()
+    expect(screen.queryByText('Rejoignez votre équipe')).toBeNull()
   })
 })

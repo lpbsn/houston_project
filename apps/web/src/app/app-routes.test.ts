@@ -17,6 +17,14 @@ describe('normalizeRoutePath', () => {
 })
 
 describe('parseAppRoute', () => {
+  it('parses access and installer routes', () => {
+    expect(parseAppRoute('/acces')).toEqual({ kind: 'static', path: '/acces' })
+    expect(parseAppRoute('/acces?destination=android')).toEqual({ kind: 'static', path: '/acces' })
+    expect(parseAppRoute('/installer')).toEqual({ kind: 'static', path: '/installer' })
+    expect(serializeAppRoute(parseAppRoute('/acces'))).toBe('/acces')
+    expect(serializeAppRoute(parseAppRoute('/installer'))).toBe('/installer')
+  })
+
   it('parses onboarding routes with query strings as /onboarding', () => {
     expect(parseAppRoute('/onboarding?establishmentId=x&sessionId=y')).toEqual({
       kind: 'static',
@@ -310,6 +318,8 @@ describe('serializeAppRoute', () => {
       '/email-change',
       '/password-reset',
       '/forgot-password',
+      '/acces',
+      '/installer',
       '/foo/bar',
     ]
 

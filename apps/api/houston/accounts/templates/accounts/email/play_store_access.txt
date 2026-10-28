@@ -1,0 +1,18 @@
+Demande d’accès Google Play
+
+Adresse SPORE : {{ spore_email }}
+{% if establishment_name %}Établissement : {{ establishment_name }}
+{% endif %}Adresse Google Play : {{ play_email }}
+Date : {{ transmitted_on }}
+{% if is_address_correction %}
+Cette demande remplace la précédente pour le même compte SPORE.
+{% endif %}{% if is_retransmission %}
+Cette transmission renouvelle la même adresse, car la précédente n’a pas été confirmée.
+{% endif %}
+Transmettez vous-même ces liens à l’adresse SPORE, après avoir autorisé le compte Google Play.
+Utiliser le même compte Google pour rejoindre le test, puis installer l’application.
+
+Adhésion : {{ join_url }}
+Installation : {{ install_url }}
+
+Aucun e-mail n’est envoyé à l’utilisateur.

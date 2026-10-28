@@ -1,5 +1,5 @@
 import { type ComponentType, useEffect, useState } from 'react'
-import { ArrowLeftRight, BarChart3, Building2, ChevronRight, History, LayoutGrid, Library, SlidersHorizontal, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, History, LayoutGrid, Library, SlidersHorizontal, Smartphone, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -506,6 +506,14 @@ export function ProfilePage({
         </div>
       </div>
       ) : null}
+
+      <ProfileManagementNavCard
+        icon={Smartphone}
+        iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
+        title="Installer SPORE"
+        subtitle="iPhone ou Android"
+        onClick={() => onNavigate?.('/acces')}
+      />
 
       <div className="space-y-2">
         <TerrainSectionLabel>Compte et sécurité</TerrainSectionLabel>

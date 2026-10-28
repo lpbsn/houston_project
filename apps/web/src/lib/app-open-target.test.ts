@@ -115,6 +115,18 @@ describe('login and select-establishment carry', () => {
     )
   })
 
+  it('sends an anonymous access page through login and keeps the android destination', () => {
+    const android = parseAppOpenTargetFromLocation(parseAppRoute('/acces'), '?destination=android')
+    expect(android).toEqual({ href: '/acces?destination=android' })
+    expect(buildLoginRedirectHref(android!)).toBe('/login?next=%2Facces%3Fdestination%3Dandroid')
+
+    const choice = parseAppOpenTargetFromLocation(parseAppRoute('/acces'), '')
+    expect(choice).toEqual({ href: '/acces' })
+    expect(buildLoginRedirectHref(choice!)).toBe('/login?next=%2Facces')
+    expect(parseAppOpenTargetFromLocation(parseAppRoute('/installer'), '')).toBeNull()
+    expect(isPendingDestinationHref('/acces?destination=android')).toBe(true)
+  })
+
   it('keeps next without a hint and ignores open-redirect next values', () => {
     expect(parsePendingAppOpenFromSearch('?next=/chat/c1')).toEqual({ href: '/chat/c1' })
     expect(parsePendingAppOpenFromSearch('?next=https://evil.example/signals/s1')).toBeNull()

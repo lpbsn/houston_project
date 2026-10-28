@@ -1,8 +1,15 @@
 import { Clock3 } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-export function EstablishmentPendingActivationCard() {
+type EstablishmentPendingActivationCardProps = {
+  onOpenInstall: () => void
+}
+
+export function EstablishmentPendingActivationCard({
+  onOpenInstall,
+}: EstablishmentPendingActivationCardProps) {
   return (
     <Card className="mx-auto w-full max-w-2xl rounded-[1.85rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_24px_52px_-40px_rgba(46,72,173,0.28)]">
       <CardHeader className="gap-3">
@@ -19,8 +26,11 @@ export function EstablishmentPendingActivationCard() {
           Vous pourrez accéder à l&apos;espace une fois l&apos;activation terminée.
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-sm leading-6 text-muted-foreground">
-        Reconnectez-vous après l&apos;activation pour accéder au workspace opérationnel.
+      <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
+        <p>Reconnectez-vous après l&apos;activation pour accéder au workspace opérationnel.</p>
+        <Button type="button" variant="outline" className="h-11 rounded-2xl" onClick={onOpenInstall}>
+          Voir les options d&apos;installation
+        </Button>
       </CardContent>
     </Card>
   )
