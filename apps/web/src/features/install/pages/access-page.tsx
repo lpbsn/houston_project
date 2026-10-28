@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAuthenticatedLandingPath, isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { AccessWebLink } from '@/features/install/components/access-web-link'
 import { AndroidAccess } from '@/features/install/components/android-access'
+import { AndroidMark, AppleMark } from '@/features/install/components/store-marks'
 import { InstallFrame } from '@/features/install/components/install-frame'
 import {
   playRequestEstablishmentId,
@@ -104,17 +105,19 @@ function ChoiceActions({
 }) {
   return (
     <div className="space-y-4">
-      <Button asChild className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]">
+      <Button asChild className="h-12 w-full gap-2 rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]">
         <a href={iosAppStoreUrl} target="_blank" rel="noopener noreferrer">
+          <AppleMark />
           Télécharger sur iPhone
         </a>
       </Button>
       <Button
         type="button"
         variant="outline"
-        className="h-12 w-full rounded-2xl"
+        className="h-12 w-full gap-2 rounded-2xl"
         onClick={onAndroid}
       >
+        <AndroidMark />
         Télécharger sur Android
       </Button>
       <p className="text-sm leading-6 text-[#40564d]">
