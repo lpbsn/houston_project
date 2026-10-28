@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -139,9 +140,12 @@ export function AndroidAccess({
               required
             />
           </label>
-          <p className="text-sm leading-6 text-[#40564d]">
-            Sur votre Android, ouvrez Play Store, puis la photo de profil, et vérifiez l’adresse
-            sélectionnée.
+          <p className="flex items-start gap-2.5 rounded-2xl bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]">
+            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span>
+              Ouvrez Play Store, touchez votre photo de profil et vérifiez l’adresse du{' '}
+              <strong className="font-bold">compte sélectionné</strong>.
+            </span>
           </p>
           {error ? (
             <p role="alert" className="text-sm text-destructive">

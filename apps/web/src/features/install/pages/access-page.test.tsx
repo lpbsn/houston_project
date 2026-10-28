@@ -113,6 +113,12 @@ describe('AccessPage', () => {
     expect((input as HTMLInputElement).value).toBe('')
     expect((input as HTMLInputElement).value).not.toBe('spore@example.com')
     expect(screen.getByRole('button', { name: 'Demander mon accès' })).toBeTruthy()
+    const emphasis = screen.getByText('compte sélectionné')
+    expect(emphasis.tagName).toBe('STRONG')
+    expect(emphasis.closest('p')?.textContent).toBe(
+      'Ouvrez Play Store, touchez votre photo de profil et vérifiez l’adresse du compte sélectionné.',
+    )
+    expect(screen.queryByText(/Sur votre Android/)).toBeNull()
     expect(screen.queryByRole('link', { name: /Google Play/i })).toBeNull()
     expect(document.body.textContent).not.toContain(CLOSED_JOIN)
     expect(document.body.textContent).not.toContain(CLOSED_INSTALL)
