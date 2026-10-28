@@ -511,7 +511,7 @@ export function ProfilePage({
         icon={Smartphone}
         iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
         title="Installer SPORE"
-        subtitle="iPhone, Android ou ordinateur"
+        subtitle="iPhone ou Android"
         onClick={() => onNavigate?.('/acces')}
       />
 

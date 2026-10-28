@@ -28,7 +28,7 @@ export function InstallerPage() {
             </a>
           </Button>
           <Button type="button" variant="outline" className="h-12 w-full rounded-2xl" onClick={openAndroid}>
-            Préparer l’accès à Google Play
+            Télécharger sur Android
           </Button>
           <p className="text-sm leading-6 text-[#40564d]">
             Une fois l’application installée, connectez-vous avec votre compte SPORE.

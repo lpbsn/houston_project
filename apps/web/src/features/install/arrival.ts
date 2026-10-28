@@ -126,12 +126,11 @@ export function resolveAccessCopy(
 ): {
   lines: string[]
   question: string
-  spaceReady: boolean
   establishmentId: string | null
 } {
   const question = 'Où souhaitez-vous utiliser SPORE ?'
   if (!bootstrap) {
-    return { lines: [], question, spaceReady: false, establishmentId: null }
+    return { lines: [], question, establishmentId: null }
   }
 
   const arrivalMatches =
@@ -144,10 +143,6 @@ export function resolveAccessCopy(
         (membership) => membership.establishment_id === concernedId,
       )
     : bootstrap.pending_onboarding_memberships.length > 0 && !hasOperationalMembership(bootstrap)
-  const spaceReady = concernedId
-    ? !concernedPending
-    : hasOperationalMembership(bootstrap)
-
   const lines: string[] = []
   if (concernedPending) {
     lines.push('Votre compte est activé. Votre établissement est encore en préparation.')
@@ -169,7 +164,7 @@ export function resolveAccessCopy(
     }
   }
 
-  return { lines, question, spaceReady, establishmentId: concernedId }
+  return { lines, question, establishmentId: concernedId }
 }
 
 export function playRequestEstablishmentId(

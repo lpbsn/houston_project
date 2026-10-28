@@ -102,14 +102,14 @@ export function AndroidAccess({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-[#172e27]">Préparer l’accès à Google Play</h1>
+      <h1 className="text-2xl font-bold text-[#172e27]">Télécharger sur Android</h1>
       <p className="text-sm leading-6 text-[#40564d]">
         Pour installer SPORE sur Google Play, nous devons autoriser le compte Google utilisé dans
         votre Play Store. Cette adresse n’est pas votre identifiant SPORE.
       </p>
       {showReceived ? (
         <div className="space-y-4">
-          <p className="rounded-2xl bg-[#edf6f0] p-4 text-sm leading-6 text-[#172e27]">
+          <p className="rounded-lg bg-[#edf6f0] p-4 text-sm leading-6 text-[#172e27]">
             {RECEIVED_MESSAGE}
           </p>
           <Button
@@ -140,7 +140,7 @@ export function AndroidAccess({
               required
             />
           </label>
-          <p className="flex items-start gap-2.5 rounded-2xl bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]">
+          <p className="flex items-start gap-2.5 rounded-lg bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]">
             <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span>
               Ouvrez Play Store, touchez votre photo de profil et vérifiez l’adresse du{' '}

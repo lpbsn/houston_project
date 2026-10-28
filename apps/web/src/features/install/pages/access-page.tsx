@@ -1,5 +1,5 @@
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -20,19 +20,16 @@ import {
   iosAppStoreUrl,
   resolveAndroidChoice,
 } from '@/features/install/distribution'
-import { resolvePublicAppUrl } from '@/lib/runtime'
+import { terrain } from '@/lib/terrain-styles'
 import { useLgViewport } from '@/lib/lg-viewport'
+import { cn } from '@/lib/utils'
 
-const IPHONE_FROM_ANOTHER_DEVICE =
-  'Pour installer SPORE sur un iPhone depuis un autre appareil, choisissez Ordinateur et scannez le QR code. Il ouvre la page d’installation, puis cette fiche sur le téléphone.'
+const installHintClassName =
+  'flex items-start gap-2.5 rounded-lg bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]'
 
-function destinationOf(search: string): 'android' | 'ordinateur' | null {
+function destinationOf(search: string): 'android' | null {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
-  const value = params.get('destination')
-  if (value === 'android' || value === 'ordinateur') {
-    return value
-  }
-  return null
+  return params.get('destination') === 'android' ? 'android' : null
 }
 
 export function AccessPage() {
@@ -78,17 +75,9 @@ export function AccessPage() {
               onChooseAnother={() => navigate('/acces')}
             />
           ) : null}
-          {destination === 'ordinateur' ? (
-            <ComputerAccess
-              spaceReady={copy.spaceReady}
-              onOpenSpace={openSpace}
-              onChooseAnother={() => navigate('/acces')}
-            />
-          ) : null}
           {destination === null ? (
             <ChoiceActions
               onAndroid={() => navigate('/acces?destination=android')}
-              onComputer={() => navigate('/acces?destination=ordinateur')}
               onWeb={openSpace}
             />
           ) : null}
@@ -100,15 +89,13 @@ export function AccessPage() {
 
 function ChoiceActions({
   onAndroid,
-  onComputer,
   onWeb,
 }: {
   onAndroid: () => void
-  onComputer: () => void
   onWeb: () => void
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <Button asChild className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]">
         <a href={iosAppStoreUrl} target="_blank" rel="noopener noreferrer">
           Télécharger sur l’App Store
@@ -120,79 +107,27 @@ function ChoiceActions({
         className="h-12 w-full rounded-2xl"
         onClick={onAndroid}
       >
-        Préparer l’accès à Google Play
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        className="h-12 w-full rounded-2xl"
-        onClick={onComputer}
-      >
-        Accéder à SPORE sur le Web
+        Télécharger sur Android
       </Button>
       <p className="text-sm leading-6 text-[#40564d]">
         Une fois l’application installée, connectez-vous avec votre compte SPORE.
       </p>
-      <p className="text-sm leading-6 text-[#40564d]">{IPHONE_FROM_ANOTHER_DEVICE}</p>
-      <Button type="button" variant="ghost" className="h-11 w-full rounded-2xl" onClick={onWeb}>
-        Accéder directement au Web
-      </Button>
-    </div>
-  )
-}
-
-function ComputerAccess({
-  spaceReady,
-  onOpenSpace,
-  onChooseAnother,
-}: {
-  spaceReady: boolean
-  onOpenSpace: () => void
-  onChooseAnother: () => void
-}) {
-  const installerUrl = resolvePublicAppUrl('/installer')
-  const [qrSvg, setQrSvg] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    void QRCode.toString(installerUrl, { type: 'svg', margin: 1, width: 180 }).then((svg) => {
-      if (!cancelled) {
-        setQrSvg(svg)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [installerUrl])
-
-  return (
-    <div className="space-y-5">
-      <h2 className="text-xl font-bold text-[#172e27]">
-        {spaceReady ? 'Votre espace SPORE est prêt' : 'Votre établissement est encore en préparation'}
-      </h2>
-      <Button
-        type="button"
-        className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]"
-        onClick={onOpenSpace}
-      >
-        Ouvrir mon espace SPORE
-      </Button>
-      <div className="space-y-3 rounded-2xl bg-[#f7faf8] p-4">
-        <p className="text-sm font-medium text-[#172e27]">Retrouvez SPORE sur votre téléphone</p>
-        {qrSvg ? (
-          <div
-            className="mx-auto w-fit bg-white p-2"
-            aria-label="QR code vers la page d’installation"
-            dangerouslySetInnerHTML={{ __html: qrSvg }}
-          />
-        ) : null}
-        <p className="text-sm leading-6 text-[#40564d]">
-          Le QR code ouvre un choix iPhone ou Android, sans identifiant ni invitation.
-        </p>
+      <p className={installHintClassName}>
+        <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <span>
+          Vous pourrez retrouver cette page à tout moment dans SPORE, depuis{' '}
+          <strong className="font-bold">Général → Installer SPORE</strong>.
+        </span>
+      </p>
+      <div className="border-t border-[#dce8e2] pt-4 text-center">
+        <button
+          type="button"
+          className={cn('text-sm underline underline-offset-4', terrain.success)}
+          onClick={onWeb}
+        >
+          Accéder au site web
+        </button>
       </div>
-      <Button type="button" variant="ghost" className="h-11 w-full rounded-2xl" onClick={onChooseAnother}>
-        Choisir un autre appareil
-      </Button>
     </div>
   )
 }

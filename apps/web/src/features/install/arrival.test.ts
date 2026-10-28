@@ -78,7 +78,6 @@ describe('resolveAccessCopy', () => {
       arrival: 'joined',
     })
     expect(copy.lines).toEqual(['Vous avez rejoint Hôtel des Mésanges.'])
-    expect(copy.spaceReady).toBe(true)
 
     const otherAccount = resolveAccessCopy(bootstrap(), {
       ...arrival,
@@ -107,7 +106,6 @@ describe('resolveAccessCopy', () => {
       }),
       { userId: 'user-1', arrival: 'activated', establishmentId: 'draft-1' },
     )
-    expect(copy.spaceReady).toBe(false)
     expect(copy.lines[0]).toBe(
       'Votre compte est activé. Votre établissement est encore en préparation.',
     )
