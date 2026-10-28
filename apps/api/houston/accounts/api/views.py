@@ -31,6 +31,8 @@ from houston.accounts.api.serializers import (
     InvitationPreviewRequestSerializer,
     InvitationPreviewResponseSerializer,
     LegalVersionRequestSerializer,
+    PlayStoreAccessRequestSerializer,
+    PlayStoreAccessResponseSerializer,
     LoginRequestSerializer,
     LogoutRequestSerializer,
     PasswordChangeRequestSerializer,
@@ -511,6 +513,89 @@ class UserProfileView(APIView):
         )
 
         return Response(build_bootstrap_payload(request.user, session=request.auth.session))
+
+
+class PlayStoreAccessView(AuthRateLimitedMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_PLAY_STORE_ACCESS
+
+    @extend_schema(
+        tags=["auth"],
+        responses={
+            200: PlayStoreAccessResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+        },
+        description=(
+            "Returns whether the current user has a Google Play access request, "
+            "and whether Resend has accepted the current idempotency key. "
+            "The response does not include a provider identifier."
+        ),
+    )
+    def get(self, request):
+        from houston.accounts.models import PlayStoreAccessRequest
+        from houston.accounts.play_store_access import play_store_access_status
+
+        record = PlayStoreAccessRequest.objects.filter(user=request.user).first()
+        return Response({"status": play_store_access_status(record)})
+
+    @extend_schema(
+        tags=["auth"],
+        request=PlayStoreAccessRequestSerializer,
+        responses={
+            200: PlayStoreAccessResponseSerializer,
+            400: OpenApiResponse(response=ValidationErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+            503: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Sends the current user's Google Play access request to the SPORE operator. "
+            "The same address is retried with the frozen payload while its idempotency "
+            "key is still current. A different address replaces that request. "
+            "Accepted means Resend accepted the current key, not that the message was delivered."
+        ),
+    )
+    def post(self, request):
+        from houston.accounts.play_store_access import (
+            PlayStoreAccessNotAccepted,
+            PlayStoreAccessSuperseded,
+            PlayStoreAccessUnavailable,
+            play_store_access_status,
+            submit_play_store_access,
+        )
+
+        serializer = PlayStoreAccessRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        session = None if request.auth is None else request.auth.session
+        try:
+            record = submit_play_store_access(
+                user=request.user,
+                google_play_email=serializer.validated_data["google_play_email"],
+                establishment_id=serializer.validated_data.get("establishment_id"),
+                session=session,
+            )
+        except PlayStoreAccessUnavailable:
+            return _api_error_response(
+                code="play_store_access_unavailable",
+                detail="Play Store access email is not available.",
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except PlayStoreAccessNotAccepted:
+            return _api_error_response(
+                code="play_store_access_not_accepted",
+                detail="Play Store access email was not accepted.",
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except PlayStoreAccessSuperseded:
+            return _api_error_response(
+                code="play_store_access_superseded",
+                detail="Play Store access request was replaced.",
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response({"status": play_store_access_status(record)})
 
 
 class EmailChangeRequestView(AuthRateLimitedMixin, APIView):

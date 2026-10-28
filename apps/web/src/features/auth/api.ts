@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { apiClient, withAuthRetry } from '@/api/client'
+import { clearAccessArrival } from '@/features/install/arrival'
 import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
 import { clearChatOutbox } from '@/features/chat/lib/chat-outbox'
 import { clearObservationComposeDrafts } from '@/features/observations/lib/observation-compose-draft-store'
@@ -313,6 +314,7 @@ function clearVolatileAuthState(options?: { bumpInvalidation?: boolean }) {
   void clearChatOutbox()
   clearSuccessToasts()
   clearAuthenticatedQueryCache(queryClient)
+  clearAccessArrival()
 }
 
 function clearPersistedRefreshTokenBestEffort() {
@@ -656,8 +658,13 @@ export async function login(input: LoginRequest) {
 }
 
 export type InvitationAcceptOutcome =
-  | { kind: 'session' }
-  | { kind: 'membership_only'; requiresLogin: boolean }
+  | { kind: 'session'; userId: string; establishmentId: string }
+  | {
+      kind: 'membership_only'
+      requiresLogin: boolean
+      userId: string
+      establishmentId: string
+    }
 
 export async function previewInvitation(token: string) {
   const { data, error, response } = await apiClient.POST('/api/v1/invitations/preview/', {
@@ -760,11 +767,14 @@ async function settleInvitationAccept(
   }
 
   if (isMembershipOnlyAcceptPayload(data)) {
+    const context = readInvitationAcceptContext(data)
     return {
       kind: 'outcome',
       outcome: {
         kind: 'membership_only',
         requiresLogin: data.requires_login,
+        userId: context.userId,
+        establishmentId: context.establishmentId,
       },
     }
   }
@@ -779,7 +789,24 @@ async function settleInvitationAccept(
   } else {
     await commitInvitationSession(data, prepared)
   }
-  return { kind: 'outcome', outcome: { kind: 'session' } }
+  return {
+    kind: 'outcome',
+    outcome: { kind: 'session', ...readInvitationAcceptContext(data) },
+  }
+}
+
+function readInvitationAcceptContext(data: object): { userId: string; establishmentId: string } {
+  const record = data as {
+    user?: { id?: string }
+    user_id?: string
+    establishment_id?: string
+  }
+  const userId = record.user_id ?? record.user?.id ?? ''
+  const establishmentId = record.establishment_id ?? ''
+  return {
+    userId: typeof userId === 'string' ? userId : String(userId),
+    establishmentId: typeof establishmentId === 'string' ? establishmentId : String(establishmentId),
+  }
 }
 
 async function refreshBearerAfterUnauthorized(

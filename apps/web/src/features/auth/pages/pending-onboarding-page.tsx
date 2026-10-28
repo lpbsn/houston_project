@@ -15,6 +15,7 @@ type PendingOnboardingPageProps = {
 export function PendingOnboardingPage({
   pendingMemberships,
   memberships,
+  onNavigate,
 }: PendingOnboardingPageProps) {
   const [forceWaiting, setForceWaiting] = useState(false)
   const landing = useMemo(
@@ -40,7 +41,9 @@ export function PendingOnboardingPage({
   }
 
   if (forceWaiting || landing.kind === 'waiting') {
-    return <EstablishmentPendingActivationCard />
+    return (
+      <EstablishmentPendingActivationCard onOpenInstall={() => onNavigate('/acces')} />
+    )
   }
 
   if (landing.kind === 'selection') {
@@ -52,5 +55,5 @@ export function PendingOnboardingPage({
     )
   }
 
-  return <EstablishmentPendingActivationCard />
+  return <EstablishmentPendingActivationCard onOpenInstall={() => onNavigate('/acces')} />
 }

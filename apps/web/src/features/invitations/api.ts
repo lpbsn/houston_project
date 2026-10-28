@@ -28,7 +28,10 @@ function rethrowInvitationError(error: unknown): never {
 export async function previewDirectorInvitation(token: string) {
   try {
     const preview = await previewInvitation(token)
-    return { requiresPassword: preview.requires_password }
+    return {
+      requiresPassword: preview.requires_password,
+      establishmentName: preview.establishment_name,
+    }
   } catch (error) {
     rethrowInvitationError(error)
   }

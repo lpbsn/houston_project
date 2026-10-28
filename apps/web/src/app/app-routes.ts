@@ -25,6 +25,8 @@ export type AppPath =
   | '/'
   | '/login'
   | '/forgot-password'
+  | '/acces'
+  | '/installer'
   | '/onboarding'
   | '/pending-onboarding'
   | '/select-establishment'
@@ -323,6 +325,8 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/' ||
     pathname === '/login' ||
     pathname === '/forgot-password' ||
+    pathname === '/acces' ||
+    pathname === '/installer' ||
     pathname === '/onboarding' ||
     pathname === '/pending-onboarding' ||
     pathname === '/select-establishment' ||

@@ -395,11 +395,22 @@ class InvitationPreviewRequestSerializer(serializers.Serializer):
 
 class InvitationPreviewResponseSerializer(serializers.Serializer):
     requires_password = serializers.BooleanField()
+    establishment_name = serializers.CharField(allow_blank=True)
 
 
 class ActiveInvitationAcceptResponseSerializer(serializers.Serializer):
     requires_login = serializers.BooleanField()
     establishment_id = serializers.UUIDField()
+    user_id = serializers.UUIDField()
+
+
+class PlayStoreAccessRequestSerializer(serializers.Serializer):
+    google_play_email = serializers.EmailField()
+    establishment_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class PlayStoreAccessResponseSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=("none", "pending", "accepted"))
 
 
 class DirectorInvitationAcceptResponseSerializer(AuthResponseSerializer):

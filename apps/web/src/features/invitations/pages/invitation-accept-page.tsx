@@ -15,6 +15,8 @@ import {
 } from '@/features/auth/lib/password-creation'
 import { clearAuthState, logout } from '@/features/auth/api'
 import { getAccessToken } from '@/features/auth/session'
+import { rememberAccessArrival, type AccessArrival } from '@/features/install/arrival'
+import { buildLoginRedirectHref } from '@/lib/app-open-target'
 import {
   InvitationAcceptApiError,
   acceptDirectorInvitation,
@@ -62,8 +64,9 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requiresPassword, setRequiresPassword] = useState<boolean | null>(null)
+  const [establishmentName, setEstablishmentName] = useState('')
   const [accepted, setAccepted] = useState(false)
-  const [needsLogin, setNeedsLogin] = useState(false)
+  const [switchArrival, setSwitchArrival] = useState<AccessArrival | null>(null)
   const [needsAccountSwitch, setNeedsAccountSwitch] = useState(false)
 
   useLayoutEffect(() => {
@@ -84,6 +87,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
       .then((preview) => {
         if (!cancelled) {
           setRequiresPassword(preview.requiresPassword)
+          setEstablishmentName(preview.establishmentName?.trim() ?? '')
         }
       })
       .catch((error: unknown) => {
@@ -130,17 +134,32 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
         ...(acceptTerms ? { terms_version: CURRENT_TERMS_VERSION } : {}),
       })
 
+      const arrival =
+        outcome.userId && outcome.establishmentId
+          ? {
+              userId: outcome.userId,
+              establishmentId: outcome.establishmentId,
+              arrival: outcome.kind === 'session' ? ('activated' as const) : ('joined' as const),
+            }
+          : null
+
       if (outcome.kind === 'membership_only' && outcome.requiresLogin) {
         if (getAccessToken()) {
+          setSwitchArrival(arrival)
           setNeedsAccountSwitch(true)
           return
         }
-        setNeedsLogin(true)
+        if (arrival) {
+          rememberAccessArrival(arrival)
+        }
         setAccepted(true)
         return
       }
 
-      setAccepted(true)
+      if (arrival) {
+        rememberAccessArrival(arrival)
+      }
+      onAccepted()
     } catch (error) {
       setSubmitError(getAcceptErrorMessage(error))
     } finally {
@@ -157,9 +176,12 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
       setSubmitError(getAcceptErrorMessage(error))
     } finally {
       clearAuthState()
+      if (switchArrival) {
+        rememberAccessArrival(switchArrival)
+      }
       setIsSubmitting(false)
     }
-    navigate('/login', { replace: true })
+    navigate(buildLoginRedirectHref({ href: '/acces' }), { replace: true })
   }
 
   if (accepted) {
@@ -170,9 +192,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
           <CheckCircle2 aria-hidden="true" className="size-12 rounded-full bg-[#edf6f0] p-2 text-[#004d3b]" />
           <CardTitle className="text-2xl font-bold">Bienvenue dans votre équipe !</CardTitle>
           <CardDescription className="text-sm leading-6 text-[#40564d]">
-            Votre invitation est acceptée. {needsLogin
-              ? 'Connectez-vous avec l’adresse qui a reçu l’invitation pour accéder à votre établissement.'
-              : 'Votre espace Spore est prêt.'}
+            Votre invitation est acceptée. Connectez-vous avec l’adresse qui a reçu l’invitation pour accéder à votre établissement.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -181,8 +201,8 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
             <p>Une idée, un problème ou un retour client ? Partagez-le avec votre équipe, en texte, photo ou vocal.</p>
           </div>
           <Button className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]"
-            onClick={() => needsLogin ? navigate('/login', { replace: true }) : onAccepted()}>
-            {needsLogin ? 'Se connecter à Spore' : 'Ouvrir mon espace Spore'}
+            onClick={() => navigate(buildLoginRedirectHref({ href: '/acces' }), { replace: true })}>
+            Se connecter à Spore
           </Button>
         </CardContent>
       </Card>
@@ -249,11 +269,12 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     )
   }
 
+  const joinedPlace = establishmentName || 'votre équipe'
   const description =
     requiresPassword === false
-      ? 'Vous avez déjà un compte Spore. Rejoignez votre équipe en conservant votre mot de passe habituel.'
+      ? `Vous avez déjà un compte Spore. Rejoignez ${joinedPlace} en conservant votre mot de passe habituel.`
       : requiresPassword
-        ? 'Choisissez votre mot de passe pour activer votre compte et rejoindre votre équipe.'
+        ? `Choisissez votre mot de passe pour activer votre compte et rejoindre ${joinedPlace}.`
         : 'Votre invitation n’a pas pu être vérifiée.'
 
   return (

@@ -54,6 +54,7 @@ const PROTECTED_STATIC_PATHS = new Set<string>([
   '/onboarding',
   '/select-establishment',
   '/no-establishment',
+  '/acces',
 ])
 
 const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([

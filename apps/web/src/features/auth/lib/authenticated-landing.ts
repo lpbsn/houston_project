@@ -91,7 +91,8 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
   return (
     path === '/pending-onboarding' ||
     path === '/select-establishment' ||
-    path === '/no-establishment'
+    path === '/no-establishment' ||
+    path === '/acces'
   )
 }
 
@@ -126,7 +127,7 @@ export function allowsUnauthenticatedAccess(route: AppRoute): boolean {
     return false
   }
 
-  return route.path === '/login' || route.path === '/forgot-password'
+  return route.path === '/login' || route.path === '/forgot-password' || route.path === '/installer'
 }
 
 export function shouldShowAuthRoutingLoading(
