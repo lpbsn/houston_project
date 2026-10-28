@@ -228,6 +228,43 @@ describe('InvitationAcceptPage', () => {
       arrival: 'joined',
       establishmentId: 'est-1',
     })
+    const pendingSubmit = screen.getByRole('button', { name: /activation en cours/i })
+    expect(pendingSubmit).toHaveProperty('disabled', true)
+    fireEvent.submit(pendingSubmit.closest('form')!)
+    expect(acceptDirectorInvitation).toHaveBeenCalledTimes(1)
+    expect(onAccepted).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the join form inactive after a new account session is created', async () => {
+    acceptDirectorInvitation.mockResolvedValue({
+      kind: 'session',
+      userId: 'user-1',
+      establishmentId: 'est-1',
+    })
+    const { onAccepted } = renderPage('/invitations#invite-token')
+
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'SecurePass123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoindre mon équipe' }))
+
+    await vi.waitFor(() => {
+      expect(onAccepted).toHaveBeenCalledOnce()
+    })
+    expect(screen.queryByText('Bienvenue dans votre équipe !')).toBeNull()
+    expect(JSON.parse(sessionStorage.getItem('spore.access-arrival') ?? 'null')).toEqual({
+      userId: 'user-1',
+      arrival: 'activated',
+      establishmentId: 'est-1',
+    })
+    const pendingSubmit = screen.getByRole('button', { name: /activation en cours/i })
+    expect(pendingSubmit).toHaveProperty('disabled', true)
+    fireEvent.submit(pendingSubmit.closest('form')!)
+    expect(acceptDirectorInvitation).toHaveBeenCalledTimes(1)
+    expect(onAccepted).toHaveBeenCalledOnce()
   })
 
   it('shows an expired invitation without password fields or an active submit', async () => {

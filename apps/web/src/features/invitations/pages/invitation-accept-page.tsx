@@ -122,6 +122,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     }
 
     setIsSubmitting(true)
+    let keepFormLocked = false
 
     try {
       const outcome = await acceptDirectorInvitation(invitationToken, {
@@ -159,11 +160,14 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
       if (arrival) {
         rememberAccessArrival(arrival)
       }
+      keepFormLocked = true
       onAccepted()
     } catch (error) {
       setSubmitError(getAcceptErrorMessage(error))
     } finally {
-      setIsSubmitting(false)
+      if (!keepFormLocked) {
+        setIsSubmitting(false)
+      }
     }
   }
 
