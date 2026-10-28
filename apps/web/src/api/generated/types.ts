@@ -438,6 +438,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/play-store-access/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns whether the current user has a Google Play access request, and whether Resend has accepted the current idempotency key. The response does not include a provider identifier. */
+        get: operations["v1_auth_me_play_store_access_retrieve"];
+        put?: never;
+        /** @description Sends the current user's Google Play access request to the SPORE operator. The same address is retried with the frozen payload while its idempotency key is still current. A different address replaces that request. Accepted means Resend accepted the current key, not that the message was delivered. */
+        post: operations["v1_auth_me_play_store_access_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/terms/": {
         parameters: {
             query?: never;
@@ -3567,6 +3585,8 @@ export interface components {
             requires_login: boolean;
             /** Format: uuid */
             establishment_id: string;
+            /** Format: uuid */
+            user_id: string;
         };
         ActivityDescriptionResponse: {
             description: string;
@@ -4792,6 +4812,7 @@ export interface components {
         };
         InvitationPreviewResponse: {
             requires_password: boolean;
+            establishment_name: string;
         };
         LegalVersionRequest: {
             version: string;
@@ -5393,6 +5414,22 @@ export interface components {
             next_cursor: string | null;
             results: components["schemas"]["PlatformUserListItem"][];
         };
+        PlayStoreAccessRequest: {
+            /** Format: email */
+            google_play_email: string;
+            /** Format: uuid */
+            establishment_id?: string | null;
+        };
+        PlayStoreAccessResponse: {
+            status: components["schemas"]["PlayStoreAccessResponseStatusEnum"];
+        };
+        /**
+         * @description * `none` - none
+         *     * `pending` - pending
+         *     * `accepted` - accepted
+         * @enum {string}
+         */
+        PlayStoreAccessResponseStatusEnum: "none" | "pending" | "accepted";
         /**
          * @description * `info` - Info
          *     * `action_required` - Action required
@@ -7159,6 +7196,106 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_play_store_access_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayStoreAccessResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_play_store_access_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlayStoreAccessRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlayStoreAccessRequest"];
+                "multipart/form-data": components["schemas"]["PlayStoreAccessRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayStoreAccessResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

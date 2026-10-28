@@ -286,6 +286,17 @@ afterEach(() => {
 })
 
 describe('ProfilePage', () => {
+  it('opens the access choice from the install card', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Installer SPORE/ }))
+    expect(onNavigate).toHaveBeenCalledWith('/acces')
+  })
+
   it('withdraws AI consent from the Général toggle', () => {
     render(
       createElement(ProfilePage, {

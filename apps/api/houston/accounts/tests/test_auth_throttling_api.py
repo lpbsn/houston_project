@@ -45,6 +45,7 @@ THROTTLE_TEST_RATES = {
     "auth_password_change": "2/minute",
     "auth_password_reset": "2/hour",
     "auth_password_reset_confirm": "2/hour",
+    "auth_play_store_access": "2/minute",
 }
 
 

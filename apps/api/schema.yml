@@ -1416,6 +1416,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/auth/me/play-store-access/:
+    get:
+      operationId: v1_auth_me_play_store_access_retrieve
+      description: Returns whether the current user has a Google Play access request,
+        and whether Resend has accepted the current idempotency key. The response
+        does not include a provider identifier.
+      tags:
+      - auth
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayStoreAccessResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    post:
+      operationId: v1_auth_me_play_store_access_create
+      description: Sends the current user's Google Play access request to the SPORE
+        operator. The same address is retried with the frozen payload while its idempotency
+        key is still current. A different address replaces that request. Accepted
+        means Resend accepted the current key, not that the message was delivered.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayStoreAccessRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlayStoreAccessRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlayStoreAccessRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayStoreAccessResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/me/terms/:
     post:
       operationId: v1_auth_me_terms_create
@@ -11346,9 +11434,13 @@ components:
         establishment_id:
           type: string
           format: uuid
+        user_id:
+          type: string
+          format: uuid
       required:
       - establishment_id
       - requires_login
+      - user_id
     ActivityDescriptionResponse:
       type: object
       properties:
@@ -14456,7 +14548,10 @@ components:
       properties:
         requires_password:
           type: boolean
+        establishment_name:
+          type: string
       required:
+      - establishment_name
       - requires_password
     LegalVersionRequest:
       type: object
@@ -15938,6 +16033,35 @@ components:
       required:
       - next_cursor
       - results
+    PlayStoreAccessRequest:
+      type: object
+      properties:
+        google_play_email:
+          type: string
+          format: email
+        establishment_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - google_play_email
+    PlayStoreAccessResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/PlayStoreAccessResponseStatusEnum'
+      required:
+      - status
+    PlayStoreAccessResponseStatusEnum:
+      enum:
+      - none
+      - pending
+      - accepted
+      type: string
+      description: |-
+        * `none` - none
+        * `pending` - pending
+        * `accepted` - accepted
     PriorityEnum:
       enum:
       - info

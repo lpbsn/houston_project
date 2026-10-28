@@ -501,6 +501,7 @@ def test_accept_active_user_activates_membership_without_session(api_client):
     )
     assert preview.status_code == 200
     assert preview.json()["requires_password"] is False
+    assert preview.json()["establishment_name"] == second.membership.establishment.name
 
     response = api_client.post(
         "/api/v1/invitations/accept/",
@@ -514,6 +515,7 @@ def test_accept_active_user_activates_membership_without_session(api_client):
     )
     assert response.status_code == 200
     assert response.data["requires_login"] is True
+    assert str(response.data["user_id"]) == str(user.id)
     assert "access_token" not in response.data
     assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
     assert UserSession.objects.filter(user=user).count() == session_count

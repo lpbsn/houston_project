@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { parseAppRoute } from '@/app/app-routes'
-import { isProtectedRoute } from '@/app/terrain-routes'
+import { isProtectedRoute, requiresActiveMembership } from '@/app/terrain-routes'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
@@ -462,11 +462,19 @@ describe('isPublicAuthRoute', () => {
 describe('routeAllowsMissingActiveMembership', () => {
   it('returns true for onboarding and account routes without a session', () => {
     expect(routeAllowsMissingActiveMembership('/pending-onboarding')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/acces')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/onboarding')).toBe(false)
     expect(routeAllowsMissingActiveMembership('/no-establishment')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/organization')).toBe(false)
     expect(routeAllowsMissingActiveMembership('/organization/establishments/est-1')).toBe(false)
     expect(routeAllowsMissingActiveMembership('/app')).toBe(false)
+  })
+
+  it('keeps a pending-only account on /acces after login', () => {
+    const route = parseAppRoute('/acces')
+    expect(isProtectedRoute(route)).toBe(true)
+    expect(requiresActiveMembership(route)).toBe(false)
+    expect(route.kind === 'static' && routeAllowsMissingActiveMembership(route.path)).toBe(true)
   })
 
   it('returns false for operational routes', () => {
@@ -480,6 +488,8 @@ describe('allowsUnauthenticatedAccess', () => {
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/login' })).toBe(true)
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/onboarding' })).toBe(false)
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/forgot-password' })).toBe(true)
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/installer' })).toBe(true)
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/acces' })).toBe(false)
   })
 
   it('returns false for protected and unknown routes', () => {
