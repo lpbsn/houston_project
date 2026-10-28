@@ -1,32 +1,44 @@
 import { CheckCircle2, LoaderCircle } from 'lucide-react'
 import { useLayoutEffect, useState } from 'react'
 
-import sporeIcon from '@/assets/brand/spore-icon-green.png'
-
+import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
 import { useAppRoute } from '@/app/app-routes'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
+import { clearAuthState, logout } from '@/features/auth/api'
 import { PasswordCreationFields } from '@/features/auth/components/password-creation-fields'
+import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
 import {
   canSubmitPasswordCreation,
   evaluatePasswordCreation,
   passwordCreationBlockerMessage,
 } from '@/features/auth/lib/password-creation'
-import { clearAuthState, logout } from '@/features/auth/api'
 import { getAccessToken } from '@/features/auth/session'
 import { rememberAccessArrival, type AccessArrival } from '@/features/install/arrival'
-import { buildLoginRedirectHref } from '@/lib/app-open-target'
 import {
   InvitationAcceptApiError,
   acceptDirectorInvitation,
   previewDirectorInvitation,
 } from '@/features/invitations/api'
+import { buildLoginRedirectHref } from '@/lib/app-open-target'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 type InvitationAcceptPageProps = {
   onAccepted: () => void
 }
+
+const pageClassName = cn(
+  'grid min-h-dvh grid-rows-[auto_1fr_auto]',
+  'bg-[#F9FAFB]',
+  'bg-[radial-gradient(circle_at_bottom_left,rgba(139,92,246,0.06),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.06),transparent_40%)]',
+)
+
+const authActionClassName = cn(
+  'h-12 w-full rounded-full text-[15px] font-semibold text-white',
+  terrainBrandAction.bg,
+  terrainBrandAction.hover,
+)
 
 function getAcceptErrorMessage(error: unknown) {
   if (error instanceof InvitationAcceptApiError) {
@@ -44,11 +56,55 @@ function getAcceptErrorMessage(error: unknown) {
   return 'Impossible de valider votre invitation. Vérifiez votre connexion puis réessayez.'
 }
 
-function InvitationBrand() {
+function InvitationAuthShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-4 flex items-center gap-2 text-[#004d3b]">
-      <img src={sporeIcon} alt="" className="size-10 object-contain" />
-      <span className="text-3xl font-bold tracking-tight">spore</span>
+    <div data-testid="invitation-accept-page" className={pageClassName}>
+      <header
+        className="flex justify-end px-4 pt-[max(1rem,var(--app-safe-top))] sm:px-6 sm:pt-[max(1.5rem,var(--app-safe-top))]"
+        aria-hidden
+      />
+      <main className="flex flex-col items-center justify-center gap-8 px-4 py-8">
+        <div className="flex items-center gap-2.5">
+          <span className="text-3xl font-bold tracking-tight text-[#111827]">spore</span>
+          <img src={sporeIconSrc} alt="" aria-hidden className="size-20 object-contain" />
+        </div>
+        {children}
+      </main>
+      <footer className="pb-[max(1.5rem,var(--app-safe-bottom))] text-center text-xs text-[#9CA3AF]">
+        © 2026 Spore · Terrain-first
+      </footer>
+    </div>
+  )
+}
+
+function InvitationPanel({
+  title,
+  description,
+  leading,
+  children,
+}: {
+  title: string
+  description?: string
+  leading?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="w-full max-w-lg rounded-[22px] border border-[#E8E6DF] bg-white px-5 py-6 shadow-[0_20px_60px_-24px_rgba(15,23,42,0.12)] sm:rounded-3xl">
+      {leading}
+      <h1 className="text-lg font-semibold text-[#111827]">{title}</h1>
+      {description ? <p className="mt-2 text-sm leading-6 text-[#6B7280]">{description}</p> : null}
+      <div className="mt-5 space-y-4">{children}</div>
+    </section>
+  )
+}
+
+function InvitationAlert({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-sm text-rose-900"
+    >
+      {children}
     </div>
   )
 }
@@ -190,47 +246,44 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
 
   if (accepted) {
     return (
-      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-xl">
-        <CardHeader className="gap-3">
-          <InvitationBrand />
-          <CheckCircle2 aria-hidden="true" className="size-12 rounded-full bg-[#edf6f0] p-2 text-[#004d3b]" />
-          <CardTitle className="text-2xl font-bold">Bienvenue dans votre équipe !</CardTitle>
-          <CardDescription className="text-sm leading-6 text-[#40564d]">
-            Votre invitation est acceptée. Connectez-vous avec l’adresse qui a reçu l’invitation pour accéder à votre établissement.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="rounded-2xl bg-[#edf6f0] p-4 text-sm leading-6">
+      <InvitationAuthShell>
+        <InvitationPanel
+          title="Bienvenue dans votre équipe !"
+          description="Votre invitation est acceptée. Connectez-vous avec l’adresse qui a reçu l’invitation pour accéder à votre établissement."
+          leading={
+            <CheckCircle2
+              aria-hidden="true"
+              className="mb-4 size-12 rounded-full bg-[#F3F4F6] p-2 text-[#114660]"
+            />
+          }
+        >
+          <div className="rounded-2xl border border-[#E8E6DF] bg-[#F9FAFB] p-4 text-sm leading-6 text-[#111827]">
             <p className="font-semibold">Votre première observation compte.</p>
             <p>Une idée, un problème ou un retour client ? Partagez-le avec votre équipe, en texte, photo ou vocal.</p>
           </div>
-          <Button className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]"
-            onClick={() => navigate(buildLoginRedirectHref({ href: '/acces' }), { replace: true })}>
+          <Button
+            type="button"
+            className={authActionClassName}
+            onClick={() => navigate(buildLoginRedirectHref({ href: '/acces' }), { replace: true })}
+          >
             Se connecter à Spore
           </Button>
-        </CardContent>
-      </Card>
+        </InvitationPanel>
+      </InvitationAuthShell>
     )
   }
 
   if (needsAccountSwitch) {
     return (
-      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
-        <CardHeader className="gap-2">
-          <InvitationBrand />
-          <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-            Rejoindre mon équipe
-          </CardTitle>
-          <CardDescription className="text-sm leading-6 text-[#40564d]">
-            Votre invitation est acceptée pour un autre compte. Déconnectez-vous de la session actuelle
-            puis connectez-vous avec l’adresse qui a reçu l’invitation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {submitError ? <p role="alert" className="text-sm text-destructive">{submitError}</p> : null}
+      <InvitationAuthShell>
+        <InvitationPanel
+          title="Rejoindre mon équipe"
+          description="Votre invitation est acceptée pour un autre compte. Déconnectez-vous de la session actuelle puis connectez-vous avec l’adresse qui a reçu l’invitation."
+        >
+          {submitError ? <InvitationAlert>{submitError}</InvitationAlert> : null}
           <Button
             type="button"
-            className="h-12 w-full rounded-[1rem] bg-[#004d3b] text-white hover:bg-[#003b2d]"
+            className={authActionClassName}
             disabled={isSubmitting}
             onClick={() => void switchToInvitedAccount()}
           >
@@ -243,33 +296,23 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
               'Changer de compte et continuer'
             )}
           </Button>
-        </CardContent>
-      </Card>
+        </InvitationPanel>
+      </InvitationAuthShell>
     )
   }
 
   if (!token) {
     return (
-      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
-        <CardHeader className="gap-2">
-          <InvitationBrand />
-          <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-            Rejoindre mon équipe
-          </CardTitle>
-          <CardDescription className="text-sm leading-6 text-[#40564d]">
-            Ce lien est absent ou invalide. Ouvrez le lien reçu par e-mail pour rejoindre votre équipe.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            className="h-12 w-full rounded-[1rem] bg-[#004d3b] text-white hover:bg-[#003b2d]"
-            onClick={() => navigate('/login')}
-          >
+      <InvitationAuthShell>
+        <InvitationPanel
+          title="Rejoindre mon équipe"
+          description="Ce lien est absent ou invalide. Ouvrez le lien reçu par e-mail pour rejoindre votre équipe."
+        >
+          <Button type="button" className={authActionClassName} onClick={() => navigate('/login')}>
             Se connecter
           </Button>
-        </CardContent>
-      </Card>
+        </InvitationPanel>
+      </InvitationAuthShell>
     )
   }
 
@@ -282,22 +325,17 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
         : 'Votre invitation n’a pas pu être vérifiée.'
 
   return (
-    <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#dce8e2] bg-white text-[#172e27] shadow-[0_20px_60px_-30px_rgba(0,77,59,0.25)]">
-      <CardHeader className="gap-2">
-        <InvitationBrand />
-        <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-          Rejoindre mon équipe
-        </CardTitle>
-        <CardDescription className="text-sm leading-6 text-[#40564d]">
-          {requiresPassword === null && !submitError
+    <InvitationAuthShell>
+      <InvitationPanel
+        title="Rejoindre mon équipe"
+        description={
+          requiresPassword === null && !submitError
             ? 'Vérification de votre invitation…'
-            : description}
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent>
+            : description
+        }
+      >
         {requiresPassword === null && !submitError ? (
-          <LoaderCircle className="size-4 animate-spin" />
+          <LoaderCircle className="size-4 animate-spin text-[#114660]" />
         ) : (
           <form className="space-y-4" onSubmit={handleSubmit}>
             {requiresPassword ? (
@@ -323,13 +361,13 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
               </>
             ) : null}
 
-            {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
-            {submitError ? <p role="alert" className="text-sm text-destructive">{submitError}</p> : null}
+            {fieldError ? <p className="text-sm text-[#E24B4A]">{fieldError}</p> : null}
+            {submitError ? <InvitationAlert>{submitError}</InvitationAlert> : null}
 
             <Button
               type="submit"
               disabled={isSubmitting || requiresPassword === null}
-              className="h-12 w-full rounded-[1rem] bg-[#004d3b] text-white hover:bg-[#003b2d]"
+              className={authActionClassName}
             >
               {isSubmitting ? (
                 <>
@@ -342,7 +380,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
             </Button>
           </form>
         )}
-      </CardContent>
-    </Card>
+      </InvitationPanel>
+    </InvitationAuthShell>
   )
 }

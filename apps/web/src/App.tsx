@@ -1115,6 +1115,10 @@ function App() {
     return <ForgotPasswordPage onNavigate={navigate} />
   }
 
+  if (route.kind === 'invitation') {
+    return routeContent
+  }
+
   const signOutAction = (
     <Button
       type="button"
@@ -1155,15 +1159,8 @@ function App() {
   )
 
   const routeCopy =
-    route.kind === 'invitation'
+    route.kind === 'email-change'
       ? {
-          headingBadge: 'Invitation',
-          title: 'Rejoignez votre équipe',
-          description: 'Partagez vos observations et avancez ensemble avec Spore.',
-          actions: null,
-        }
-      : route.kind === 'email-change'
-        ? {
             headingBadge: 'Compte',
             title: 'Confirmer l’e-mail',
             description:

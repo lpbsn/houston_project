@@ -4,6 +4,7 @@ import { createElement, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
 import { AppRouteProvider } from '@/app/app-routes'
 import { createMemoryHistory } from '@/app/app-history'
 
@@ -42,6 +43,14 @@ import { InvitationAcceptApiError } from '@/features/invitations/api'
 
 import { InvitationAcceptPage } from './invitation-accept-page'
 
+function expectAuthChrome() {
+  expect(screen.getByTestId('invitation-accept-page')).toBeTruthy()
+  expect(screen.getAllByText('spore')).toHaveLength(1)
+  expect(document.querySelector('img')?.getAttribute('src')).toBe(sporeIconSrc)
+  expect(screen.queryByText('Rejoignez votre équipe')).toBeNull()
+  expect(screen.getByText('© 2026 Spore · Terrain-first')).toBeTruthy()
+}
+
 function renderPage(initialHref: string, onAccepted = vi.fn()) {
   const history = createMemoryHistory(initialHref)
   function Wrapper({ children }: { children: ReactNode }) {
@@ -73,6 +82,7 @@ describe('InvitationAcceptPage', () => {
 
     expect(history.getHref()).toBe('/invitations')
     expect(screen.queryByLabelText('Invitation code')).toBeNull()
+    expectAuthChrome()
   })
 
   it('shows a missing-link state when the fragment is absent', () => {
@@ -89,6 +99,8 @@ describe('InvitationAcceptPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(history.getHref()).toBe('/login')
+    expectAuthChrome()
+    expect(screen.getAllByRole('heading', { name: 'Rejoindre mon équipe' })).toHaveLength(1)
   })
 
   it('does not treat a path segment as an invitation secret', () => {
@@ -112,6 +124,14 @@ describe('InvitationAcceptPage', () => {
     })
     renderPage('/invitations#invite-token')
     expect(await screen.findByText(/Hôtel des Mésanges/)).toBeTruthy()
+    expect(screen.getByLabelText(/^mot de passe$/i)).toBeTruthy()
+    expect(screen.getByLabelText(/confirmer le mot de passe/i)).toBeTruthy()
+    expect(screen.getByText('Au moins 12 caractères')).toBeTruthy()
+    expect(screen.getByText('Ne doit pas être uniquement composé de chiffres')).toBeTruthy()
+    expect(screen.getByText('Les deux champs doivent correspondre')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /conditions d’utilisation/i })).toBeTruthy()
+    expectAuthChrome()
+    expect(screen.getAllByRole('heading', { name: 'Rejoindre mon équipe' })).toHaveLength(1)
   })
 
   it('submits the remembered fragment token in the accept call', async () => {
@@ -172,6 +192,9 @@ describe('InvitationAcceptPage', () => {
     })
     expect(onAccepted).not.toHaveBeenCalled()
     expect(logout).not.toHaveBeenCalled()
+    expectAuthChrome()
+    expect(screen.getByRole('heading', { name: 'Bienvenue dans votre équipe !' })).toBeTruthy()
+    expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
   })
 
   it('keeps another signed-in account in place until that person signs out', async () => {
@@ -205,6 +228,7 @@ describe('InvitationAcceptPage', () => {
       arrival: 'joined',
       establishmentId: 'est-2',
     })
+    expectAuthChrome()
   })
 
   it('keeps the current session when the invited account is already signed in', async () => {
@@ -233,6 +257,8 @@ describe('InvitationAcceptPage', () => {
     fireEvent.submit(pendingSubmit.closest('form')!)
     expect(acceptDirectorInvitation).toHaveBeenCalledTimes(1)
     expect(onAccepted).toHaveBeenCalledOnce()
+    expectAuthChrome()
+    expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
   })
 
   it('keeps the join form inactive after a new account session is created', async () => {
@@ -265,6 +291,9 @@ describe('InvitationAcceptPage', () => {
     fireEvent.submit(pendingSubmit.closest('form')!)
     expect(acceptDirectorInvitation).toHaveBeenCalledTimes(1)
     expect(onAccepted).toHaveBeenCalledOnce()
+    expectAuthChrome()
+    expect(screen.getByLabelText(/^mot de passe$/i)).toBeTruthy()
+    expect(screen.getByLabelText(/confirmer le mot de passe/i)).toBeTruthy()
   })
 
   it('shows an expired invitation without password fields or an active submit', async () => {
@@ -274,6 +303,7 @@ describe('InvitationAcceptPage', () => {
     expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
     expect(screen.getByRole('button', { name: 'Rejoindre mon équipe' })).toHaveProperty('disabled', true)
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
+    expectAuthChrome()
   })
 
   it('shows the server message when password validation fails', async () => {

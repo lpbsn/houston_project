@@ -189,5 +189,7 @@ describe('App invitation landing', () => {
     })
     expect(navigate).not.toHaveBeenCalledWith('/pending-onboarding', { replace: true })
     expect(navigate).not.toHaveBeenCalledWith('/reporting', { replace: true })
+    expect(screen.queryByTestId('app-shell')).toBeNull()
+    expect(screen.queryByText('Rejoignez votre équipe')).toBeNull()
   })
 })
