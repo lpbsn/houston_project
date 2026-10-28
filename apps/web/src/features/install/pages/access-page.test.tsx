@@ -11,7 +11,6 @@ import { rememberAccessArrival } from '@/features/install/arrival'
 
 const fetchPlayStoreAccess = vi.hoisted(() => vi.fn(async () => 'none' as const))
 const submitPlayStoreAccess = vi.hoisted(() => vi.fn(async () => undefined))
-const qrToString = vi.hoisted(() => vi.fn(async (value: string) => `<svg>${value}</svg>`))
 
 vi.mock('@/lib/lg-viewport', () => ({
   useLgViewport: () => true,
@@ -20,10 +19,6 @@ vi.mock('@/lib/lg-viewport', () => ({
 vi.mock('@/features/install/api', () => ({
   fetchPlayStoreAccess,
   submitPlayStoreAccess,
-}))
-
-vi.mock('qrcode', () => ({
-  default: { toString: qrToString },
 }))
 
 const bootstrapState = vi.hoisted(() => ({
@@ -89,29 +84,39 @@ afterEach(() => {
   fetchPlayStoreAccess.mockResolvedValue('none')
   submitPlayStoreAccess.mockReset()
   submitPlayStoreAccess.mockResolvedValue(undefined)
-  qrToString.mockClear()
   bootstrapState.current = operationalBootstrap()
   bootstrapState.authenticated = true
 })
 
 describe('AccessPage', () => {
-  it('opens the App Store from the choice and explains the QR path', () => {
+  it('opens the stores from the choice and points back to Général', () => {
     const history = renderAt('/acces', createElement(AccessPage))
-    const iphone = screen.getByRole('link', { name: 'Télécharger sur l’App Store' })
+    const iphone = screen.getByRole('link', { name: 'Télécharger sur iPhone' })
     expect(iphone.getAttribute('href')).toBe(IOS_URL)
     expect(iphone.getAttribute('target')).toBe('_blank')
-    expect(screen.getByText(/choisissez Ordinateur et scannez le QR code/i)).toBeTruthy()
+    expect(iphone.querySelector('svg[aria-hidden="true"]')).toBeTruthy()
+    const android = screen.getByRole('button', { name: 'Télécharger sur Android' })
+    expect(android.querySelector('svg[aria-hidden="true"]')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Accéder à SPORE sur le Web' })).toBeNull()
+    expect(screen.queryByText(/QR code/i)).toBeNull()
+    const hint = screen.getByText('Général → Installer SPORE')
+    expect(hint.tagName).toBe('STRONG')
+    expect(hint.closest('p')?.textContent).toBe(
+      'Vous pourrez retrouver cette page à tout moment dans SPORE, depuis Général → Installer SPORE.',
+    )
     expect(document.body.textContent).not.toContain(CLOSED_JOIN)
     expect(document.body.textContent).not.toContain(CLOSED_INSTALL)
-    fireEvent.click(screen.getByRole('button', { name: 'Accéder directement au Web' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accéder au site web' }))
     expect(history.getHref()).toBe('/reporting')
   })
 
   it('shows the android request form without the SPORE email or Play links', async () => {
-    renderAt('/acces?destination=android', createElement(AccessPage))
+    const history = renderAt('/acces?destination=android', createElement(AccessPage))
     const input = await screen.findByLabelText(/compte Google utilisé sur le Play Store/i)
     expect((input as HTMLInputElement).value).toBe('')
     expect((input as HTMLInputElement).value).not.toBe('spore@example.com')
+    expect(screen.getByRole('heading', { name: 'Télécharger sur Android' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Demander mon accès' })).toBeTruthy()
     const emphasis = screen.getByText('compte sélectionné')
     expect(emphasis.tagName).toBe('STRONG')
@@ -122,6 +127,30 @@ describe('AccessPage', () => {
     expect(screen.queryByRole('link', { name: /Google Play/i })).toBeNull()
     expect(document.body.textContent).not.toContain(CLOSED_JOIN)
     expect(document.body.textContent).not.toContain(CLOSED_INSTALL)
+    expect(screen.queryByRole('button', { name: 'Continuer sur le Web' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Choisir un autre appareil' })).toBeNull()
+    const web = screen.getByRole('button', { name: 'Accéder au site web' })
+    expect(web.className).toContain('underline')
+    expect(web.parentElement?.className).toContain('border-t')
+    fireEvent.click(web)
+    expect(history.getHref()).toBe('/reporting')
+  })
+
+  it('returns from Android to the device choice and reopens a received request', async () => {
+    fetchPlayStoreAccess.mockResolvedValue('accepted')
+    renderAt('/acces?destination=android', createElement(AccessPage))
+    const correct = await screen.findByRole('button', { name: 'Corriger le mail' })
+    expect(correct.className).toContain('bg-[#004d3b]')
+    expect(correct.className).toContain('rounded-2xl')
+    expect(screen.queryByRole('button', { name: 'Corriger l’adresse' })).toBeNull()
+    fireEvent.click(correct)
+    expect(await screen.findByLabelText(/compte Google utilisé sur le Play Store/i)).toBeTruthy()
+    cleanup()
+    fetchPlayStoreAccess.mockResolvedValue('accepted')
+    const back = renderAt('/acces?destination=android', createElement(AccessPage))
+    await screen.findByRole('button', { name: 'Corriger le mail' })
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+    expect(back.getHref()).toBe('/acces')
   })
 
   it('shows a matching welcome once', async () => {
@@ -153,37 +182,11 @@ describe('AccessPage', () => {
     expect(screen.getByText('Où souhaitez-vous utiliser SPORE ?')).toBeTruthy()
   })
 
-  it('titles the computer page from the bootstrap', async () => {
+  it('keeps a former computer link on the device choice', () => {
     renderAt('/acces?destination=ordinateur', createElement(AccessPage))
-    expect(screen.getByRole('heading', { name: 'Votre espace SPORE est prêt' })).toBeTruthy()
-    await waitFor(() => {
-      expect(qrToString).toHaveBeenCalledWith(expect.stringMatching(/\/installer$/), expect.anything())
-    })
-    const qrTarget = qrToString.mock.calls[0]?.[0] as string
-    expect(qrTarget).not.toContain('token')
-    expect(qrTarget).not.toContain('invitation')
-
-    cleanup()
-    bootstrapState.current = {
-      ...operationalBootstrap(),
-      memberships: [],
-      active_membership: null,
-      pending_onboarding_memberships: [
-        {
-          id: 'p-1',
-          establishment_id: 'draft-1',
-          establishment_name: 'Brouillon',
-          establishment_status: 'draft',
-          organization_id: 'org-1',
-          organization_name: 'Org',
-          role: 'staff',
-          onboarding_session_id: null,
-        },
-      ],
-    } as BootstrapResponse
-    renderAt('/acces?destination=ordinateur', createElement(AccessPage))
-    expect(screen.getByRole('heading', { name: 'Votre établissement est encore en préparation' })).toBeTruthy()
-    expect(screen.queryByText('Votre espace SPORE est prêt')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Télécharger sur iPhone' })).toBeTruthy()
+    expect(screen.queryByText(/QR code/i)).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Votre espace SPORE est prêt' })).toBeNull()
   })
 })
 
@@ -193,12 +196,13 @@ describe('AndroidAccess distribution', () => {
       createElement(AndroidAccess, {
         choice: { kind: 'store', href: 'https://play.google.com/store/apps/details?id=app.spore' },
         onContinueWeb: () => undefined,
-        onChooseAnother: () => undefined,
       }),
     )
     const link = screen.getByRole('link', { name: 'Ouvrir Google Play' })
     expect(link.getAttribute('href')).toBe('https://play.google.com/store/apps/details?id=app.spore')
     expect(screen.queryByLabelText(/Play Store/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Accéder au site web' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Choisir un autre appareil' })).toBeNull()
   })
 
   it('shows an unavailable state without a form when the public URL is empty', () => {
@@ -206,7 +210,6 @@ describe('AndroidAccess distribution', () => {
       createElement(AndroidAccess, {
         choice: { kind: 'unavailable' },
         onContinueWeb: () => undefined,
-        onChooseAnother: () => undefined,
       }),
     )
     expect(screen.getByText(/Lien Android indisponible/)).toBeTruthy()
@@ -222,7 +225,7 @@ describe('InstallerPage', () => {
     const iphone = screen.getByRole('link', { name: 'Télécharger sur l’App Store' })
     expect(iphone.getAttribute('href')).toBe(IOS_URL)
     expect(iphone.getAttribute('target')).toBe('_blank')
-    fireEvent.click(screen.getByRole('button', { name: 'Préparer l’accès à Google Play' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Télécharger sur Android' }))
     expect(history.getHref()).toBe('/login?next=%2Facces%3Fdestination%3Dandroid')
     expect(document.body.textContent).not.toContain('token')
   })

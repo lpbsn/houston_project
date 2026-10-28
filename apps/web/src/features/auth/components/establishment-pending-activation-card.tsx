@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 type EstablishmentPendingActivationCardProps = {
-  onOpenInstall?: () => void
+  onOpenInstall: () => void
 }
 
 export function EstablishmentPendingActivationCard({
@@ -28,11 +28,9 @@ export function EstablishmentPendingActivationCard({
       </CardHeader>
       <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
         <p>Reconnectez-vous après l&apos;activation pour accéder au workspace opérationnel.</p>
-        {onOpenInstall ? (
-          <Button type="button" variant="outline" className="h-11 rounded-2xl" onClick={onOpenInstall}>
-            Voir les options d&apos;installation
-          </Button>
-        ) : null}
+        <Button type="button" variant="outline" className="h-11 rounded-2xl" onClick={onOpenInstall}>
+          Voir les options d&apos;installation
+        </Button>
       </CardContent>
     </Card>
   )

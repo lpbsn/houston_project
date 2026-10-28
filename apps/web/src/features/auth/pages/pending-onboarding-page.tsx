@@ -40,13 +40,7 @@ export function PendingOnboardingPage({
     )
   }
 
-  if (forceWaiting || landing.kind === 'waiting') {
-    return (
-      <EstablishmentPendingActivationCard onOpenInstall={() => onNavigate('/acces')} />
-    )
-  }
-
-  if (landing.kind === 'selection') {
+  if (!forceWaiting && landing.kind === 'selection') {
     return (
       <PendingOnboardingSelectionCard
         pendingMemberships={landing.pendingMemberships}

@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { fetchPlayStoreAccess, submitPlayStoreAccess } from '@/features/install/api'
+import { AccessWebLink } from '@/features/install/components/access-web-link'
 import type { AndroidChoice } from '@/features/install/distribution'
+
+const primaryButtonClassName = 'h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]'
 
 const RECEIVED_MESSAGE =
   'Demande reçue. Elle a été transmise à l’équipe SPORE. L’autorisation Google Play n’est pas encore confirmée.'
@@ -13,14 +16,12 @@ type AndroidAccessProps = {
   choice: AndroidChoice
   establishmentId?: string
   onContinueWeb: () => void
-  onChooseAnother: () => void
 }
 
 export function AndroidAccess({
   choice,
   establishmentId,
   onContinueWeb,
-  onChooseAnother,
 }: AndroidAccessProps) {
   const [status, setStatus] = useState<'unknown' | 'none' | 'pending' | 'accepted'>('unknown')
   const [editing, setEditing] = useState(false)
@@ -53,12 +54,12 @@ export function AndroidAccess({
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-[#172e27]">Télécharger sur Google Play</h1>
-        <Button asChild className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]">
+        <Button asChild className={primaryButtonClassName}>
           <a href={choice.href} target="_blank" rel="noopener noreferrer">
             Ouvrir Google Play
           </a>
         </Button>
-        <SecondaryActions onContinueWeb={onContinueWeb} onChooseAnother={onChooseAnother} />
+        <AccessWebLink onClick={onContinueWeb} />
       </div>
     )
   }
@@ -70,7 +71,7 @@ export function AndroidAccess({
         <p className="text-sm leading-6 text-[#40564d]">
           Le lien Google Play n’est pas disponible pour le moment. Vous pouvez continuer sur le Web.
         </p>
-        <SecondaryActions onContinueWeb={onContinueWeb} onChooseAnother={onChooseAnother} />
+        <AccessWebLink onClick={onContinueWeb} />
       </div>
     )
   }
@@ -102,27 +103,26 @@ export function AndroidAccess({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-[#172e27]">Préparer l’accès à Google Play</h1>
+      <h1 className="text-2xl font-bold text-[#172e27]">Télécharger sur Android</h1>
       <p className="text-sm leading-6 text-[#40564d]">
         Pour installer SPORE sur Google Play, nous devons autoriser le compte Google utilisé dans
         votre Play Store. Cette adresse n’est pas votre identifiant SPORE.
       </p>
       {showReceived ? (
         <div className="space-y-4">
-          <p className="rounded-2xl bg-[#edf6f0] p-4 text-sm leading-6 text-[#172e27]">
+          <p className="rounded-lg bg-[#edf6f0] p-4 text-sm leading-6 text-[#172e27]">
             {RECEIVED_MESSAGE}
           </p>
           <Button
             type="button"
-            variant="outline"
-            className="h-11 w-full rounded-2xl"
+            className={primaryButtonClassName}
             onClick={() => {
               setEmail('')
               setError(null)
               setEditing(true)
             }}
           >
-            Corriger l’adresse
+            Corriger le mail
           </Button>
         </div>
       ) : (
@@ -140,7 +140,7 @@ export function AndroidAccess({
               required
             />
           </label>
-          <p className="flex items-start gap-2.5 rounded-2xl bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]">
+          <p className="flex items-start gap-2.5 rounded-lg bg-[#edf6f0] px-3.5 py-3 text-sm leading-5 text-[#172e27]">
             <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span>
               Ouvrez Play Store, touchez votre photo de profil et vérifiez l’adresse du{' '}
@@ -155,32 +155,13 @@ export function AndroidAccess({
           <Button
             type="submit"
             disabled={submitting || email.trim().length === 0}
-            className="h-12 w-full rounded-2xl bg-[#004d3b] text-white hover:bg-[#003b2d]"
+            className={primaryButtonClassName}
           >
             {submitting ? 'Envoi…' : 'Demander mon accès'}
           </Button>
         </form>
       )}
-      <SecondaryActions onContinueWeb={onContinueWeb} onChooseAnother={onChooseAnother} />
-    </div>
-  )
-}
-
-function SecondaryActions({
-  onContinueWeb,
-  onChooseAnother,
-}: {
-  onContinueWeb: () => void
-  onChooseAnother: () => void
-}) {
-  return (
-    <div className="space-y-2">
-      <Button type="button" variant="outline" className="h-11 w-full rounded-2xl" onClick={onContinueWeb}>
-        Continuer sur le Web
-      </Button>
-      <Button type="button" variant="ghost" className="h-11 w-full rounded-2xl" onClick={onChooseAnother}>
-        Choisir un autre appareil
-      </Button>
+      <AccessWebLink onClick={onContinueWeb} />
     </div>
   )
 }
