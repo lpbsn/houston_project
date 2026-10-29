@@ -8,7 +8,7 @@ Unified smoke validation for local pilot and Railway prod-test.
 ## Local pilot — stack
 
 - [ ] `.env` configured (`DJANGO_SECRET_KEY`)
-- [ ] `make bootstrap-dev` OK. `catalog-check` succeeds when the database matches the versioned seed: 19 BU, 161 subjects. Import leaves catalogue rows that are absent from the CSV, so a database that already holds extra entries stays larger and `catalog-check` fails.
+- [ ] `make bootstrap-dev` OK. `catalog-check` succeeds when the database matches the versioned seed: 27 BU, 227 subjects. Import leaves catalogue rows that are absent from the CSV, so a database that already holds extra entries stays larger and `catalog-check` fails.
 - [ ] `docker compose ps`: postgres, redis, rabbitmq, api, celery-ai-interactive, celery-operational, celery-background **Up**
 - [ ] Health: `curl` → `200` on http://localhost:8000/api/v1/health/
 - [ ] `make web-dev` → http://localhost:5173 (no port conflict with `make up` web container)
