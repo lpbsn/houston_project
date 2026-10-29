@@ -160,3 +160,69 @@ gestion_entreprise__finances_comptabilite,Finances & comptabilité,gestion_entre
 gestion_entreprise__financement,Financement,gestion_entreprise,"Recherche de financements, aides, préparation des dossiers et suivi des démarches.",1590
 gestion_entreprise__achats_prestataires,Achats & prestataires,gestion_entreprise,"Sélection, abonnements, contrats fournisseurs et suivi économique des prestations.",1600
 gestion_entreprise__conformite_donnees,Conformité & gouvernance des données,gestion_entreprise,"Organisation des obligations relatives aux données, documentation et suivi des engagements ; les mesures techniques relèvent du développement logiciel.",1610
+decoration__clientele,Clientèle,decoration,"Demandes, conseil et retours clients concernant les produits et services du rayon. Exclut l’encaissement et les dossiers SAV.",1620
+decoration__offre,Offre,decoration,"Assortiment, choix de références et adaptation de l’offre commerciale du rayon. Exclut la rupture ponctuelle de stock.",1630
+decoration__stocks,Stocks,decoration,"Disponibilité, rupture, réassort et quantité des produits dans le rayon concerné. Exclut le rangement et le stockage en réserve.",1640
+decoration__prix,Prix,decoration,"Étiquetage, affichage et cohérence des prix des produits en rayon. Exclut l’erreur technique de passage en caisse.",1650
+decoration__presentation,Présentation,decoration,"Facing, merchandising, implantation et mise en valeur des produits du rayon. Exclut le nettoyage et les opérations saisonnières de pilotage.",1660
+decoration__saisonnalite,Saisonnalité,decoration,"Préparation, coordination et suivi des assortiments ou opérations commerciales saisonnières du rayon.",1670
+decoration__fournisseurs,Fournisseurs,decoration,"Disponibilité, échanges et incidents avec les fournisseurs concernant les produits du rayon.",1680
+decoration__organisation,Organisation,decoration,"Répartition des tâches, coordination et fonctionnement opérationnel quotidien de l’équipe du rayon. Exclut les plannings RH centraux.",1690
+decoration__proprete,Propreté,decoration,"Propreté et entretien courant des linéaires, produits et espaces du rayon. Exclut nettoyage général et maintenance technique du magasin.",1700
+decoration__pertes,Pertes,decoration,"Casse, démarque, écarts et pertes de marchandises du rayon, y compris produits périmés ou dates limites quand applicable.",1710
+jardin__clientele,Clientèle,jardin,"Demandes, conseil et retours clients concernant les produits et services du rayon. Exclut l’encaissement et les dossiers SAV.",1720
+jardin__offre,Offre,jardin,"Assortiment, choix de références et adaptation de l’offre commerciale du rayon. Exclut la rupture ponctuelle de stock.",1730
+jardin__stocks,Stocks,jardin,"Disponibilité, rupture, réassort et quantité des produits dans le rayon concerné. Exclut le rangement et le stockage en réserve.",1740
+jardin__prix,Prix,jardin,"Étiquetage, affichage et cohérence des prix des produits en rayon. Exclut l’erreur technique de passage en caisse.",1750
+jardin__presentation,Présentation,jardin,"Facing, merchandising, implantation et mise en valeur des produits du rayon. Exclut le nettoyage et les opérations saisonnières de pilotage.",1760
+jardin__saisonnalite,Saisonnalité,jardin,"Préparation, coordination et suivi des assortiments ou opérations commerciales saisonnières du rayon.",1770
+jardin__fournisseurs,Fournisseurs,jardin,"Disponibilité, échanges et incidents avec les fournisseurs concernant les produits du rayon.",1780
+jardin__organisation,Organisation,jardin,"Répartition des tâches, coordination et fonctionnement opérationnel quotidien de l’équipe du rayon. Exclut les plannings RH centraux.",1790
+jardin__proprete,Propreté,jardin,"Propreté et entretien courant des linéaires, produits et espaces du rayon. Exclut nettoyage général et maintenance technique du magasin.",1800
+jardin__pertes,Pertes,jardin,"Casse, démarque, écarts et pertes de marchandises du rayon, y compris produits périmés ou dates limites quand applicable.",1810
+jardin__vegetaux,Végétaux,jardin,"État sanitaire, arrosage, qualité, conservation et entretien des plantes. Les ruptures et quantités relèvent de Stocks.",1820
+technique__clientele,Clientèle,technique,"Demandes, conseil et retours clients concernant les produits et services du rayon. Exclut l’encaissement et les dossiers SAV.",1830
+technique__offre,Offre,technique,"Assortiment, choix de références et adaptation de l’offre commerciale du rayon. Exclut la rupture ponctuelle de stock.",1840
+technique__stocks,Stocks,technique,"Disponibilité, rupture, réassort et quantité des produits dans le rayon concerné. Exclut le rangement et le stockage en réserve.",1850
+technique__prix,Prix,technique,"Étiquetage, affichage et cohérence des prix des produits en rayon. Exclut l’erreur technique de passage en caisse.",1860
+technique__presentation,Présentation,technique,"Facing, merchandising, implantation et mise en valeur des produits du rayon. Exclut le nettoyage et les opérations saisonnières de pilotage.",1870
+technique__saisonnalite,Saisonnalité,technique,"Préparation, coordination et suivi des assortiments ou opérations commerciales saisonnières du rayon.",1880
+technique__fournisseurs,Fournisseurs,technique,"Disponibilité, échanges et incidents avec les fournisseurs concernant les produits du rayon.",1890
+technique__organisation,Organisation,technique,"Répartition des tâches, coordination et fonctionnement opérationnel quotidien de l’équipe du rayon. Exclut les plannings RH centraux.",1900
+technique__proprete,Propreté,technique,"Propreté et entretien courant des linéaires, produits et espaces du rayon. Exclut nettoyage général et maintenance technique du magasin.",1910
+technique__pertes,Pertes,technique,"Casse, démarque, écarts et pertes de marchandises du rayon, y compris produits périmés ou dates limites quand applicable.",1920
+caisse_accueil__accueil,Accueil,caisse_accueil,"Orientation, information et prise en charge initiale des clients au comptoir ou à l’entrée.",1930
+caisse_accueil__encaissement,Encaissement,caisse_accueil,"Passage en caisse, paiements, tickets, rendu de monnaie et incidents de transaction.",1940
+caisse_accueil__fidelite,Fidélité,caisse_accueil,"Adhésion, utilisation et problèmes du programme de fidélité.",1950
+caisse_accueil__reclamations,Réclamations,caisse_accueil,Réclamations générales reçues et traitées à l’accueil ; dossiers techniques de produits défectueux vers SAV.,1960
+caisse_accueil__pickup,Pickup,caisse_accueil,Accueil et remise des commandes ou colis aux points de retrait.,1970
+caisse_accueil__commandes_web,Commandes web,caisse_accueil,Traitement et suivi des commandes passées en ligne ; remise physique des colis via Pickup.,1980
+caisse_accueil__prix,Prix,caisse_accueil,Écarts de prix constatés lors du passage en caisse ou correction d’encaissement ; affichage des prix en rayon exclu.,1990
+caisse_accueil__presentation,Présentation,caisse_accueil,"Tenue, affichage et présentation de la zone caisse et accueil ; merchandising des rayons exclu.",2000
+caisse_accueil__stocks,Stocks,caisse_accueil,Consommables et fournitures utilisés par l’accueil ou les caisses ; marchandises en rayon exclues.,2010
+caisse_accueil__saisonnalite,Saisonnalité,caisse_accueil,Organisation des dispositifs et informations saisonniers en caisse et accueil.,2020
+caisse_accueil__organisation,Organisation,caisse_accueil,Organisation du travail et de la fluidité au poste caisse/accueil ; organisation des rayons exclue.,2030
+logistique__reception,Réception,logistique,"Arrivée, contrôle, identification et prise en charge des livraisons fournisseurs.",2040
+logistique__stockage,Stockage,logistique,"Rangement, localisation et organisation physique des produits en réserve et zones logistiques.",2050
+logistique__inventaires,Inventaires,logistique,"Comptages, écarts d’inventaire et préparation des inventaires du magasin.",2060
+logistique__livraisons,Livraisons,logistique,"Préparation, enlèvement, transport et suivi des livraisons du magasin vers les clients.",2070
+logistique__dechets,Déchets,logistique,"Collecte, tri, stockage et évacuation des déchets et emballages liés aux flux logistiques.",2080
+logistique__equipements,Équipements,logistique,Disponibilité et usage des moyens matériels logistiques ; pannes techniques vers Entretien & sécurité.,2090
+logistique__organisation,Organisation,logistique,"Coordination des flux, priorités et tâches des équipes logistiques.",2100
+sav__prise_en_charge,Prise en charge,sav,Réception et ouverture des dossiers de produits clients défectueux ou à diagnostiquer.,2110
+sav__reparations,Réparations,sav,"Diagnostic, réparation et suivi technique des produits des clients ; machines du magasin exclues.",2120
+sav__garanties,Garanties,sav,"Vérification, application et traitement des garanties produit.",2130
+sav__retours,Retours,sav,Traitement des demandes de retour ou échange relevant du SAV.,2140
+sav__fournisseurs,Fournisseurs,sav,"Échanges et dossiers fournisseurs liés au SAV, pièces ou réparations.",2150
+sav__delais,Délais,sav,"Délais de traitement, attente de pièce ou retard de réparation et retour client.",2160
+administration_direction__rh,RH,administration_direction,"Recrutement, intégration, suivi administratif et gestion des collaborateurs.",2170
+administration_direction__plannings,Plannings,administration_direction,"Élaboration, diffusion et modification des plannings de travail.",2180
+administration_direction__facturation,Facturation,administration_direction,"Émission, correction et suivi des factures et avoirs.",2190
+administration_direction__comptabilite,Comptabilité,administration_direction,"Écritures, rapprochements, justificatifs et opérations comptables.",2200
+administration_direction__donnees,Données,administration_direction,"Qualité, disponibilité, suivi et exploitation des données de gestion du magasin.",2210
+administration_direction__communication,Communication,administration_direction,"Information interne et externe, supports et messages de communication du magasin.",2220
+administration_direction__commercial,Commercial,administration_direction,"Actions commerciales transversales, prospection et développement de l’activité.",2230
+administration_direction__evenements,Événements,administration_direction,"Préparation, organisation et coordination des événements et animations du magasin.",2240
+entretien_securite__nettoyage,Nettoyage,entretien_securite,Nettoyage général des locaux et parties communes ; entretien commercial courant d’un rayon exclu.,2250
+entretien_securite__maintenance,Maintenance,entretien_securite,"Pannes et entretien des machines, installations et équipements appartenant au magasin ; produits des clients vers SAV.",2260
+entretien_securite__securite,Sécurité,entretien_securite,"Risques et incidents de sécurité des personnes, locaux, accès, installations et équipements de protection.",2270

@@ -24,7 +24,7 @@ From repo root (Docker API; local-dev DB guard):
 | `make bootstrap-dev` | `up-backend` → `migrate` → `import-catalog` → `check` → `catalog-check` |
 | `make reset-dev-db` | Destructive: `compose down -v` then `bootstrap-dev` |
 
-Expected seed counts today: **19** `CatalogBusinessUnit`, **161** `CatalogActivitySubject` (driven by CSV length / `catalog_seed_counts.py`).
+Expected seed counts today: **27** `CatalogBusinessUnit`, **227** `CatalogActivitySubject` (driven by CSV length / `catalog_seed_counts.py`).
 
 Optional management flags: `--dry-run`, `--strict`, `--regenerate-from-source`.
 
