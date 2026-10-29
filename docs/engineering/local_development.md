@@ -156,7 +156,7 @@ make validate-mama-nice-dataset ARGS='--local'
 
 | Command | Expected |
 |---------|----------|
-| `make catalog-check` | `19 CatalogBusinessUnit, 161 CatalogActivitySubject` when the database matches the versioned seed. Import does not remove catalogue rows absent from the CSV, so extra stored entries make the check fail. |
+| `make catalog-check` | `27 CatalogBusinessUnit, 227 CatalogActivitySubject` when the database matches the versioned seed. Import does not remove catalogue rows absent from the CSV, so extra stored entries make the check fail. |
 | `make check` | Django system check OK |
 | `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/health/` | `200` |
 
