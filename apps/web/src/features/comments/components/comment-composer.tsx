@@ -1,3 +1,4 @@
+import { DictationButton } from '@/features/chat/components/dictation-button'
 import {
   forwardRef,
   useEffect,
@@ -305,6 +306,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
               commentThread.replyPillFocusShadow,
             )}
           >
+            <DictationButton key={`${establishmentId}-${executionId}`} establishmentId={establishmentId} disabled={disabled} remaining={MAX_COMMENT_LENGTH - draft.length - (draft ? 1 : 0)} onAppend={text => setDraft(current => current ? `${current} ${text}` : text)} />
             <textarea
               {...textareaProps}
               rows={1}

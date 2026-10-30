@@ -1864,6 +1864,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/notifications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_chat_conversations_notifications_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/": {
         parameters: {
             query?: never;
@@ -2024,6 +2040,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/chat/messages/{message_id}/tools/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_chat_messages_tools_retrieve"];
+        put?: never;
+        post: operations["v1_establishments_chat_messages_tools_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/plan-comments/{comment_id}/tools/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_chat_plan_comments_tools_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/plan-discussions/{execution_id}/preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_chat_plan_discussions_preferences_retrieve"];
+        put?: never;
+        post: operations["v1_establishments_chat_plan_discussions_preferences_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/chat/settings/": {
         parameters: {
             query?: never;
@@ -2114,6 +2178,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["v1_establishments_chat_uploads_presign_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/workspace/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_chat_workspace_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4907,6 +4987,7 @@ export interface components {
             author_display_name: string;
         };
         ChatConversationDetail: {
+            notification_mode?: components["schemas"]["NotificationModeEnum"];
             /** Format: uuid */
             id: string;
             type: string;
@@ -4964,6 +5045,9 @@ export interface components {
             role: string;
         };
         ChatMessage: {
+            acknowledgement_count?: number;
+            acknowledged?: boolean;
+            observation_created?: boolean;
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -5127,6 +5211,23 @@ export interface components {
             can_reply: boolean;
             can_resolve: boolean;
         };
+        CommentToolRequest: {
+            operation: components["schemas"]["CommentToolRequestOperationEnum"];
+            /** @default true */
+            active: boolean;
+            title?: string;
+            /** Format: uuid */
+            assigned_membership_id?: string | null;
+            /** Format: date-time */
+            deadline_at?: string | null;
+        };
+        /**
+         * @description * `pin` - pin
+         *     * `acknowledge` - acknowledge
+         *     * `task` - task
+         * @enum {string}
+         */
+        CommentToolRequestOperationEnum: "pin" | "acknowledge" | "task";
         /**
          * @description * `observation` - Observation
          *     * `comment` - Comment
@@ -5202,6 +5303,13 @@ export interface components {
             /** Format: date-time */
             invitation_expires_at: string;
             invitation_accept_path: string;
+        };
+        DiscussionPreference: {
+            mode?: components["schemas"]["ModeEnum"];
+            /** @default false */
+            seen: boolean;
+            /** Format: date-time */
+            seen_through?: string;
         };
         EmailChangeConfirmRequest: {
             token: string;
@@ -5403,6 +5511,12 @@ export interface components {
             attachment_ids?: string[];
         };
         ExecutionCommentListItem: {
+            pinned?: boolean;
+            /** Format: uuid */
+            created_task_id?: string | null;
+            can_create_task?: boolean;
+            acknowledgement_count?: number;
+            acknowledged?: boolean;
             item_type: components["schemas"]["ExecutionCommentListItemItemTypeEnum"];
             /** Format: uuid */
             id: string;
@@ -5427,6 +5541,12 @@ export interface components {
          */
         ExecutionCommentListItemItemTypeEnum: "inherited_signal" | "execution_thread";
         ExecutionCommentThreadItem: {
+            pinned?: boolean;
+            /** Format: uuid */
+            created_task_id?: string | null;
+            can_create_task?: boolean;
+            acknowledgement_count?: number;
+            acknowledged?: boolean;
             item_type: components["schemas"]["ExecutionCommentThreadItemItemTypeEnum"];
             /** Format: uuid */
             id: string;
@@ -5664,6 +5784,25 @@ export interface components {
             first_name: string;
             last_name: string;
         };
+        MessageToolRequest: {
+            operation: components["schemas"]["MessageToolRequestOperationEnum"];
+            /** @default true */
+            active: boolean;
+            text?: string;
+        };
+        /**
+         * @description * `acknowledge` - acknowledge
+         *     * `observe` - observe
+         * @enum {string}
+         */
+        MessageToolRequestOperationEnum: "acknowledge" | "observe";
+        /**
+         * @description * `all` - all
+         *     * `mentions` - mentions
+         *     * `silent` - silent
+         * @enum {string}
+         */
+        ModeEnum: "all" | "mentions" | "silent";
         MyDayResponse: {
             items: components["schemas"]["MyDayTask"][];
             next_offset: number | null;
@@ -5728,6 +5867,13 @@ export interface components {
             applied_filters: components["schemas"]["NotificationListAppliedFilters"];
             counts: components["schemas"]["NotificationListCounts"];
         };
+        /**
+         * @description * `all` - all
+         *     * `mentions` - mentions
+         *     * `silent` - silent
+         * @enum {string}
+         */
+        NotificationModeEnum: "all" | "mentions" | "silent";
         NotificationNavigation: {
             parent_subject_type: components["schemas"]["NotificationSubjectTypeEnum"];
             /** Format: uuid */
@@ -6705,6 +6851,11 @@ export interface components {
          * @enum {string}
          */
         TerminalDateSourceEnum: "field" | "event" | "unknown";
+        ToolResult: {
+            success: boolean;
+            /** Format: uuid */
+            target_id?: string | null;
+        };
         TranscriptionResponse: {
             text: string;
             language: string;
@@ -6742,6 +6893,30 @@ export interface components {
             errors: {
                 [key: string]: unknown;
             };
+        };
+        WorkspaceItem: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["WorkspaceItemKindEnum"];
+            /** Format: uuid */
+            parent_id: string;
+            title: string;
+            body: string;
+            author: string;
+            /** Format: date-time */
+            created_at: string;
+            unresolved: boolean;
+            unread: boolean;
+        };
+        /**
+         * @description * `chat` - chat
+         *     * `plan` - plan
+         * @enum {string}
+         */
+        WorkspaceItemKindEnum: "chat" | "plan";
+        WorkspaceResponse: {
+            items: components["schemas"]["WorkspaceItem"][];
+            cursor: string | null;
         };
     };
     responses: never;
@@ -13028,6 +13203,34 @@ export interface operations {
             };
         };
     };
+    v1_establishments_chat_conversations_notifications_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DiscussionPreference"];
+                "application/x-www-form-urlencoded": components["schemas"]["DiscussionPreference"];
+                "multipart/form-data": components["schemas"]["DiscussionPreference"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolResult"];
+                };
+            };
+        };
+    };
     v1_establishments_chat_conversations_participants_create: {
         parameters: {
             query?: never;
@@ -13583,6 +13786,134 @@ export interface operations {
             };
         };
     };
+    v1_establishments_chat_messages_tools_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMessage"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_messages_tools_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageToolRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MessageToolRequest"];
+                "multipart/form-data": components["schemas"]["MessageToolRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolResult"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_plan_comments_tools_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentToolRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CommentToolRequest"];
+                "multipart/form-data": components["schemas"]["CommentToolRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolResult"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_plan_discussions_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionPreference"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_plan_discussions_preferences_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DiscussionPreference"];
+                "application/x-www-form-urlencoded": components["schemas"]["DiscussionPreference"];
+                "multipart/form-data": components["schemas"]["DiscussionPreference"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolResult"];
+                };
+            };
+        };
+    };
     v1_establishments_chat_settings_partial_update: {
         parameters: {
             query?: never;
@@ -13863,6 +14194,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_workspace_retrieve: {
+        parameters: {
+            query?: {
+                after?: string;
+                author_id?: string;
+                before?: string;
+                cursor?: string;
+                execution_id?: string;
+                files_only?: boolean;
+                q?: string;
+                /**
+                 * @description * `plans` - plans
+                 *     * `mentions` - mentions
+                 *     * `search` - search
+                 */
+                tab?: "plans" | "mentions" | "search";
+                unresolved?: boolean;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceResponse"];
                 };
             };
         };

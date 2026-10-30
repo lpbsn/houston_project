@@ -100,6 +100,9 @@ class ChatConversationListResponseSerializer(serializers.Serializer):
 
 
 class ChatConversationDetailSerializer(serializers.Serializer):
+    notification_mode = serializers.ChoiceField(
+        choices=["all", "mentions", "silent"], required=False
+    )
     id = serializers.UUIDField()
     type = serializers.CharField()
     title = serializers.CharField(allow_blank=True)
@@ -113,6 +116,9 @@ class ChatConversationDetailSerializer(serializers.Serializer):
 
 
 class ChatMessageSerializer(serializers.Serializer):
+    acknowledgement_count = serializers.IntegerField(required=False)
+    acknowledged = serializers.BooleanField(required=False)
+    observation_created = serializers.BooleanField(required=False)
     id = serializers.UUIDField()
     author_membership_id = serializers.UUIDField()
     author_display_name = serializers.CharField()
@@ -386,7 +392,11 @@ def serialize_message(
         resolved_parent,
         history_cutoff_at=history_cutoff_at,
     )
+    acknowledgements = list(message.acknowledgements.all())
     return {
+        "acknowledgement_count": len(acknowledgements),
+        "acknowledged": any(a.membership_id == viewer_membership_id for a in acknowledgements),
+        "observation_created": hasattr(message, "observation_source"),
         "id": message.id,
         "author_membership_id": message.author_membership_id,
         "author_display_name": membership_display_name(message.author_membership),
@@ -410,6 +420,9 @@ def serialize_messages(
     history_cutoffs_by_conversation_id: dict | None = None,
     viewer_membership_id: uuid.UUID | None = None,
 ) -> list[dict]:
+    from django.db.models import prefetch_related_objects
+
+    prefetch_related_objects(messages, "acknowledgements", "observation_source")
     parent_ids = [
         message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)
     ]
@@ -483,6 +496,14 @@ def serialize_conversation_detail(
         "participants": [
             serialize_participant_summary(participant) for participant in active_participants
         ],
+        "notification_mode": next(
+            (
+                p.notification_mode
+                for p in active_participants
+                if p.membership_id == viewer_membership_id
+            ),
+            "all",
+        ),
         "can_manage": can_manage,
         "can_delete": can_delete,
         "pinned": pinned,
