@@ -77,6 +77,7 @@ export function applyOperationalInvalidation(
       case 'comment.signal.inherited':
         invalidateExecutionCommentQueries(queryClient, establishmentId, event.entity_id)
         break
+      case 'comment.execution.updated':
       case 'comment.execution.created':
       case 'comment.execution.resolved':
       case 'comment.execution.unresolved':

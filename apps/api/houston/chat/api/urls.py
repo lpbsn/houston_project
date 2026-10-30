@@ -26,8 +26,35 @@ from houston.chat.api.views import (
     ChatStatusView,
     ChatWsTicketView,
 )
+from houston.chat.api.workspace_views import (
+    CommentToolView,
+    CommunicationWorkspaceView,
+    ConversationNotificationView,
+    MessageToolView,
+    PlanDiscussionPreferenceView,
+)
 
 urlpatterns = [
+    path(
+        "establishments/<uuid:establishment_id>/chat/workspace/",
+        CommunicationWorkspaceView.as_view(),
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/messages/<uuid:message_id>/tools/",
+        MessageToolView.as_view(),
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/notifications/",
+        ConversationNotificationView.as_view(),
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/plan-discussions/<uuid:execution_id>/preferences/",
+        PlanDiscussionPreferenceView.as_view(),
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/plan-comments/<uuid:comment_id>/tools/",
+        CommentToolView.as_view(),
+    ),
     path(
         "establishments/<uuid:establishment_id>/chat/ws-ticket/",
         ChatWsTicketView.as_view(),

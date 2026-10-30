@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Reply } from 'lucide-react'
+import { MessageTools } from './message-tools'
 
 import { resolveApiUrl } from '@/lib/runtime'
 import { cn } from '@/lib/utils'
@@ -10,6 +11,8 @@ import { splitBodyByMentions } from '../lib/chat-mentions'
 import type { ChatMessage, ChatReplyTo, LocalChatMessage } from '../types'
 
 type MessageBubbleProps = {
+  establishmentId?: string
+  conversationId?: string
   message: ChatMessage | LocalChatMessage
   isOwn: boolean
   onRetry?: () => void
@@ -140,6 +143,8 @@ function readMessage(message: ChatMessage | LocalChatMessage) {
 }
 
 export function MessageBubble({
+  establishmentId,
+  conversationId,
   message,
   isOwn,
   onRetry,
@@ -320,6 +325,7 @@ export function MessageBubble({
             })}
           </ul>
         ) : null}
+        {establishmentId && conversationId && !isLocalMessage(message) && <MessageTools establishmentId={establishmentId} conversationId={conversationId} message={message} />}
         <div
           className={cn(
             'mt-1 flex items-center justify-end gap-2 text-[10px]',

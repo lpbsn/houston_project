@@ -3,6 +3,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./components/discussion-toolbar', () => ({ DiscussionToolbar: () => null }))
+vi.mock('./components/comment-tools', () => ({ CommentTools: () => null }))
+
 import { resolveApiUrl } from '@/lib/runtime'
 
 import { CommentsApiError } from './api'

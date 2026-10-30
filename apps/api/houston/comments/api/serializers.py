@@ -78,9 +78,7 @@ def _serialize_comment_attachments(
         resolved_execution
     ):
         return []
-    attachments = getattr(comment, "_prefetched_objects_cache", {}).get(
-        "plan_comment_attachments"
-    )
+    attachments = getattr(comment, "_prefetched_objects_cache", {}).get("plan_comment_attachments")
     if attachments is None:
         attachments = list(comment.plan_comment_attachments.select_related("upload").all())
     return [
@@ -152,7 +150,16 @@ def serialize_execution_comment_thread(
     execution: ActionPlanExecution,
 ) -> dict:
     root = entry.root
+    from houston.action_plans.permissions import can_update_action_plan_execution
+
+    acknowledgements = list(root.acknowledgements.all())
     return {
+        "pinned": root.pinned_at is not None,
+        "created_task_id": root.created_task_id,
+        "can_create_task": execution.status == "in_progress"
+        and can_update_action_plan_execution(membership, execution),
+        "acknowledgement_count": len(acknowledgements),
+        "acknowledged": any(a.membership_id == membership.id for a in acknowledgements),
         "item_type": "execution_thread",
         **serialize_comment(
             root,
@@ -246,6 +253,11 @@ class InheritedSignalCommentItemSerializer(serializers.Serializer):
 
 
 class ExecutionCommentThreadItemSerializer(serializers.Serializer):
+    pinned = serializers.BooleanField(required=False)
+    created_task_id = serializers.UUIDField(required=False, allow_null=True)
+    can_create_task = serializers.BooleanField(required=False)
+    acknowledgement_count = serializers.IntegerField(required=False)
+    acknowledged = serializers.BooleanField(required=False)
     item_type = serializers.ChoiceField(choices=["execution_thread"])
     id = serializers.UUIDField()
     origin = serializers.ChoiceField(
@@ -264,6 +276,11 @@ class ExecutionCommentThreadItemSerializer(serializers.Serializer):
 
 
 class ExecutionCommentListItemSerializer(serializers.Serializer):
+    pinned = serializers.BooleanField(required=False)
+    created_task_id = serializers.UUIDField(required=False, allow_null=True)
+    can_create_task = serializers.BooleanField(required=False)
+    acknowledgement_count = serializers.IntegerField(required=False)
+    acknowledged = serializers.BooleanField(required=False)
     item_type = serializers.ChoiceField(choices=["inherited_signal", "execution_thread"])
     id = serializers.UUIDField()
     origin = serializers.ChoiceField(

@@ -9,6 +9,8 @@ import type { ChatConversationDetail, ChatMessage } from '../types'
 
 import { ChatConversationPage } from './chat-conversation-page'
 
+vi.mock('../components/source-message', () => ({ SourceMessage: () => null }))
+
 const CONVERSATION_ID = 'conv-1'
 
 const conversationDetail: ChatConversationDetail = {

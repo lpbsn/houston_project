@@ -1049,7 +1049,10 @@ def _deliver_chat_message_notifications(
         conversation=message.conversation,
         exclude_membership_id=actor_membership.id,
     )
+    from houston.notifications.discussion_preferences import chat_message_notification_allowed
     for recipient in recipients:
+        if not chat_message_notification_allowed(message=message, membership_id=recipient.id):
+            continue
         create_in_app_notification(
             establishment_id=message.conversation.establishment_id,
             recipient_membership=recipient,
