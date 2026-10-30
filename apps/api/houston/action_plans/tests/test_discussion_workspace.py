@@ -138,3 +138,9 @@ def test_plan_silent_mode_preserves_business_actions_notifications(owner_members
         ).notification_mode
         == "silent"
     )
+
+
+def test_inactive_member_cannot_search_discussions(owner_membership, discussion):
+    owner_membership.status = "deactivated"
+    assert communication_search(membership=owner_membership)["items"] == []
+    assert plan_discussions(membership=owner_membership)["items"] == []

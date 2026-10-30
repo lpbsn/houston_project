@@ -357,7 +357,7 @@ export function ChatPage({
   }
 
   const tabs = <CommunicationTabs tab={tab} onChange={setTab} />
-  if (tab !== 'team') return <ChatPageRoot>{tabs}<CommunicationWorkspace key={`${establishmentId}-${tab}`} establishmentId={establishmentId} tab={tab} /></ChatPageRoot>
+  if (tab !== 'team') return <ChatPageRoot>{tabs}<CommunicationWorkspace key={`${establishmentId}-${tab}`} establishmentId={establishmentId} tab={tab} onOpenItem={() => setTab('team')} /></ChatPageRoot>
 
   const canCreate = statusQuery.data.can_create_dm || statusQuery.data.can_create_group
   const collapseLabel = listCollapsed

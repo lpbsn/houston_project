@@ -335,3 +335,14 @@ def find_existing_dm_conversation(
         dm_membership_a_id=first_id,
         dm_membership_b_id=second_id,
     ).first()
+
+
+def visible_messages(*, membership: EstablishmentMembership) -> QuerySet[ChatMessage]:
+    from houston.chat.permissions import can_access_chat
+
+    if not can_access_chat(membership):
+        return ChatMessage.objects.none()
+    return ChatMessage.objects.filter(
+        conversation__establishment_id=membership.establishment_id,
+        conversation__deleted_at__isnull=True,
+    ).filter(_message_visible_after_viewer_cutoff(membership_id=membership.id))

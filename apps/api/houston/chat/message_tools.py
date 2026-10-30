@@ -5,30 +5,14 @@ import uuid
 from django.db import transaction
 from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError
 from houston.chat.models import (
-    ChatMessage,
     ChatMessageAcknowledgement,
     ChatObservationSource,
     ChatParticipant,
 )
 from houston.chat.permissions import can_access_chat
+from houston.chat.selectors import visible_messages
 from houston.establishments.permissions import can_create_observation
 from houston.observations.services import submit_observation
-
-
-def visible_messages(*, membership):
-    from django.db.models import Exists, OuterRef, Q
-
-    if not can_access_chat(membership):
-        return ChatMessage.objects.none()
-    participant = ChatParticipant.objects.filter(
-        conversation_id=OuterRef("conversation_id"),
-        membership_id=membership.id,
-        left_at__isnull=True,
-    ).filter(Q(history_cutoff_at__isnull=True) | Q(history_cutoff_at__lt=OuterRef("created_at")))
-    return ChatMessage.objects.filter(
-        conversation__establishment_id=membership.establishment_id,
-        conversation__deleted_at__isnull=True,
-    ).filter(Exists(participant))
 
 
 def require_message(*, membership, message_id, lock=False):
