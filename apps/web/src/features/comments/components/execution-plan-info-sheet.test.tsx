@@ -51,10 +51,10 @@ describe('ExecutionPlanInfoSheet', () => {
     cleanup()
   })
 
-  it('uses Médias as the sheet title with Médias and Documents chips', () => {
+  it('names the document collection explicitly and keeps both media tabs', () => {
     renderSheet()
 
-    expect(screen.getByRole('dialog', { name: 'Médias' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Documents et médias' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Médias' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Documents' })).toBeTruthy()
   })

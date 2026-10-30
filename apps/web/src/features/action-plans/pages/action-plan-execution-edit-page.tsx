@@ -339,6 +339,7 @@ export function ActionPlanExecutionEditPage({
                 ) : null}
                 <ActionPlanTaskDraftEditor
                   tasks={form.pendingTasks}
+                  maxTasks={10 - form.treatedTasks.length}
                   establishmentId={establishmentId}
                   pilotBusinessUnitId={form.pilotBusinessUnitId}
                   canDefineCrossPoleTasks={canCrossPole}
@@ -473,6 +474,7 @@ export function ActionPlanExecutionEditPage({
 
         <ActionPlanTaskDraftEditor
           tasks={form.pendingTasks}
+                  maxTasks={10 - form.treatedTasks.length}
           establishmentId={establishmentId}
           pilotBusinessUnitId={form.pilotBusinessUnitId}
           canDefineCrossPoleTasks={canCrossPole}

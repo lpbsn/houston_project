@@ -53,6 +53,7 @@ type ExecutionCalendarViewProps = {
   onOpenExecution: (executionId: string) => void
   onOpenDay?: (anchor: string) => void
   showEstablishment?: boolean
+  onDeadlineDrop?: (executionId: string, date: string) => void
 }
 
 /** One CSS grid item per execution, spanning all occupied civil days in this row. */
@@ -224,6 +225,7 @@ export function ExecutionCalendarView({
   onOpenExecution,
   onOpenDay,
   showEstablishment = false,
+  onDeadlineDrop,
 }: ExecutionCalendarViewProps) {
   const timeZone = timeZoneProp ?? data?.timezone ?? BUSINESS_TIMEZONE
   const today = todayCivilDate(timeZone)
@@ -375,6 +377,7 @@ export function ExecutionCalendarView({
       {desktopCalendar ? (
         <div data-testid="calendar-grid-card" className={gridCardClassName}>
           <DesktopExecutionCalendar
+            onDeadlineDrop={onDeadlineDrop}
             granularity={granularity}
             days={days}
             month={month}

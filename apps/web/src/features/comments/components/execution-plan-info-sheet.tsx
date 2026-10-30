@@ -43,7 +43,7 @@ export function ExecutionPlanInfoSheet({
   }
 
   return (
-    <TerrainBottomSheet open={open} onClose={onClose} title="Médias">
+    <TerrainBottomSheet open={open} onClose={onClose} title="Documents et médias">
       <div className="flex flex-wrap gap-2 pb-3">
         <button
           type="button"
