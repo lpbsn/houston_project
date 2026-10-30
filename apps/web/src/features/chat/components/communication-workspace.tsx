@@ -48,7 +48,9 @@ export function workspaceHref(establishmentId: string, item: WorkspaceItem) {
 export function CommunicationWorkspace({
   establishmentId,
   tab,
+  onOpenItem,
 }: {
+  onOpenItem: () => void
   establishmentId: string
   tab: Exclude<CommunicationTab, 'team'>
 }) {
@@ -167,7 +169,10 @@ export function CommunicationWorkspace({
             <li key={`${item.kind}-${item.id}`}>
               <button
                 className="w-full rounded-2xl border border-[#D8D8D2] bg-white p-4 text-left hover:bg-[#F5F4F0]"
-                onClick={() => navigate(workspaceHref(establishmentId, item))}
+                onClick={() => {
+                  onOpenItem()
+                  navigate(workspaceHref(establishmentId, item))
+                }}
               >
                 <div className="flex gap-2 font-semibold">
                   {item.unread && <span className="text-[#114660]">●</span>}

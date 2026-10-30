@@ -1,6 +1,7 @@
 import { apiClient, withAuthRetry } from '@/api/client'
 import type { components } from '@/api/generated/types'
 import { ChatApiError } from './api'
+import { parseStandardApiError } from '@/lib/api-errors'
 export type WorkspaceResponse = components['schemas']['WorkspaceResponse']
 export type WorkspaceItem = components['schemas']['WorkspaceItem']
 export type NotificationMode = 'all' | 'mentions' | 'silent'
@@ -18,12 +19,7 @@ export type WorkspaceFilter = {
 const headers = (token: string | null) => (token ? { Authorization: `Bearer ${token}` } : undefined)
 function result<T>(r: { response: Response; data?: T; error?: unknown }): T {
   if (r.response.ok && r.data !== undefined) return r.data
-  const e = r.error as { detail?: string; code?: string } | undefined
-  throw new ChatApiError({
-    status: r.response.status,
-    detail: e?.detail || 'Impossible de terminer cette action. Réessayez.',
-    code: e?.code,
-  })
+  throw new ChatApiError(parseStandardApiError(r.response, r.error))
 }
 export async function fetchWorkspace(establishmentId: string, filter: WorkspaceFilter) {
   return result(
