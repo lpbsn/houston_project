@@ -15,6 +15,7 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  Sun,
 } from 'lucide-react'
 
 import type { NavigateOptions } from '@/app/app-history'
@@ -50,6 +51,7 @@ const ITEM_ICONS: Record<
   ScopedDesktopNavItemId,
   typeof Eye
 > = {
+  'my-day': Sun,
   dashboard: BarChart3,
   brain: Brain,
   settings: SlidersHorizontal,

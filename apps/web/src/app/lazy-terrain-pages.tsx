@@ -143,3 +143,7 @@ export const LazyChatRealtimeProvider = lazy(() =>
     default: module.ChatRealtimeProvider,
   })),
 )
+
+export const LazyMyDayPage = lazy(() =>
+  import('@/features/my-day/my-day-page').then((module) => ({ default: module.MyDayPage })),
+)
