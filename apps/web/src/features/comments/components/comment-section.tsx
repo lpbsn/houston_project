@@ -1,3 +1,4 @@
+import { DiscussionToolbar } from './discussion-toolbar'
 import { useRef, useState, type ReactNode } from 'react'
 import { Info, LoaderCircle } from 'lucide-react'
 
@@ -144,6 +145,7 @@ export function CommentSection({
     isSignal ? establishmentId : null,
     isSignal ? targetId : null,
   )
+  const [discussionFilter, setDiscussionFilter] = useState("all")
   const executionQuery = useExecutionCommentsQuery(
     isExecution ? establishmentId : null,
     isExecution ? targetId : null,
@@ -278,10 +280,11 @@ export function CommentSection({
         />
       ) : null}
 
+      {isExecution && targetId && <DiscussionToolbar establishmentId={establishmentId} executionId={targetId} filter={discussionFilter} onFilter={setDiscussionFilter} latestAt={executionQuery.data?.flatMap(item => [item.created_at, ...(item.replies ?? []).map(reply => reply.created_at)]).sort().at(-1)} />}
       {executionQuery.isSuccess && isExecution ? (
         <CommentList
           mode="execution"
-          comments={executionQuery.data}
+          comments={executionQuery.data.filter(item => discussionFilter === 'all' || item.id === highlightCommentId || item.replies?.some(reply => reply.id === highlightCommentId) || (discussionFilter === 'pinned' ? item.pinned : item.item_type === 'execution_thread' && !item.is_resolved))}
           {...threadListProps}
           disabled={readOnly || threadListProps.disabled}
           replyErrorMessage={

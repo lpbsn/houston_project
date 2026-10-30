@@ -1,3 +1,4 @@
+import { CommentTools } from './comment-tools'
 import { useEffect, useState } from 'react'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -333,6 +334,7 @@ export function ActionCommentThreadCard({
       />
 
       <div className="ml-10">
+        {executionId && <CommentTools establishmentId={establishmentId} executionId={executionId} item={item} disabled={disabled} />}
         <CommentMetaRow
           createdAt={item.created_at}
           canReply={hints?.can_reply ?? false}

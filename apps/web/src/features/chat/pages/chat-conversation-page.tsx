@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { DiscussionNotificationControl } from '../components/discussion-notification-control'
+import { SourceMessage } from '../components/source-message'
 import { Info, LoaderCircle, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -308,6 +310,10 @@ export function ChatConversationPage({
         </div>
       </div>
 
+      <div className="shrink-0 border-b bg-white px-3 py-2">
+        <DiscussionNotificationControl establishmentId={establishmentId} parentId={conversationId} kind="chat" mode={detailQuery.data?.notification_mode ?? 'all'} />
+        <SourceMessage establishmentId={establishmentId} conversationId={conversationId} />
+      </div>
       <div
         ref={messagesScrollRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-3"
@@ -371,6 +377,8 @@ export function ChatConversationPage({
                       </div>
                     ) : null}
                     <MessageBubble
+                      establishmentId={establishmentId}
+                      conversationId={conversationId}
                       message={message}
                       isOwn={isOwn}
                       onResignPreview={() => messagesQuery.refetch()}

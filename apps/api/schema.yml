@@ -5762,6 +5762,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/notifications/:
+    post:
+      operationId: v1_establishments_chat_conversations_notifications_create
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscussionPreference'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DiscussionPreference'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DiscussionPreference'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResult'
+          description: ''
   /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/:
     post:
       operationId: v1_establishments_chat_conversations_participants_create
@@ -6301,6 +6339,174 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/chat/messages/{message_id}/tools/:
+    get:
+      operationId: v1_establishments_chat_messages_tools_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+          description: ''
+    post:
+      operationId: v1_establishments_chat_messages_tools_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageToolRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageToolRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageToolRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResult'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/plan-comments/{comment_id}/tools/:
+    post:
+      operationId: v1_establishments_chat_plan_comments_tools_create
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentToolRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentToolRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentToolRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResult'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/plan-discussions/{execution_id}/preferences/:
+    get:
+      operationId: v1_establishments_chat_plan_discussions_preferences_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionPreference'
+          description: ''
+    post:
+      operationId: v1_establishments_chat_plan_discussions_preferences_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscussionPreference'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DiscussionPreference'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DiscussionPreference'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResult'
+          description: ''
   /api/v1/establishments/{establishment_id}/chat/settings/:
     patch:
       operationId: v1_establishments_chat_settings_partial_update
@@ -6571,6 +6777,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/workspace/:
+    get:
+      operationId: v1_establishments_chat_workspace_retrieve
+      parameters:
+      - in: query
+        name: after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: author_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: before
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: files_only
+        schema:
+          type: boolean
+          default: false
+      - in: query
+        name: q
+        schema:
+          type: string
+          default: ''
+          maxLength: 150
+      - in: query
+        name: tab
+        schema:
+          enum:
+          - plans
+          - mentions
+          - search
+          type: string
+          default: plans
+          minLength: 1
+        description: |-
+          * `plans` - plans
+          * `mentions` - mentions
+          * `search` - search
+      - in: query
+        name: unresolved
+        schema:
+          type: boolean
+          default: false
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/chat/ws-ticket/:
     post:
@@ -12828,6 +13110,8 @@ components:
     ChatConversationDetail:
       type: object
       properties:
+        notification_mode:
+          $ref: '#/components/schemas/NotificationModeEnum'
         id:
           type: string
           format: uuid
@@ -12981,6 +13265,12 @@ components:
     ChatMessage:
       type: object
       properties:
+        acknowledgement_count:
+          type: integer
+        acknowledged:
+          type: boolean
+        observation_created:
+          type: boolean
         id:
           type: string
           format: uuid
@@ -13394,6 +13684,37 @@ components:
       required:
       - can_reply
       - can_resolve
+    CommentToolRequest:
+      type: object
+      properties:
+        operation:
+          $ref: '#/components/schemas/CommentToolRequestOperationEnum'
+        active:
+          type: boolean
+          default: true
+        title:
+          type: string
+          maxLength: 255
+        assigned_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - operation
+    CommentToolRequestOperationEnum:
+      enum:
+      - pin
+      - acknowledge
+      - task
+      type: string
+      description: |-
+        * `pin` - pin
+        * `acknowledge` - acknowledge
+        * `task` - task
     ContentKindEnum:
       enum:
       - observation
@@ -13564,6 +13885,17 @@ components:
       - invitation_expires_at
       - invitation_token
       - membership
+    DiscussionPreference:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        seen:
+          type: boolean
+          default: false
+        seen_through:
+          type: string
+          format: date-time
     EmailChangeConfirmRequest:
       type: object
       properties:
@@ -14057,6 +14389,18 @@ components:
     ExecutionCommentListItem:
       type: object
       properties:
+        pinned:
+          type: boolean
+        created_task_id:
+          type: string
+          format: uuid
+          nullable: true
+        can_create_task:
+          type: boolean
+        acknowledgement_count:
+          type: integer
+        acknowledged:
+          type: boolean
         item_type:
           $ref: '#/components/schemas/ExecutionCommentListItemItemTypeEnum'
         id:
@@ -14114,6 +14458,18 @@ components:
     ExecutionCommentThreadItem:
       type: object
       properties:
+        pinned:
+          type: boolean
+        created_task_id:
+          type: string
+          format: uuid
+          nullable: true
+        can_create_task:
+          type: boolean
+        acknowledgement_count:
+          type: integer
+        acknowledged:
+          type: boolean
         item_type:
           $ref: '#/components/schemas/ExecutionCommentThreadItemItemTypeEnum'
         id:
@@ -14709,6 +15065,38 @@ components:
       - id
       - last_name
       - username
+    MessageToolRequest:
+      type: object
+      properties:
+        operation:
+          $ref: '#/components/schemas/MessageToolRequestOperationEnum'
+        active:
+          type: boolean
+          default: true
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 10
+      required:
+      - operation
+    MessageToolRequestOperationEnum:
+      enum:
+      - acknowledge
+      - observe
+      type: string
+      description: |-
+        * `acknowledge` - acknowledge
+        * `observe` - observe
+    ModeEnum:
+      enum:
+      - all
+      - mentions
+      - silent
+      type: string
+      description: |-
+        * `all` - all
+        * `mentions` - mentions
+        * `silent` - silent
     NotificationActor:
       type: object
       properties:
@@ -14821,6 +15209,16 @@ components:
       - has_more
       - items
       - next_cursor
+    NotificationModeEnum:
+      enum:
+      - all
+      - mentions
+      - silent
+      type: string
+      description: |-
+        * `all` - all
+        * `mentions` - mentions
+        * `silent` - silent
     NotificationNavigation:
       type: object
       properties:
@@ -17121,6 +17519,17 @@ components:
         * `field` - field
         * `event` - event
         * `unknown` - unknown
+    ToolResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        target_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - success
     TranscriptionResponse:
       type: object
       properties:
@@ -17217,6 +17626,61 @@ components:
       - code
       - detail
       - errors
+    WorkspaceItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/WorkspaceItemKindEnum'
+        parent_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        author:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        unresolved:
+          type: boolean
+        unread:
+          type: boolean
+      required:
+      - author
+      - body
+      - created_at
+      - id
+      - kind
+      - parent_id
+      - title
+      - unread
+      - unresolved
+    WorkspaceItemKindEnum:
+      enum:
+      - chat
+      - plan
+      type: string
+      description: |-
+        * `chat` - chat
+        * `plan` - plan
+    WorkspaceResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkspaceItem'
+        cursor:
+          type: string
+          nullable: true
+      required:
+      - cursor
+      - items
   securitySchemes:
     BearerAccessToken:
       type: http

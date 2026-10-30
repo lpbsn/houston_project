@@ -20,6 +20,7 @@ EMITTER_SCAN_FILES: tuple[Path, ...] = (
     API_ROOT / "houston/action_plans/schedule_services.py",
     API_ROOT / "houston/action_plans/realtime.py",
     API_ROOT / "houston/comments/services.py",
+    API_ROOT / "houston/comments/discussion_services.py",
     API_ROOT / "houston/notifications/services.py",
     API_ROOT / "houston/observations/services.py",
 )

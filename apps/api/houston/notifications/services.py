@@ -120,6 +120,14 @@ def create_in_app_notification(
     ):
         return None
 
+    if subject_type == Notification.SubjectType.COMMENT:
+        from houston.notifications.discussion_preferences import comment_notification_allowed
+
+        if not comment_notification_allowed(
+            comment_id=subject_id, membership_id=recipient_membership.id
+        ):
+            return None
+
     effective_dedupe_key = dedupe_key or build_default_dedupe_key(
         event_key=event_key,
         subject_type=subject_type,
