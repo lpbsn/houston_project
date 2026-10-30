@@ -214,6 +214,7 @@ describe('DesktopTerrainSidebar', () => {
     const destinations = screen.getByRole('navigation', { name: 'Destinations' })
     expect(within(destinations).queryByRole('heading')).toBeNull()
     expect(destinationOrder(destinations)).toEqual([
+      'Ma journée',
       'Dashboard',
       'Spore Brain - Bientôt disponible',
       'Nouvelle observation',
