@@ -225,7 +225,7 @@ export function CommentSection({
       onClick={() => setInfoOpen(true)}
     >
       <Info className="h-3.5 w-3.5" aria-hidden="true" />
-      Médias
+      Documents et médias
     </button>
   ) : null
 

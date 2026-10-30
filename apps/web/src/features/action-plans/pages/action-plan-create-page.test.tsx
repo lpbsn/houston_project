@@ -25,6 +25,8 @@ const createMutateAsync = vi.fn()
 const planningMutateAsync = vi.fn()
 const signalDetailQueryMock = vi.fn()
 const detailQueryMock = vi.fn()
+const duplicateQueryMock = vi.fn()
+let routeSearch = ''
 
 function buildTemplatePlan(overrides: Record<string, unknown> = {}) {
   return {
@@ -128,7 +130,7 @@ const { mockAuthState, mockBusinessUnitTree, perAssigneeTestMode } = vi.hoisted(
 }))
 
 vi.mock('@/app/app-routes', () => ({
-  useAppRoute: () => ({ navigate }),
+  useAppRoute: () => ({ navigate, search: routeSearch }),
 }))
 
 vi.mock('@/app/auth-provider', () => ({
@@ -173,6 +175,7 @@ vi.mock('../hooks', () => ({
     isPending: false,
   }),
   useActionPlanDetailQuery: () => detailQueryMock(),
+  useActionPlanExecutionDetailQuery: () => duplicateQueryMock(),
 }))
 
 vi.mock('../components/action-plan-event-planning-form', () => ({
@@ -348,7 +351,18 @@ function renderPage(
 }
 
 describe('ActionPlanCreatePage', () => {
+  it('blocks the creation form when the source copy is inaccessible', () => {
+    routeSearch = '?from=execution&duplicate=unavailable'
+    duplicateQueryMock.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: vi.fn() })
+    render(createElement(ActionPlanCreatePage, { mode: 'execution' }))
+    expect(screen.getByText('Impossible de charger le plan à dupliquer.')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(createMutateAsync).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
+    routeSearch = ''
+    duplicateQueryMock.mockReturnValue({ data: undefined, isLoading: false, isError: false })
     navigate.mockReset()
     createMutateAsync.mockReset()
     planningMutateAsync.mockReset()

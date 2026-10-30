@@ -75,6 +75,9 @@ import { ActionPlanExecutionPinReplacementSheet } from '@/features/action-plans/
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
 import { ExecutionCalendarView } from '../components/execution-calendar-view'
+import { ActionPlanQuickCreate } from '@/features/action-plans/components/action-plan-quick-create'
+import { ExecutionDeadlineDialog } from '../components/execution-deadline-dialog'
+import { ExecutionBoard } from '../components/execution-board'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import {
@@ -207,6 +210,8 @@ function ExecutionFeedPageContent({
   establishmentId: string | null
   source: 'establishment' | 'cross'
 }) {
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+  const [deadlineChange, setDeadlineChange] = useState<{ id: string; date: string } | null>(null)
   const auth = useAuth()
   const { route, search, navigate } = useAppRoute()
   const isCross = source === 'cross'
@@ -789,12 +794,15 @@ function ExecutionFeedPageContent({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {deadlineChange && establishmentId && !isCross && <ExecutionDeadlineDialog key={`${deadlineChange.id}:${deadlineChange.date}`} establishmentId={establishmentId} executionId={deadlineChange.id} date={deadlineChange.date} timeZone={calendarTimeZone} onClose={() => setDeadlineChange(null)} onOpenExecution={openExecution} />}
+      {quickCreateOpen && <ActionPlanQuickCreate onClose={() => setQuickCreateOpen(false)} onNavigate={(path) => onNavigate?.(path)} />}
       <ExecutionCreateMenuSheet
         open={isCreateMenuOpen}
         presentation={isDesktopWeb ? 'dialog' : 'sheet'}
         permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
-        onSelectActionPlan={() => onNavigate?.('/action-plans/new?from=execution')}
+        onSelectActionPlan={() => setQuickCreateOpen(true)}
+        onSelectAdvanced={() => onNavigate?.('/action-plans/new?from=execution')}
         onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
       {!isCross && quickActions.pinReplacement ? (
@@ -868,6 +876,7 @@ function ExecutionFeedPageContent({
             : 'overflow-y-auto overscroll-y-contain',
         )}
         onScroll={(event) => {
+          if (layout !== 'list') return
           approachArmedRef.current = true
           const atTop = event.currentTarget.scrollTop <= 0
           const edge = {
@@ -896,7 +905,9 @@ function ExecutionFeedPageContent({
         }}
         {...pullToRefresh.pointerProps}
       >
-        {layout === 'calendar' ? (
+        {layout === 'board' ? (
+          <ExecutionBoard key={`${readingScopeKey}:${viewMode}`} establishmentId={establishmentId} viewMode={viewMode} source={source} onOpenExecution={openExecution} />
+        ) : layout === 'calendar' ? (
           <div className="flex min-h-0 flex-1 flex-col pt-3">
             <ExecutionCalendarView
               granularity={granularity}
@@ -909,6 +920,7 @@ function ExecutionFeedPageContent({
               error={calendarQuery.error}
               onRetry={() => void calendarQuery.refetch()}
               onOpenExecution={openExecution}
+              onDeadlineDrop={!isCross ? (id, date) => setDeadlineChange({ id, date }) : undefined}
               onOpenDay={(anchor) => replaceFeedUrl({ granularity: 'day', anchor })}
               showEstablishment={isCross}
             />

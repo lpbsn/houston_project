@@ -13,6 +13,7 @@ type ExecutionCreateMenuSheetProps = {
   onClose: () => void
   onSelectActionPlan: () => void
   onSelectCatalog: () => void
+  onSelectAdvanced?: () => void
 }
 
 export function ExecutionCreateMenuSheet({
@@ -22,6 +23,7 @@ export function ExecutionCreateMenuSheet({
   onClose,
   onSelectActionPlan,
   onSelectCatalog,
+  onSelectAdvanced,
 }: ExecutionCreateMenuSheetProps) {
   const options = getExecutionCreateMenuOptions(permissionHints)
 
@@ -75,6 +77,7 @@ export function ExecutionCreateMenuSheet({
             </li>
           )
         })}
+        {onSelectAdvanced && options.some((option) => option.id === 'action_plan' && !option.disabled) && <li><button type="button" className="min-h-11 w-full rounded-lg border border-[#E8E6DF] px-3 py-2.5 text-left text-sm font-medium text-[#1a1a1a]" onClick={() => { onSelectAdvanced(); onClose() }}>Création détaillée</button></li>}
       </ul>
   )
 
