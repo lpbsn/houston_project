@@ -7417,6 +7417,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/my-day/:
+    get:
+      operationId: v1_establishments_my_day_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyDayResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/notifications/:
     get:
       operationId: v1_establishments_notifications_retrieve
@@ -12685,6 +12710,18 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
+    BucketEnum:
+      enum:
+      - overdue
+      - today
+      - upcoming
+      - undated
+      type: string
+      description: |-
+        * `overdue` - overdue
+        * `today` - today
+        * `upcoming` - upcoming
+        * `undated` - undated
     BusinessUnitGeneric:
       type: object
       properties:
@@ -14709,6 +14746,57 @@ components:
       - id
       - last_name
       - username
+    MyDayResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyDayTask'
+        next_offset:
+          type: integer
+          nullable: true
+        timezone:
+          type: string
+      required:
+      - items
+      - next_offset
+      - timezone
+    MyDayTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        execution_id:
+          type: string
+          format: uuid
+        execution_title:
+          type: string
+        pole:
+          type: string
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        all_day:
+          type: boolean
+        shared:
+          type: boolean
+        bucket:
+          $ref: '#/components/schemas/BucketEnum'
+      required:
+      - all_day
+      - bucket
+      - due_at
+      - execution_id
+      - execution_title
+      - id
+      - pole
+      - shared
+      - title
     NotificationActor:
       type: object
       properties:

@@ -1,5 +1,5 @@
 import { type ComponentType, useEffect, useState } from 'react'
-import { ArrowLeftRight, BarChart3, Building2, ChevronRight, History, LayoutGrid, Library, SlidersHorizontal, Smartphone, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, History, LayoutGrid, Library, SlidersHorizontal, Smartphone, Sun, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -426,6 +426,14 @@ export function ProfilePage({
           />
         </div>
       ) : null}
+
+      {establishmentId && <ProfileManagementNavCard
+        icon={Sun}
+        iconClassName="bg-[#EAF2F5] text-[#114660]"
+        title="Ma journée"
+        subtitle="Mes tâches, mes priorités et les dernières nouvelles"
+        onClick={() => onNavigate?.('/my-day')}
+      />}
 
       {canViewTeam && !canAccessManagement ? (
         <ProfileManagementNavCard

@@ -807,6 +807,7 @@ function ExecutionFeedPageContent({
           onReplace={quickActions.replacePin}
         />
       ) : null}
+      {!isCross && <button type="button" className="mx-4 mt-2 self-start rounded-lg border border-[#D7E1E5] bg-white px-3 py-2 text-sm font-semibold text-[#114660]" onClick={() => onNavigate?.(establishmentId ? `/e/${establishmentId}/my-day` : '/my-day')}>Ma journée →</button>}
       <TerrainHubTitleSlot>{viewTabs}</TerrainHubTitleSlot>
       <TerrainHubSubheader>
         <div className={cn('flex flex-col', isDesktopWeb ? 'gap-2' : 'gap-0')}>

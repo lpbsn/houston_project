@@ -116,6 +116,7 @@ describe('query-invalidation factory parity', () => {
     invalidateActionPlanExecutionFeedQueries(queryClient, EST)
 
     expect(prefixes()).toEqual([
+      ['action-plans', 'my-day', EST],
       actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
       actionPlansQueryKeys.executionCalendar(EST, 'personal', '2026-01-01', '2026-01-02').slice(0, 3),
       actionPlansQueryKeys.crossExecutionFeed('general').slice(0, 2),

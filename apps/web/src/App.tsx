@@ -26,6 +26,7 @@ import {
   LazyHistoryPage,
   LazyProfilePage,
   LazyNotificationsCenterPage,
+  LazyMyDayPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
   LazyOperationalConfigPage,
@@ -863,6 +864,9 @@ function App() {
           />
         )
       }
+      if (route.page === 'my-day' && scope.type === 'establishment') {
+        return <LazyMyDayPage establishmentId={scope.establishmentId} onNavigate={navigate} />
+      }
       if (route.page === 'execution') {
         return (
           <LazyExecutionFeedPage
@@ -950,6 +954,9 @@ function App() {
       )
     }
 
+    if (route.path === '/my-day') {
+      return <LazyMyDayPage establishmentId={establishmentId} onNavigate={navigate} />
+    }
     if (route.path === '/execution') {
       return (
         <LazyExecutionFeedPage
