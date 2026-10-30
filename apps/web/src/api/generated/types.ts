@@ -2068,6 +2068,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/my-day/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_my_day_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/notifications/": {
         parameters: {
             query?: never;
@@ -4068,6 +4084,14 @@ export interface components {
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
             permission_hints: components["schemas"]["BootstrapPermissionHints"];
         };
+        /**
+         * @description * `overdue` - overdue
+         *     * `today` - today
+         *     * `upcoming` - upcoming
+         *     * `undated` - undated
+         * @enum {string}
+         */
+        BucketEnum: "overdue" | "today" | "upcoming" | "undated";
         BusinessUnitGeneric: {
             key: string;
             label: string;
@@ -4876,6 +4900,25 @@ export interface components {
             email: string | null;
             first_name: string;
             last_name: string;
+        };
+        MyDayResponse: {
+            items: components["schemas"]["MyDayTask"][];
+            next_offset: number | null;
+            timezone: string;
+        };
+        MyDayTask: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            execution_id: string;
+            execution_title: string;
+            pole: string;
+            /** Format: date-time */
+            due_at: string | null;
+            all_day: boolean;
+            shared: boolean;
+            bucket: components["schemas"]["BucketEnum"];
         };
         NotificationActor: {
             /** Format: uuid */
@@ -13112,6 +13155,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_my_day_retrieve: {
+        parameters: {
+            query?: {
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyDayResponse"];
                 };
             };
         };

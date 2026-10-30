@@ -5,6 +5,7 @@ const UUID_PATTERN =
 
 const CROSS_PAGES = new Set(['reporting', 'signals', 'execution', 'chat', 'settings'])
 const ESTABLISHMENT_PAGES = new Set([
+  'my-day',
   'reporting',
   'signals',
   'execution',
@@ -19,6 +20,7 @@ export type TerrainScope =
   | { type: 'establishment'; establishmentId: string }
 
 export type ScopedTerrainPage =
+  | 'my-day'
   | 'dashboard'
   | 'reporting'
   | 'signals'

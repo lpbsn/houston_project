@@ -148,6 +148,7 @@ describe('scoped desktop navigation', () => {
 
     expect(navigation.scopeLabel).toBe('Spore Lyon')
     expect(navigation.items.map((item) => item.id)).toEqual([
+      'my-day',
       'reporting',
       'signals',
       'execution',
@@ -171,6 +172,7 @@ describe('scoped desktop navigation', () => {
 
     expect(navigation.options.map((option) => option.id)).toEqual(['est-1'])
     expect(navigation.items.map((item) => item.id)).toEqual([
+      'my-day',
       'reporting',
       'signals',
       'execution',
@@ -193,6 +195,7 @@ describe('scoped desktop navigation', () => {
     })
 
     expect(ownerNav.items.map((item) => item.id)).toEqual([
+      'my-day',
       'dashboard',
       'brain',
       'reporting',
@@ -203,7 +206,7 @@ describe('scoped desktop navigation', () => {
       'general',
       'settings',
     ])
-    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 3, 3, 3])
+    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 1, 2, 2, 2, 2, 3, 3, 3])
     expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
       label: 'Spore Brain',
       href: null,
@@ -267,6 +270,7 @@ describe('scoped desktop navigation', () => {
         bootstrap: data,
       }).items.map((item) => item.id),
     ).toEqual([
+      'my-day',
       'dashboard',
       'brain',
       'reporting',
@@ -283,6 +287,7 @@ describe('scoped desktop navigation', () => {
         bootstrap: data,
       }).items.map((item) => item.id),
     ).toEqual([
+      'my-day',
       'dashboard',
       'reporting',
       'signals',
@@ -308,7 +313,7 @@ describe('scoped desktop navigation', () => {
         route: establishmentRoute('est-1', 'signals'),
         bootstrap: bootstrap([staff, inactiveOwner]),
       }).items.map((item) => item.id),
-    ).toEqual(['reporting', 'signals', 'execution', 'chat', 'history', 'general'])
+    ).toEqual(['my-day', 'reporting', 'signals', 'execution', 'chat', 'history', 'general'])
   })
 
   it('shows establishment Chat from membership chat_available', () => {

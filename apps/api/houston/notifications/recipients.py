@@ -275,3 +275,16 @@ def resolve_signal_attention_recipients(
     if signal.routing_status == Signal.RoutingStatus.UNASSIGNED:
         return _dedupe_memberships([*triage, *pole])
     return pole or triage
+
+
+def resolve_signal_reporter_recipients(*, signal: Signal) -> list[EstablishmentMembership]:
+    """All contributors, including aggregated/merged observations, once each."""
+    return list(
+        EstablishmentMembership.objects.filter(
+            establishment_id=signal.establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+            id__in=signal.source_observation_links.filter(
+                observation__establishment_id=signal.establishment_id,
+            ).values("observation__submitted_by_membership_id"),
+        ).select_related("user").distinct()
+    )

@@ -34,6 +34,7 @@ export type TerrainRouteConfig = {
 export type TerrainTopbarPlacement = 'all' | 'hidden' | 'mobile-only'
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
+  '/my-day',
   '/reporting',
   '/signals',
   '/execution',
@@ -79,6 +80,7 @@ const TEAM_TERRAIN_PATHS = new Set<string>(['/team', '/team/invite'])
 const NOTIFICATIONS_TERRAIN_PATHS = new Set<string>(['/notifications-center'])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
+  '/my-day',
   '/reporting',
   '/signals',
   '/execution',
@@ -187,6 +189,8 @@ export function usesTerrainShell(route: AppRoute): boolean {
 
 function scopedPageTitle(page: string): string | undefined {
   switch (page) {
+    case 'my-day':
+      return 'Ma journée'
     case 'dashboard':
       return 'Dashboard'
     case 'reporting':
@@ -218,6 +222,7 @@ function scopedHubConfig(page: ScopedTerrainPage): TerrainRouteConfig {
     showTopbarBottomBorder: false,
     mainScroll:
       isDashboard ||
+      page === 'my-day' ||
       page === 'general' ||
       page === 'operational-config' ||
       page === 'settings' ||
@@ -318,6 +323,10 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       mainScroll: 'auto',
       hideTopbar: true,
     }
+  }
+
+  if (route.kind === 'static' && route.path === '/my-day') {
+    return { topbarVariant: 'hub', pageTitle: 'Ma journée', showBottomNav: true, mainScroll: 'auto', showTopbarBottomBorder: false }
   }
 
   if (route.kind === 'static' && route.path === '/reporting') {
