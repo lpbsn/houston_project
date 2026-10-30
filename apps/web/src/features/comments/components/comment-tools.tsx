@@ -103,6 +103,7 @@ export function CommentTools({
               className="w-full rounded border p-2"
             />
           </label>
+          <p className="text-sm">{title.length}/255 caractères pour le titre de la tâche.</p>
           <label>
             Responsable
             <select

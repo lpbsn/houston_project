@@ -4,14 +4,17 @@ from django.contrib.postgres.search import SearchQuery, SearchVector
 from django.db.models import Exists, OuterRef, Q, Subquery
 from houston.accounts.display import membership_display_name
 from houston.action_plans.selectors import action_plan_execution_feed_queryset
-from houston.chat.message_tools import visible_messages
+from houston.chat.selectors import visible_messages
 from houston.comments.models import Comment, PlanDiscussionPreference
+from houston.establishments.permissions import is_valid_membership
 
 PAGE_SIZE = 30
 
 
 def visible_plan_comments(*, membership):
-    visible = action_plan_execution_feed_queryset(membership=membership, view_mode="global")
+    if not is_valid_membership(membership):
+        return Comment.objects.none()
+    visible = action_plan_execution_feed_queryset(membership=membership, view_mode="general")
     return Comment.objects.filter(
         establishment_id=membership.establishment_id,
         action_plan_execution_id__in=visible.values("id"),

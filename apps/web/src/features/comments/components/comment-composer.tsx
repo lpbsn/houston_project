@@ -293,6 +293,16 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       </button>
     ) : null
 
+    const dictationButton = (
+      <DictationButton
+        key={`${establishmentId}-${executionId}`}
+        establishmentId={establishmentId}
+        disabled={disabled}
+        remaining={MAX_COMMENT_LENGTH - draft.length - (draft ? 1 : 0)}
+        onAppend={(text) => setDraft((current) => current ? `${current} ${text}` : text)}
+      />
+    )
+
     return (
       <div className={isReply || compactOnLg ? undefined : 'mt-4'}>
         {fileInput}
@@ -306,7 +316,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
               commentThread.replyPillFocusShadow,
             )}
           >
-            <DictationButton key={`${establishmentId}-${executionId}`} establishmentId={establishmentId} disabled={disabled} remaining={MAX_COMMENT_LENGTH - draft.length - (draft ? 1 : 0)} onAppend={text => setDraft(current => current ? `${current} ${text}` : text)} />
+            {dictationButton}
             <textarea
               {...textareaProps}
               rows={1}
@@ -354,6 +364,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                   compactOnLg ? 'lg:min-h-9 lg:py-1.5' : null,
                 )}
               />
+              {dictationButton}
               {attachIconButton}
               <button
                 type="button"
