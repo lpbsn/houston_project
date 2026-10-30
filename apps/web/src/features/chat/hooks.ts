@@ -206,6 +206,9 @@ export function invalidateConversationStructureQueries(
   void queryClient.invalidateQueries({
     queryKey: chatQueryKeys.eligibleMembershipsForConversation(establishmentId, conversationId),
   })
+  void queryClient.invalidateQueries({ queryKey: chatQueryKeys.messages(establishmentId, conversationId) })
+  void queryClient.invalidateQueries({ queryKey: ['chat', 'workspace', establishmentId] })
+  void queryClient.invalidateQueries({ queryKey: ['chat', 'source-message', establishmentId] })
 }
 
 export function useAddGroupParticipantMutation(

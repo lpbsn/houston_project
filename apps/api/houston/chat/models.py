@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.db.models import Q
 from houston.chat.constants import CHAT_GROUP_TITLE_MAX_LENGTH, CHAT_MESSAGE_BODY_MAX_LENGTH
@@ -82,6 +84,11 @@ class ChatParticipant(BaseModel):
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.MEMBER)
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
+    notification_mode = models.CharField(
+        max_length=16,
+        default="all",
+        choices=[("all", "All"), ("mentions", "Mentions"), ("silent", "Silent")],
+    )
     pinned_at = models.DateTimeField(null=True, blank=True)
     history_cutoff_at = models.DateTimeField(null=True, blank=True)
     list_hidden_at = models.DateTimeField(null=True, blank=True)
@@ -120,6 +127,7 @@ class ChatMessage(BaseModel):
     class Meta:
         ordering = ["created_at", "id"]
         indexes = [
+            GinIndex(SearchVector("body", config="french"), name="chat_message_search_idx"),
             models.Index(fields=["conversation", "created_at", "id"]),
             models.Index(
                 fields=["conversation", "reply_to_id"],
@@ -240,3 +248,35 @@ class ChatMessageAttachment(BaseModel):
                 name="uniq_chat_message_attachment_position",
             ),
         ]
+
+
+class ChatMessageAcknowledgement(BaseModel):
+    message = models.ForeignKey(
+        ChatMessage, on_delete=models.CASCADE, related_name="acknowledgements"
+    )
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership", on_delete=models.CASCADE
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "membership"], name="unique_chat_acknowledgement"
+            )
+        ]
+
+
+class ChatObservationSource(BaseModel):
+    # Retain provenance when ephemeral chat is purged; no new right to the conversation.
+    message = models.OneToOneField(
+        ChatMessage, null=True, on_delete=models.SET_NULL, related_name="observation_source"
+    )
+    observation = models.OneToOneField(
+        "observations.Observation", on_delete=models.CASCADE, related_name="chat_source"
+    )
+    source_author = models.ForeignKey(
+        "establishments.EstablishmentMembership", null=True, on_delete=models.SET_NULL
+    )
+    source_created_at = models.DateTimeField()
+    source_message_id = models.UUIDField()
+    source_conversation_id = models.UUIDField()
