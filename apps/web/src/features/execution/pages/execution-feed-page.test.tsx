@@ -1642,7 +1642,7 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
   })
 
-  it('opens the existing create choices in a dialog without creating a plan', () => {
+  it('keeps detailed creation available beside quick creation and templates', () => {
     stubLgViewport(true)
     permissionHintsHolder.value = {
       can_create_action_plan: true,
@@ -1656,7 +1656,7 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.getByTestId('execution-create-menu-dialog')).toBeTruthy()
     expect(screen.queryByTestId('execution-create-menu-sheet')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer un plan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Création détaillée' }))
     expect(onNavigate).toHaveBeenCalledWith('/action-plans/new?from=execution')
   })
 

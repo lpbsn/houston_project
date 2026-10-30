@@ -1,4 +1,4 @@
-import { Calendar, List } from 'lucide-react'
+import { Calendar, List, Columns3 } from 'lucide-react'
 
 import { TerrainFilterChip } from '@/components/ui/terrain'
 import type { ActionPlanExecutionFeedCategory } from '@/features/action-plans/api'
@@ -26,6 +26,7 @@ export function ExecutionFeedLayoutToggle({
   const options = [
     { value: 'list' as const, label: 'Liste', icon: List },
     { value: 'calendar' as const, label: 'Calendrier', icon: Calendar },
+    { value: 'board' as const, label: 'Tableau Kanban', icon: Columns3 },
   ]
   return (
     <div role="tablist" aria-label="Disposition du feed" className="inline-flex items-center gap-0.5">

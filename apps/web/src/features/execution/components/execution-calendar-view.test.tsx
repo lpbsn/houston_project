@@ -1687,3 +1687,22 @@ describe('ExecutionCalendarView', () => {
 })
 
 
+
+it('proposes a deadline change on desktop drop, without navigating or mutating a plan', () => {
+  vi.stubEnv('VITE_APP_RUNTIME', 'web')
+  installTestMatchMedia(true, 'fine')
+  const drop = vi.fn()
+  const open = vi.fn()
+  const item = wrap({ id: 'drag-plan', title: 'Podium' })
+  item.action_plan_execution.permission_hints.can_update = true
+  render(<ExecutionCalendarView granularity="week" days={[...MONDAY_WEEK]} month="2026-09"
+    data={{ ...emptyCalendarData, items: [item] }} isLoading={false} isError={false} error={null}
+    onRetry={vi.fn()} onOpenExecution={open} onDeadlineDrop={drop} />)
+  const card = screen.getByTestId('calendar-event-drag-plan')
+  expect(card.getAttribute('draggable')).toBe('true')
+  fireEvent.dragStart(card, { dataTransfer: { setData: vi.fn(), effectAllowed: '' } })
+  fireEvent.dragOver(screen.getByTestId('calendar-weekday-2026-09-10'))
+  fireEvent.drop(screen.getByTestId('calendar-weekday-2026-09-10'))
+  expect(drop).toHaveBeenCalledWith('drag-plan', '2026-09-10')
+  expect(open).not.toHaveBeenCalled()
+})
