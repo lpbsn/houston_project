@@ -1,6 +1,7 @@
 import pytest
 
 from houston.action_plans.tests.helpers import create_execution, create_open_signal
+from houston.establishments.membership_scope import replace_membership_scopes
 from houston.notifications.models import Notification
 from houston.notifications.recipients import resolve_signal_reporter_recipients
 from houston.notifications.scheduling import (
@@ -76,3 +77,55 @@ def test_plan_followup_points_to_signal_and_is_idempotent(
     assert notices.count() == 1
     assert notices.get().subject_type == "signal"
     assert notices.get().subject_id == signal.id
+
+
+def test_reporter_who_still_sees_the_signal_is_notified(owner_membership, staff_membership):
+    signal = create_open_signal(owner_membership=owner_membership)
+    link(signal, staff_membership)
+    assert [member.id for member in resolve_signal_reporter_recipients(signal=signal)] == [
+        staff_membership.id
+    ]
+    schedule_signal_resolved_notification(
+        signal_id=signal.id,
+        actor_membership_id=owner_membership.id,
+    )
+    assert (
+        Notification.objects.filter(
+            recipient_membership=staff_membership,
+            subject_id=signal.id,
+            event_key="signal.resolved",
+        ).count()
+        == 1
+    )
+
+
+def test_reporter_who_no_longer_sees_the_signal_is_not_notified(
+    owner_membership, staff_membership, business_unit
+):
+    signal = create_open_signal(owner_membership=owner_membership)
+    link(signal, staff_membership)
+    replace_membership_scopes(membership=staff_membership, scope_inputs=[])
+
+    assert resolve_signal_reporter_recipients(signal=signal) == []
+    schedule_signal_resolved_notification(
+        signal_id=signal.id,
+        actor_membership_id=owner_membership.id,
+    )
+    assert not Notification.objects.filter(
+        recipient_membership=staff_membership,
+        subject_id=signal.id,
+    ).exists()
+
+    execution = create_execution(owner_membership, business_unit=business_unit, title="Corriger")
+    execution.source_signal = signal
+    execution.availability_notified_at = None
+    execution.save(update_fields=["source_signal", "availability_notified_at"])
+    emit_action_plan_execution_availability_if_due(
+        execution_id=execution.id,
+        actor_membership_id=owner_membership.id,
+    )
+    assert not Notification.objects.filter(
+        recipient_membership=staff_membership,
+        event_key="action_plan.execution.created_from_signal",
+        subject_id=signal.id,
+    ).exists()
