@@ -34,6 +34,10 @@ from houston.notifications.constants import (
     build_chat_message_dedupe_key,
     build_mention_dedupe_key,
 )
+from houston.notifications.discussion_preferences import (
+    filter_chat_message_recipients,
+    filter_comment_notification_recipients,
+)
 from houston.notifications.models import Notification
 from houston.notifications.recipients import (
     resolve_action_plan_execution_canceled_recipients,
@@ -220,7 +224,8 @@ def emit_action_plan_execution_availability_if_due(
             create_in_app_notifications_for_recipients(
                 establishment_id=signal.establishment_id,
                 recipient_memberships=[
-                    member for member in resolve_signal_reporter_recipients(signal=signal)
+                    member
+                    for member in resolve_signal_reporter_recipients(signal=signal)
                     if member.id not in assigned_ids
                 ],
                 event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL,
@@ -231,8 +236,9 @@ def emit_action_plan_execution_availability_if_due(
                     establishment_id=signal.establishment_id,
                     actor_membership_id=actor_membership_id,
                 ),
-                idempotency_key_for_recipient=lambda recipient_id:
-                    f"observation-followup:{execution.id}:{recipient_id}",
+                idempotency_key_for_recipient=lambda recipient_id: (
+                    f"observation-followup:{execution.id}:{recipient_id}"
+                ),
             )
     now = timezone.now()
     execution.availability_notified_at = now
@@ -586,7 +592,8 @@ def _deliver_comment_notifications(
     recipients: list[EstablishmentMembership],
     actor_membership: EstablishmentMembership | None,
 ) -> None:
-    for recipient in recipients:
+    allowed = filter_comment_notification_recipients(comment=comment, recipients=recipients)
+    for recipient in allowed:
         create_in_app_notification(
             establishment_id=comment.establishment_id,
             recipient_membership=recipient,
@@ -603,7 +610,10 @@ def _deliver_comment_mention_notifications(
     comment: Comment,
     actor_membership: EstablishmentMembership | None,
 ) -> None:
-    recipients = resolve_comment_mention_recipients(comment=comment)
+    recipients = filter_comment_notification_recipients(
+        comment=comment,
+        recipients=resolve_comment_mention_recipients(comment=comment),
+    )
     for recipient in recipients:
         create_in_app_notification(
             establishment_id=comment.establishment_id,
@@ -1072,14 +1082,14 @@ def _deliver_chat_message_notifications(
 ) -> None:
     if actor_membership is None:
         return
-    recipients = resolve_chat_message_recipients(
-        conversation=message.conversation,
-        exclude_membership_id=actor_membership.id,
+    recipients = filter_chat_message_recipients(
+        message=message,
+        recipients=resolve_chat_message_recipients(
+            conversation=message.conversation,
+            exclude_membership_id=actor_membership.id,
+        ),
     )
-    from houston.notifications.discussion_preferences import chat_message_notification_allowed
     for recipient in recipients:
-        if not chat_message_notification_allowed(message=message, membership_id=recipient.id):
-            continue
         create_in_app_notification(
             establishment_id=message.conversation.establishment_id,
             recipient_membership=recipient,
@@ -1102,9 +1112,7 @@ def schedule_chat_message_received_notification(
     actor_membership_id: uuid.UUID,
 ) -> None:
     conversation_id = (
-        ChatMessage.objects.filter(id=message_id)
-        .values_list("conversation_id", flat=True)
-        .first()
+        ChatMessage.objects.filter(id=message_id).values_list("conversation_id", flat=True).first()
     )
     if conversation_id is None:
         return

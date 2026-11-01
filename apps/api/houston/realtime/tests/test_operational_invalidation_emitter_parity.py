@@ -47,7 +47,7 @@ FIXED_EVENT_WRAPPERS: dict[str, tuple[str, str | None]] = {
 
 WRAPPER_SUBJECT_TYPES = {
     "_schedule_signal_invalidation": "signal",
-    "_schedule_comment_invalidation": "comment",
+    "schedule_comment_invalidation": "comment",
     "_schedule_notification_invalidation": "notification",
 }
 

@@ -1,4 +1,4 @@
-# Messagerie terrain — proposition pour revue
+# Messagerie terrain
 
 La messagerie regroupe les échanges d’équipe, les discussions des plans et les mentions. Les commentaires restent attachés à leur plan : aucun fil parallèle ni copie de commentaires.
 
@@ -14,12 +14,11 @@ La messagerie regroupe les échanges d’équipe, les discussions des plans et l
 
 ## Intégration
 
-Base : main 7dc06f04c924d5a5db33739ce686d85698358f63. Branche indépendante de la PR Ma journée.
+La promotion vers `staging` s’ajoute à « Ma journée ». Aucune nouvelle dépendance ni variable secrète.
 
-1. Revoir/merger sur une branche de test après passage de CI et sauvegarde habituelle.
-2. Appliquer les migrations Django habituelles. Aucune nouvelle dépendance ou variable secrète. Les index de recherche PostgreSQL sont créés CONCURRENTLY dans des migrations non atomiques.
-3. Déployer API/worker et frontend depuis le même commit. Contrats OpenAPI, types et événements de rafraîchissement sont inclus.
-4. Recompiler/synchroniser Capacitor selon la procédure native existante pour distribuer l’interface mobile.
+1. Appliquer les migrations Django habituelles. Les index de recherche PostgreSQL sont créés `CONCURRENTLY` dans des migrations non atomiques, additives et réversibles. Il n’y a pas de migration de données.
+2. Déployer API, workers et frontend depuis le même commit. Contrats OpenAPI, types et événements de rafraîchissement sont inclus.
+3. Recompiler et synchroniser l’application Capacitor selon la procédure native existante pour distribuer l’interface mobile. La dictée vocale se vérifie sur un téléphone réel.
 
 Aucun changement de rétention : les messages purgés selon la politique existante ne sont plus recherchables. Une observation confirmée conserve sa provenance minimale même après purge du message. Les discussions des plans suivent la visibilité du feed opérationnel existant, pas un nouvel accès aux archives.
 
@@ -28,7 +27,7 @@ Aucun changement de rétention : les messages purgés selon la politique existan
 - CI serveur PostgreSQL : migrations, droits inter-établissements, historique masqué, départ d’une conversation, idempotence, tâches, préférences et contrats.
 - Web : recherche puis ouverture d’un ancien message ; mention vers le commentaire exact ; lecture simultanée par deux membres ; refus d’accès et échec réseau sans faux succès.
 - Native iOS/Android réel : permission microphone, dictée puis correction, fermeture pendant transcription, clavier et dialogue. Le support MediaRecorder dépend de la WebView ; en cas d’indisponibilité, l’utilisateur conserve la saisie texte.
-- Le mode silencieux ne doit pas supprimer les notifications métier d’affectation/échéance : seuls les messages/commentaires sont filtrés.
+- Le mode Silencieux bloque toute la discussion, mentions comprises, pour le chat et pour les discussions de plan. Il ne bloque pas l’affectation d’une tâche ni les échéances, y compris pour une tâche créée depuis un commentaire.
 - Vérifier les décisions épinglées et 👍 avec deux sessions, ainsi que la modification de tâche dans le formulaire existant.
 
 ## Propriété du code

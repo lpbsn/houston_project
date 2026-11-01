@@ -126,9 +126,9 @@ export function CommunicationWorkspace({
                   className="rounded border bg-white p-2"
                 >
                   <option value="">Tous</option>
-                  {people.data?.items.map((p) => (
-                    <option key={p.membership_id} value={p.membership_id}>
-                      {p.display_name}
+                  {people.data?.items.map((person) => (
+                    <option key={person.membership_id} value={person.membership_id}>
+                      {person.display_name}
                     </option>
                   ))}
                 </select>

@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 from django.utils import timezone
+from houston.chat.api.views import parse_message_cursor
 from houston.chat.exceptions import ChatNotFoundError
 from houston.chat.message_tools import (
     acknowledge_message,
@@ -115,10 +116,8 @@ def test_search_pagination_does_not_repeat_messages(setup_chat):
             client_message_id=uuid.uuid4(),
         )
     first = communication_search(membership=author, query="livraison")
-    from houston.chat.api.views import _parse_message_cursor
-
     second = communication_search(
-        membership=author, query="livraison", cursor=_parse_message_cursor(first["cursor"])
+        membership=author, query="livraison", cursor=parse_message_cursor(first["cursor"])
     )
     assert len(first["items"]) == 30
     assert len(second["items"]) == 6
@@ -149,3 +148,71 @@ def test_workspace_api_contract_and_tenant_boundary(api_client, setup_chat):
     assert api_client.get(
         f"/api/v1/establishments/{other.id}/chat/workspace/", **auth_headers(token)
     ).status_code in (403, 404)
+
+
+def test_french_search_uses_message_gin_index(setup_chat):
+    from django.contrib.postgres.search import SearchQuery, SearchVector
+    from django.db import connection
+    from houston.chat.models import ChatMessage
+
+    author, _, _, _message = setup_chat
+    queryset = ChatMessage.objects.annotate(search=SearchVector("body", config="french")).filter(
+        search=SearchQuery("livraison", config="french", search_type="plain")
+    )
+    with connection.cursor() as cursor:
+        cursor.execute("SET LOCAL enable_seqscan = off")
+        cursor.execute("SET LOCAL enable_indexscan = off")
+        cursor.execute("SET LOCAL enable_indexonlyscan = off")
+        plan = queryset.explain()
+    assert "chat_message_search_idx" in plan
+
+    from houston.testing.query_baseline import capture_queries
+
+    with capture_queries() as captured:
+        communication_search(membership=author, query="livraison")
+    sql = " ".join(query["sql"] for query in captured.captured_queries)
+    assert "to_tsvector" in sql
+    assert "french" in sql
+
+
+def test_workspace_mentions_query_count_is_bounded(api_client, setup_chat):
+    from houston.chat.models import ChatMessageMention
+    from houston.testing.query_baseline import (
+        CHAT_WORKSPACE_MENTIONS_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    author, peer, _conversation, message = setup_chat
+    ChatMessageMention.objects.create(message=message, membership=peer, start=0, end=1)
+    token = login(api_client, user=peer.user)
+    url = f"/api/v1/establishments/{author.establishment_id}/chat/workspace/?tab=mentions"
+    with capture_queries() as captured:
+        response = api_client.get(url, **auth_headers(token))
+    assert response.status_code == 200
+    assert response.json()["items"]
+    assert_query_count_at_most(
+        captured,
+        max_queries=CHAT_WORKSPACE_MENTIONS_MAX_QUERIES,
+        label="chat_workspace_mentions",
+    )
+
+
+def test_workspace_search_query_count_is_bounded(api_client, setup_chat):
+    from houston.testing.query_baseline import (
+        CHAT_WORKSPACE_SEARCH_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    author, _, _, _message = setup_chat
+    token = login(api_client, user=author.user)
+    url = f"/api/v1/establishments/{author.establishment_id}/chat/workspace/?tab=search&q=livraison"
+    with capture_queries() as captured:
+        response = api_client.get(url, **auth_headers(token))
+    assert response.status_code == 200
+    assert_query_count_at_most(
+        captured,
+        max_queries=CHAT_WORKSPACE_SEARCH_MAX_QUERIES,
+        label="chat_workspace_search",
+    )
