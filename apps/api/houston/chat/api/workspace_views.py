@@ -3,13 +3,13 @@ from houston.accounts.api.legal_errors import legal_error_response
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.accounts.legal_services import AiConsentRequiredError, TermsAcceptanceRequiredError
 from houston.action_plans.exceptions import ActionPlanPermissionError, ActionPlanServiceError
-from houston.chat.api.serializers import ChatMessageSerializer
+from houston.chat.api.serializers import ChatMessageSerializer, serialize_message
 from houston.chat.api.views import (
     CanAccessChat,
     EstablishmentScopedChatMixin,
-    _chat_error_response,
-    _parse_message_cursor,
-    _resolve_membership,
+    chat_error_response,
+    parse_message_cursor,
+    resolve_chat_request_membership,
 )
 from houston.chat.exceptions import ChatError
 from houston.chat.message_tools import (
@@ -18,6 +18,7 @@ from houston.chat.message_tools import (
     require_message,
     set_conversation_notifications,
 )
+from houston.chat.selectors import get_active_participant
 from houston.chat.workspace_selectors import communication_search, plan_discussions
 from houston.comments.discussion_services import (
     require_execution,
@@ -25,10 +26,12 @@ from houston.comments.discussion_services import (
     update_comment_tool,
     update_discussion_preference,
 )
+from houston.comments.exceptions import CommentError, CommentNotFoundError, CommentPermissionError
 from houston.comments.models import PlanDiscussionPreference
 from houston.establishments.permissions import HasActiveMembership
 from houston.observations.exceptions import ObservationValidationError
-from rest_framework import permissions, serializers
+from houston.uploads.access import resolve_observation_actor_membership
+from rest_framework import permissions, serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -68,36 +71,47 @@ class WorkspaceResponseSerializer(serializers.Serializer):
     cursor = serializers.CharField(allow_null=True)
 
 
+def comment_error_response(exc: CommentError) -> Response:
+    if isinstance(exc, CommentNotFoundError):
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    if isinstance(exc, CommentPermissionError):
+        return Response(
+            {"code": exc.code, "detail": exc.message},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class CommunicationWorkspaceView(CommunicationView):
     @extend_schema(
         tags=["chat"], parameters=[WorkspaceQuerySerializer], responses=WorkspaceResponseSerializer
     )
     def get(self, request, establishment_id):
-        member = _resolve_membership(request, self.establishment_id)
+        member = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(member, Response):
             return member
-        s = WorkspaceQuerySerializer(data=request.query_params)
-        s.is_valid(raise_exception=True)
-        data = dict(s.validated_data)
-        tab = data.pop("tab")
+        query = WorkspaceQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        filters = dict(query.validated_data)
+        tab = filters.pop("tab")
         try:
-            cursor = _parse_message_cursor(data.pop("cursor", None))
+            cursor = parse_message_cursor(filters.pop("cursor", None))
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         if cursor and cursor[0].tzinfo is None:
             raise ValidationError("Le curseur doit inclure le fuseau horaire.")
         if tab == "plans":
             result = plan_discussions(
-                membership=member, cursor=cursor, unresolved=data["unresolved"]
+                membership=member, cursor=cursor, unresolved=filters["unresolved"]
             )
         else:
-            data.pop("unresolved")
+            filters.pop("unresolved")
             result = communication_search(
                 membership=member,
                 cursor=cursor,
-                query=data.pop("q"),
+                query=filters.pop("q"),
                 mentions=tab == "mentions",
-                **data,
+                **filters,
             )
         return Response(WorkspaceResponseSerializer(result).data)
 
@@ -118,16 +132,13 @@ class MessageToolView(CommunicationView):
 
     @extend_schema(tags=["chat"], responses=ChatMessageSerializer)
     def get(self, request, establishment_id, message_id):
-        from houston.chat.api.serializers import ChatMessageSerializer, serialize_message
-        from houston.chat.selectors import get_active_participant
-
-        member = _resolve_membership(request, self.establishment_id)
+        member = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(member, Response):
             return member
         try:
             message = require_message(membership=member, message_id=message_id)
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         participant = get_active_participant(
             conversation_id=message.conversation_id, membership_id=member.id
         )
@@ -145,18 +156,18 @@ class MessageToolView(CommunicationView):
         tags=["chat"], request=MessageToolRequestSerializer, responses=ToolResultSerializer
     )
     def post(self, request, establishment_id, message_id):
-        member = _resolve_membership(request, self.establishment_id)
+        member = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(member, Response):
             return member
-        s = MessageToolRequestSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        data = s.validated_data
+        tool_request = MessageToolRequestSerializer(data=request.data)
+        tool_request.is_valid(raise_exception=True)
+        payload = tool_request.validated_data
         try:
-            if data["operation"] == "observe":
-                if not data.get("text"):
+            if payload["operation"] == "observe":
+                if not payload.get("text"):
                     raise ValidationError("Relisez le texte avant de confirmer son partage.")
                 source = observation_from_message(
-                    membership=member, message_id=message_id, text=data["text"]
+                    membership=member, message_id=message_id, text=payload["text"]
                 )
                 # Do not expose the private observation identifier to other participants.
                 target = (
@@ -165,13 +176,13 @@ class MessageToolView(CommunicationView):
                     else None
                 )
                 return Response(dict(success=True, target_id=target))
-            acknowledge_message(membership=member, message_id=message_id, active=data["active"])
+            acknowledge_message(membership=member, message_id=message_id, active=payload["active"])
         except (TermsAcceptanceRequiredError, AiConsentRequiredError) as exc:
             return legal_error_response(exc)
         except ObservationValidationError as exc:
             raise ValidationError(str(exc)) from exc
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         return Response(dict(success=True))
 
 
@@ -188,19 +199,19 @@ class ConversationNotificationView(CommunicationView):
         tags=["chat"], request=DiscussionPreferenceSerializer, responses=ToolResultSerializer
     )
     def post(self, request, establishment_id, conversation_id):
-        member = _resolve_membership(request, self.establishment_id)
+        member = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(member, Response):
             return member
-        s = DiscussionPreferenceSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        preference = DiscussionPreferenceSerializer(data=request.data)
+        preference.is_valid(raise_exception=True)
         try:
             set_conversation_notifications(
                 membership=member,
                 conversation_id=conversation_id,
-                mode=s.validated_data.get("mode", "all"),
+                mode=preference.validated_data.get("mode", "all"),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         return Response(dict(success=True))
 
 
@@ -214,14 +225,14 @@ class PlanDiscussionPreferenceView(CommunicationView):
         member = resolve_plan_member(request, self.establishment_id)
         if isinstance(member, Response):
             return member
-        s = DiscussionPreferenceSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        preference = DiscussionPreferenceSerializer(data=request.data)
+        preference.is_valid(raise_exception=True)
         try:
             update_discussion_preference(
-                membership=member, execution_id=execution_id, **s.validated_data
+                membership=member, execution_id=execution_id, **preference.validated_data
             )
-        except ChatError as exc:
-            return _chat_error_response(exc)
+        except CommentError as exc:
+            return comment_error_response(exc)
         return Response(dict(success=True))
 
     @extend_schema(tags=["comments"], responses=DiscussionPreferenceSerializer)
@@ -231,12 +242,14 @@ class PlanDiscussionPreferenceView(CommunicationView):
             return member
         try:
             require_execution(membership=member, execution_id=execution_id)
-        except ChatError as exc:
-            return _chat_error_response(exc)
-        pref = PlanDiscussionPreference.objects.filter(
+        except CommentError as exc:
+            return comment_error_response(exc)
+        preference = PlanDiscussionPreference.objects.filter(
             execution_id=execution_id, membership=member
         ).first()
-        return Response(dict(mode=pref.notification_mode if pref else "all", seen=False))
+        return Response(
+            dict(mode=preference.notification_mode if preference else "all", seen=False)
+        )
 
 
 class CommentToolRequestSerializer(serializers.Serializer):
@@ -258,39 +271,43 @@ class CommentToolView(CommunicationView):
         member = resolve_plan_member(request, self.establishment_id)
         if isinstance(member, Response):
             return member
-        s = CommentToolRequestSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        d = s.validated_data
+        tool_request = CommentToolRequestSerializer(data=request.data)
+        tool_request.is_valid(raise_exception=True)
+        payload = tool_request.validated_data
         try:
-            if d["operation"] == "task":
-                if not d.get("title"):
+            if payload["operation"] == "task":
+                if not payload.get("title"):
                     raise ValidationError("Donnez un titre à la tâche.")
                 task_id = task_from_comment(
                     membership=member,
                     comment_id=comment_id,
-                    title=d["title"],
-                    assigned_membership_id=d.get("assigned_membership_id"),
-                    deadline_at=d.get("deadline_at"),
+                    title=payload["title"],
+                    assigned_membership_id=payload.get("assigned_membership_id"),
+                    deadline_at=payload.get("deadline_at"),
                 )
                 return Response(dict(success=True, target_id=task_id))
             update_comment_tool(
                 membership=member,
                 comment_id=comment_id,
-                operation=d["operation"],
-                active=d["active"],
+                operation=payload["operation"],
+                active=payload["active"],
             )
-        except ChatError as exc:
-            return _chat_error_response(exc)
+        except CommentError as exc:
+            return comment_error_response(exc)
         except ActionPlanServiceError as exc:
             return Response(
-                dict(detail=str(exc)),
-                status=403 if isinstance(exc, ActionPlanPermissionError) else 400,
+                {"detail": str(exc)},
+                status=(
+                    status.HTTP_403_FORBIDDEN
+                    if isinstance(exc, ActionPlanPermissionError)
+                    else status.HTTP_400_BAD_REQUEST
+                ),
             )
         return Response(dict(success=True))
 
 
 def resolve_plan_member(request, establishment_id):
-    from houston.uploads.access import resolve_observation_actor_membership
-
     member = resolve_observation_actor_membership(request, establishment_id=establishment_id)
-    return member if member is not None else Response(status=404)
+    if member is None:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    return member

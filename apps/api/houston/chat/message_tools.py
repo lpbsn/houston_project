@@ -10,7 +10,7 @@ from houston.chat.models import (
     ChatParticipant,
 )
 from houston.chat.permissions import can_access_chat
-from houston.chat.selectors import visible_messages
+from houston.chat.selectors import get_conversation_for_participant, visible_messages
 from houston.establishments.permissions import can_create_observation
 from houston.observations.services import submit_observation
 
@@ -65,8 +65,6 @@ def observation_from_message(*, membership, message_id, text):
 
 @transaction.atomic
 def set_conversation_notifications(*, membership, conversation_id, mode):
-    from houston.chat.selectors import get_conversation_for_participant
-
     if (
         not can_access_chat(membership)
         or get_conversation_for_participant(

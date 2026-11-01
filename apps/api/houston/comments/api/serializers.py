@@ -3,6 +3,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.permissions import can_update_action_plan_execution
 from houston.comments.constants import ACTION_PLAN_COMMENT_ATTACHMENT_PREVIEW_TOKEN_SALT
 from houston.comments.models import ActionPlanCommentAttachment, Comment
 from houston.comments.permissions import serialize_execution_comment_permission_hints
@@ -150,8 +151,6 @@ def serialize_execution_comment_thread(
     execution: ActionPlanExecution,
 ) -> dict:
     root = entry.root
-    from houston.action_plans.permissions import can_update_action_plan_execution
-
     acknowledgements = list(root.acknowledgements.all())
     return {
         "pinned": root.pinned_at is not None,

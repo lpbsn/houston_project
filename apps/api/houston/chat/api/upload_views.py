@@ -18,9 +18,9 @@ from houston.chat.api.views import (
     CanAccessChat,
     ChatRateLimitedMixin,
     EstablishmentScopedChatMixin,
-    _chat_error_response,
-    _resolve_membership,
     _viewer_participant,
+    chat_error_response,
+    resolve_chat_request_membership,
 )
 from houston.chat.constants import CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT, CHAT_GALLERY_PAGE_SIZE
 from houston.chat.exceptions import ChatError, ChatValidationError
@@ -80,7 +80,7 @@ class ChatReserveUploadView(ChatRateLimitedMixin, EstablishmentScopedChatMixin, 
         },
     )
     def post(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
         body = ChatReserveUploadRequestSerializer(data=request.data)
@@ -94,7 +94,7 @@ class ChatReserveUploadView(ChatRateLimitedMixin, EstablishmentScopedChatMixin, 
                 size_bytes=body.validated_data["size_bytes"],
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         return Response(
             ChatReserveUploadResponseSerializer(
                 {
@@ -131,7 +131,7 @@ class ChatUploadContentView(EstablishmentScopedChatMixin, APIView):
                 {"code": "validation_error", "detail": "Use the presigned PUT URL."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
         payload = request.data if isinstance(request.data, (bytes, bytearray)) else request.body
@@ -142,7 +142,7 @@ class ChatUploadContentView(EstablishmentScopedChatMixin, APIView):
             )
             store_chat_upload_content(upload=upload, payload=bytes(payload))
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -166,7 +166,7 @@ class ChatRefreshUploadPresignView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, upload_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
         try:
@@ -175,7 +175,7 @@ class ChatRefreshUploadPresignView(EstablishmentScopedChatMixin, APIView):
                 upload_id=uuid.UUID(str(upload_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         return Response(
             ChatReserveUploadResponseSerializer(
                 {
@@ -205,7 +205,7 @@ class ChatCompleteUploadView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, upload_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
         try:
@@ -214,7 +214,7 @@ class ChatCompleteUploadView(EstablishmentScopedChatMixin, APIView):
                 upload_id=uuid.UUID(str(upload_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
         return Response(
             ChatUploadCompleteResponseSerializer(
                 {
@@ -319,7 +319,7 @@ class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
             return _render_chat_attachment_preview(request, attachment)
         if not getattr(request.user, "is_authenticated", False):
             raise Http404
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
         conversation = get_conversation_for_participant(
@@ -359,7 +359,7 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
         conversation = get_conversation_for_participant(
@@ -392,16 +392,16 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
         if raw_cursor:
             parts = raw_cursor.split("|", 1)
             if len(parts) != 2:
-                return _chat_error_response(ChatValidationError("Invalid cursor."))
+                return chat_error_response(ChatValidationError("Invalid cursor."))
             from django.utils.dateparse import parse_datetime
 
             created_at = parse_datetime(parts[0])
             try:
                 cursor_id = uuid.UUID(parts[1])
             except ValueError:
-                return _chat_error_response(ChatValidationError("Invalid cursor."))
+                return chat_error_response(ChatValidationError("Invalid cursor."))
             if created_at is None:
-                return _chat_error_response(ChatValidationError("Invalid cursor."))
+                return chat_error_response(ChatValidationError("Invalid cursor."))
             queryset = queryset.filter(
                 models_q(created_at, cursor_id)
             )

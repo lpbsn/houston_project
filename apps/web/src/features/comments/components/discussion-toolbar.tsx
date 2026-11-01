@@ -25,12 +25,20 @@ export function DiscussionToolbar({
   })
   useEffect(() => {
     if (!latestAt) return
+    let cancelled = false
     void setPlanDiscussionPreference(establishmentId, executionId, {
       seen: true,
       seen_through: latestAt,
     })
-      .then(() => client.invalidateQueries({ queryKey: ['chat', 'workspace', establishmentId] }))
+      .then(() => {
+        if (!cancelled) {
+          void client.invalidateQueries({ queryKey: ['chat', 'workspace', establishmentId] })
+        }
+      })
       .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
   }, [establishmentId, executionId, client, latestAt])
   return (
     <div className="mb-3 flex flex-wrap gap-3 rounded-xl border bg-white p-3 text-[#1a1a1a]">

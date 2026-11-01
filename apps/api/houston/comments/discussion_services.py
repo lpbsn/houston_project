@@ -3,10 +3,11 @@ from django.utils import timezone
 
 from houston.action_plans.execution_update import update_action_plan_execution
 from houston.action_plans.models import ActionPlanExecution
-from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError
+from houston.comments.exceptions import CommentNotFoundError, CommentPermissionError
 from houston.comments.models import Comment, CommentAcknowledgement, PlanDiscussionPreference
 from houston.comments.permissions import can_resolve_execution_comment
 from houston.comments.selectors import get_action_plan_execution_for_comments
+from houston.comments.services import schedule_comment_invalidation
 
 
 def require_execution(*, membership, execution_id):
@@ -14,7 +15,7 @@ def require_execution(*, membership, execution_id):
         membership=membership, execution_id=execution_id
     )
     if execution is None:
-        raise ChatNotFoundError()
+        raise CommentNotFoundError()
     return execution
 
 
@@ -23,10 +24,10 @@ def update_discussion_preference(
     *, membership, execution_id, mode=None, seen=False, seen_through=None
 ):
     execution = require_execution(membership=membership, execution_id=execution_id)
-    pref, _ = PlanDiscussionPreference.objects.get_or_create(
+    preference, _created = PlanDiscussionPreference.objects.get_or_create(
         execution=execution, membership=membership
     )
-    pref = PlanDiscussionPreference.objects.select_for_update().get(id=pref.id)
+    preference = PlanDiscussionPreference.objects.select_for_update().get(id=preference.id)
     changes = {}
     if mode is not None:
         changes["notification_mode"] = mode
@@ -38,9 +39,9 @@ def update_discussion_preference(
             .order_by("-created_at")
             .first()
         )
-        if latest and (pref.seen_at is None or latest.created_at > pref.seen_at):
+        if latest and (preference.seen_at is None or latest.created_at > preference.seen_at):
             changes["seen_at"] = latest.created_at
-    PlanDiscussionPreference.objects.filter(id=pref.id).update(**changes)
+    PlanDiscussionPreference.objects.filter(id=preference.id).update(**changes)
 
 
 def require_comment(*, membership, comment_id):
@@ -50,7 +51,7 @@ def require_comment(*, membership, comment_id):
         action_plan_execution__isnull=False,
     ).first()
     if comment is None:
-        raise ChatNotFoundError()
+        raise CommentNotFoundError()
     execution = require_execution(
         membership=membership, execution_id=comment.action_plan_execution_id
     )
@@ -64,7 +65,7 @@ def update_comment_tool(*, membership, comment_id, operation, active):
         if not can_resolve_execution_comment(
             membership=membership, execution=execution, comment=comment
         ):
-            raise ChatPermissionError()
+            raise CommentPermissionError()
         Comment.objects.filter(id=comment.id).update(pinned_at=timezone.now() if active else None)
     else:
         if active:
@@ -72,9 +73,7 @@ def update_comment_tool(*, membership, comment_id, operation, active):
         else:
             CommentAcknowledgement.objects.filter(comment=comment, membership=membership).delete()
 
-    from houston.comments.services import _schedule_comment_invalidation
-
-    _schedule_comment_invalidation(
+    schedule_comment_invalidation(
         establishment_id=membership.establishment_id,
         reason="comment.execution.updated",
         entity_id=execution.id,
@@ -92,18 +91,18 @@ def task_from_comment(*, membership, comment_id, title, assigned_membership_id, 
     tasks = list(execution.task_executions.select_related("execution_team").order_by("position"))
     pending = [
         dict(
-            id=t.id,
-            task=t.task,
-            description=t.description,
-            business_unit_id=t.execution_team.business_unit_id,
-            position=t.position,
-            assigned_membership_id=t.assigned_membership_id,
-            deadline_at=t.deadline_at,
+            id=task.id,
+            task=task.task,
+            description=task.description,
+            business_unit_id=task.execution_team.business_unit_id,
+            position=task.position,
+            assigned_membership_id=task.assigned_membership_id,
+            deadline_at=task.deadline_at,
         )
-        for t in tasks
-        if t.status == "pending"
+        for task in tasks
+        if task.status == "pending"
     ]
-    position = max((t.position for t in tasks), default=0) + 1
+    position = max((task.position for task in tasks), default=0) + 1
     business_unit_id = execution.pilot_business_unit_id
     if assigned_membership_id:
         assignment = (
@@ -129,14 +128,12 @@ def task_from_comment(*, membership, comment_id, title, assigned_membership_id, 
         expected_updated_at=execution.updated_at,
         pending_tasks=pending,
     )
-    task = execution.task_executions.get(position=position)
-    comment.created_task = task
+    created_task = execution.task_executions.get(position=position)
+    comment.created_task = created_task
     comment.save(update_fields=["created_task"])
-    from houston.comments.services import _schedule_comment_invalidation
-
-    _schedule_comment_invalidation(
+    schedule_comment_invalidation(
         establishment_id=membership.establishment_id,
         reason="comment.execution.updated",
         entity_id=execution.id,
     )
-    return task.id
+    return created_task.id
