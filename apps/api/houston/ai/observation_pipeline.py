@@ -761,6 +761,12 @@ Exemples de titre seulement :
   → « Plannings disponibles » ; pas « Demander les plannings ».
 - structured_summary : 1–3 phrases factuelles ; inclure lieu précis si mentionné ;
   porter le fait et l'action attendue quand pertinente, sans recopier validated_text.
+  Préserver les conséquences métier explicitement rapportées, quantités, créneaux,
+  renoncements, substitutions et comparaisons avant/après utiles au sujet.
+  Une cause dite par l'auteur reste une cause rapportée, pas un fait causal établi.
+  Exemple : « Trois tables ont renoncé au dessert à 14 h, selon l'auteur à cause
+  de l'attente » ne doit pas devenir seulement « Service lent ».
+  Ne pas inventer de date, quantité, lien causal ni résultat pour compléter le résumé.
 - location_text : lieu court libre (≤ 120 caractères), null si aucun lieu distinct ;
   jamais le texte complet de validated_text.
 

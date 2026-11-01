@@ -109,9 +109,7 @@ def failure_message(code: str) -> str:
 
 def suggestion_for_admin(*, user, suggestion_id) -> BrainSuggestion:
     suggestion = (
-        BrainSuggestion.objects.select_related("current_revision")
-        .filter(pk=suggestion_id)
-        .first()
+        BrainSuggestion.objects.select_related("current_revision").filter(pk=suggestion_id).first()
     )
     if suggestion is None:
         raise BrainWorkError(
@@ -538,9 +536,7 @@ def analysis_detail(*, user, establishment_id, analysis_id) -> dict:
     )
     hidden = 0
     if len(messages) > _MESSAGE_PAGE:
-        hidden = (
-            BrainMessage.objects.filter(analysis_id=analysis.id).count() - _MESSAGE_PAGE
-        )
+        hidden = BrainMessage.objects.filter(analysis_id=analysis.id).count() - _MESSAGE_PAGE
         messages = messages[:_MESSAGE_PAGE]
     messages.reverse()
     suggestions = list(
@@ -701,9 +697,7 @@ def _evaluation_dict(evaluation: BrainObjectiveEvaluation) -> dict:
 
 def _establishment_mechanism(candidate: BrainMechanismCandidate) -> dict:
     representation = (
-        candidate.global_representation
-        if isinstance(candidate.global_representation, dict)
-        else {}
+        candidate.global_representation if isinstance(candidate.global_representation, dict) else {}
     )
     return {
         "id": str(candidate.id),
@@ -823,6 +817,19 @@ def public_sources(items) -> list[dict]:
             "role": item.role,
             "locators": _item_locators(payload),
         }
+        if item.category == "terrain_evidence":
+            # Keep the immutable evidence identity; only the optional live link
+            # points at its parent. Normal destination permissions still apply.
+            for parent, kind in (("signal_id", "signal"), ("execution_id", "execution")):
+                if payload.get(parent):
+                    entry["locators"].insert(
+                        0,
+                        {
+                            "format": f"spore_{kind}",
+                            "source_id": str(payload[parent]),
+                        },
+                    )
+                    break
         for key in _PUBLIC_FIELDS:
             if key in payload and payload[key] not in (None, "", []):
                 entry[key] = payload[key]

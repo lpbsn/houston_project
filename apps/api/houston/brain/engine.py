@@ -25,7 +25,7 @@ from houston.brain.errors import BrainWorkError
 from houston.brain.models import BrainAnalysis, BrainDossier, BrainDossierItem
 
 _PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "metier_v7_1.md"
-MAX_TOOL_CALLS = 8
+MAX_TOOL_CALLS = 12
 MAX_DISTINCT_COPIES = 40
 PROVIDER_TIMEOUT_SECONDS = 90
 RESTITUTION_SENTENCE = (
@@ -38,7 +38,9 @@ FORMAT_TEXT = (
     "epistemic_status : constat, explication_etayee, hypothese, hypothese_fragilisee, "
     "absence_explication.\n"
     "figures : source measure et item_id, ou source compare et compare_id. "
-    "N'énonce pas un chiffre qui n'est pas cette référence.\n"
+    "Tout KPI ou calcul doit avoir cette référence. Les quantités rapportées dans une fiche "
+    "terrain peuvent être citées comme déclarations avec son evidence_id, "
+    "jamais comme KPI mesuré.\n"
     "anchors : anchor_id, disposition attached ou not_significant, subject_key si attached.\n"
     "limits : limites nommées.\n"
     "proposals.suggestions : key, title, description.\n"
@@ -227,10 +229,8 @@ def _context(view: SealedView) -> tuple[dict, set[str]]:
     analysis = view.dossier.analysis
     provider, model = frozen_counter(analysis.configuration)
     ceiling = _input_ceiling(analysis)
-    candidates = [
-        _mechanism_view(item)
-        for item in view.of("knowledge")
-    ]
+    candidates = [_mechanism_view(item) for item in view.of("knowledge")]
+
     def render(selected):
         return _messages_for(view, selected, omitted=0)
 
@@ -405,9 +405,7 @@ def _assign_compare_id(trace: list, entry: dict) -> None:
 
 def _ensure_dossier(analysis_id) -> BrainDossier:
     existing = (
-        BrainDossier.objects.filter(analysis_id=analysis_id)
-        .select_related("analysis")
-        .first()
+        BrainDossier.objects.filter(analysis_id=analysis_id).select_related("analysis").first()
     )
     if existing is None:
         return capture_investigation_dossier(analysis_id)

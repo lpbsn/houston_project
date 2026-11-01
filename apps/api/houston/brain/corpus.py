@@ -38,6 +38,7 @@ from houston.brain.models import (
     BrainObjectiveRevision,
     BrainReporting,
 )
+from houston.brain.terrain_evidence import collect_terrain_evidence
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
@@ -123,6 +124,14 @@ def assemble_investigation_corpus(
         "reporting": reporting_coverage,
         "memory": memory_coverage,
     }
+    evidence_rows, evidence_coverage = collect_terrain_evidence(
+        establishment_id=establishment.id,
+        capture_at=capture_at,
+        ceiling=ceiling,
+        run=run,
+    )
+    coverage["families"].update(evidence_coverage)
+    rows.extend(evidence_rows)
     rows.append(
         DossierRow(CATEGORY_COVERAGE, "coverage", "couverture", coverage, "instant_reference")
     )
@@ -358,9 +367,7 @@ def _prior_reportings(
         period_end__isnull=False,
         period_confirmed_at__lte=capture_at,
     )
-    total = run(
-        lambda: BrainReporting.objects.filter(predicate).exclude(pk=current_id).count()
-    )
+    total = run(lambda: BrainReporting.objects.filter(predicate).exclude(pk=current_id).count())
     reportings = run(
         lambda: list(
             BrainReporting.objects.filter(predicate)
@@ -513,8 +520,9 @@ def _organization(run, establishment) -> DossierRow:
     )
     activities = run(
         lambda: list(
-            ActivitySubject.objects.filter(establishment_id=establishment.id)
-            .order_by("label", "id")
+            ActivitySubject.objects.filter(establishment_id=establishment.id).order_by(
+                "label", "id"
+            )
         )
     )
     return DossierRow(
@@ -730,4 +738,3 @@ def _str(value) -> str | None:
     if value is None:
         return None
     return str(value)
-
