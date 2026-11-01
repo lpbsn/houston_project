@@ -1,5 +1,6 @@
 from django.urls import path
 
+from houston.action_plans.api.day_views import MyDayView
 from houston.action_plans.api.history_views import ExecutionHistoryView
 from houston.action_plans.api.views import (
     ActionPlanActivateView,
@@ -26,6 +27,7 @@ from houston.action_plans.api.views import (
 )
 
 urlpatterns = [
+    path("establishments/<uuid:establishment_id>/my-day/", MyDayView.as_view(), name="my-day"),
     path(
         "establishments/<uuid:establishment_id>/action-plans/",
         ActionPlanListCreateView.as_view(),

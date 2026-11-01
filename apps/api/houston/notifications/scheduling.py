@@ -47,6 +47,7 @@ from houston.notifications.recipients import (
     resolve_comment_signal_created_recipients,
     resolve_signal_attention_recipients,
     resolve_signal_pole_recipients,
+    resolve_signal_reporter_recipients,
     resolve_signal_triage_recipients,
 )
 from houston.notifications.services import (
@@ -209,6 +210,30 @@ def emit_action_plan_execution_availability_if_due(
         use_recipient_idempotency=True,
         point_delta_by_recipient_id=point_delta_by_recipient_id,
     )
+    if execution.source_signal_id:
+        signal = _load_signal(signal_id=execution.source_signal_id)
+        if signal is not None:
+            # Link reporters to the observation they can read, not to a plan
+            # whose access may be narrower. Assigned recipients already received
+            # the plan notification above; do not notify them twice.
+            assigned_ids = _membership_ids(recipients)
+            create_in_app_notifications_for_recipients(
+                establishment_id=signal.establishment_id,
+                recipient_memberships=[
+                    member for member in resolve_signal_reporter_recipients(signal=signal)
+                    if member.id not in assigned_ids
+                ],
+                event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL,
+                subject_type=Notification.SubjectType.SIGNAL,
+                subject_id=signal.id,
+                priority=Notification.Priority.INFO,
+                actor_membership=_load_actor(
+                    establishment_id=signal.establishment_id,
+                    actor_membership_id=actor_membership_id,
+                ),
+                idempotency_key_for_recipient=lambda recipient_id:
+                    f"observation-followup:{execution.id}:{recipient_id}",
+            )
     now = timezone.now()
     execution.availability_notified_at = now
     execution.save(update_fields=["availability_notified_at", "updated_at"])
@@ -877,9 +902,11 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
 
 def _lifecycle_signal_recipients(*, signal: Signal) -> list[EstablishmentMembership]:
     pole_recipients = resolve_signal_pole_recipients(signal=signal)
-    if pole_recipients:
-        return pole_recipients
-    return resolve_signal_triage_recipients(signal=signal)
+    recipients = pole_recipients or resolve_signal_triage_recipients(signal=signal)
+    by_id = {member.id: member for member in recipients}
+    for member in resolve_signal_reporter_recipients(signal=signal):
+        by_id[member.id] = member
+    return list(by_id.values())
 
 
 def schedule_signal_pinned_notification(

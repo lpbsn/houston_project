@@ -142,6 +142,7 @@ export function invalidateActionPlanExecutionFeedQueries(
   establishmentId: string,
   options?: FeedListInvalidationOptions,
 ) {
+  void queryClient.invalidateQueries({ queryKey: ['action-plans', 'my-day', establishmentId] })
   invalidateFeedListQuery(
     queryClient,
     ['action-plans', 'action-plan-execution-feed', establishmentId],

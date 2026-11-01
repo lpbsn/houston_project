@@ -1627,6 +1627,29 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.queryByText('Épinglage impossible.')).toBeNull()
   })
 
+  it('opens Ma journée in the current establishment on desktop', () => {
+    stubLgViewport(true)
+    showOperationalFeed()
+    const onNavigate = vi.fn()
+    renderExecutionFeedPage({ establishmentId: 'est-1', onNavigate })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ma journée →' }))
+
+    expect(onNavigate).toHaveBeenCalledWith('/e/est-1/my-day')
+  })
+
+  it('keeps the mobile Ma journée hub, and its bottom nav, on a large native viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    showOperationalFeed()
+    const onNavigate = vi.fn()
+    renderExecutionFeedPage({ establishmentId: 'est-1', onNavigate })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ma journée →' }))
+
+    expect(onNavigate).toHaveBeenCalledWith('/my-day')
+  })
+
   it('keeps the card and pin control on a large native viewport', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(true)

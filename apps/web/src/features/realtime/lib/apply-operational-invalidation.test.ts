@@ -287,7 +287,8 @@ describe('applyOperationalInvalidation', () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ['action-plans', 'cross-action-plan-execution-calendar'],
       })
-      expect(invalidateSpy).toHaveBeenCalledTimes(6)
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['action-plans', 'my-day', 'est-1'] })
+      expect(invalidateSpy).toHaveBeenCalledTimes(7)
     } else {
       expect(invalidateSpy).toHaveBeenCalledOnce()
     }
