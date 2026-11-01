@@ -125,6 +125,15 @@ def test_search_pagination_does_not_repeat_messages(setup_chat):
     assert second["cursor"] is None
 
 
+def test_dm_search_title_names_the_other_participant(setup_chat):
+    from houston.chat.api.serializers import membership_display_name
+
+    author, peer, _conversation, _message = setup_chat
+    hits = communication_search(membership=author, query="livraison")["items"]
+    assert hits[0]["title"] == membership_display_name(peer)
+    assert hits[0]["title"] not in {"Message direct", "Direct message"}
+
+
 def test_workspace_api_contract_and_tenant_boundary(api_client, setup_chat):
     author, _, _, message = setup_chat
     token = login(api_client, user=author.user)

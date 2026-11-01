@@ -38,10 +38,11 @@ CHAT_MESSAGES_LIST_MAX_QUERIES = 12
 
 # GET .../chat/workspace/?tab=plans — 3 visible discussions. Measured 5, flat from 1 to 3.
 CHAT_WORKSPACE_PLANS_MAX_QUERIES = 5
-# GET .../chat/workspace/?tab=search&q=... — one hit. Measured 6.
-CHAT_WORKSPACE_SEARCH_MAX_QUERIES = 6
-# GET .../chat/workspace/?tab=mentions — one mention. Measured 6.
-CHAT_WORKSPACE_MENTIONS_MAX_QUERIES = 6
+# GET .../chat/workspace/?tab=search&q=... — one hit.
+# +1 batched participant load so a DM title is the other person, not a generic label.
+CHAT_WORKSPACE_SEARCH_MAX_QUERIES = 7
+# GET .../chat/workspace/?tab=mentions — one mention. Same participant prefetch.
+CHAT_WORKSPACE_MENTIONS_MAX_QUERIES = 7
 CHAT_WORKSPACE_MAX_QUERY_DELTA_ONE_TO_THREE = 0
 
 # build_pipeline_input — one observation, dual context, one BU/AS

@@ -7,9 +7,11 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from django.contrib.postgres.search import SearchQuery, SearchVector
-from django.db.models import Exists, OuterRef, Q, QuerySet, Subquery
+from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
 from houston.accounts.display import membership_display_name
 from houston.action_plans.selectors import action_plan_execution_feed_queryset
+from houston.chat.api.serializers import conversation_title
+from houston.chat.models import ChatParticipant
 from houston.chat.selectors import visible_messages
 from houston.comments.models import Comment, PlanDiscussionPreference
 from houston.establishments.models import EstablishmentMembership
@@ -61,12 +63,15 @@ def _page(rows: list[CommunicationHit]) -> dict:
     return {"items": [asdict(row) for row in page], "cursor": cursor}
 
 
-def _chat_hit(message) -> CommunicationHit:
+def _chat_hit(message, *, viewer_membership_id) -> CommunicationHit:
     return CommunicationHit(
         id=message.id,
         kind="chat",
         parent_id=message.conversation_id,
-        title=message.conversation.title or "Message direct",
+        title=conversation_title(
+            conversation=message.conversation,
+            viewer_membership_id=viewer_membership_id,
+        ),
         body=message.body,
         author=membership_display_name(message.author_membership),
         created_at=message.created_at,
@@ -141,7 +146,14 @@ def communication_search(
         comments = comments.filter(plan_comment_attachments__isnull=False)
     distinct = _needs_distinct(mentions=mentions, files_only=files_only)
     chat_rows = _bounded_page(
-        chat.select_related("conversation", "author_membership__user"),
+        chat.select_related("conversation", "author_membership__user").prefetch_related(
+            Prefetch(
+                "conversation__participants",
+                queryset=ChatParticipant.objects.filter(left_at__isnull=True).select_related(
+                    "membership__user"
+                ),
+            )
+        ),
         cursor,
         distinct=distinct,
     )
@@ -150,7 +162,9 @@ def communication_search(
         cursor,
         distinct=distinct,
     )
-    hits = [_chat_hit(message) for message in chat_rows]
+    hits = [
+        _chat_hit(message, viewer_membership_id=membership.id) for message in chat_rows
+    ]
     hits.extend(_plan_hit(comment, unread=False) for comment in comment_rows)
     hits.sort(key=lambda hit: (hit.created_at, hit.id), reverse=True)
     return _page(hits)
