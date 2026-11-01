@@ -11,6 +11,10 @@ from houston.chat.selectors import active_participant_queryset
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
+from houston.signals.permissions import (
+    can_view_signal_detail,
+    signal_visible_in_membership_scope,
+)
 from houston.signals.reporter_display import created_from_source_observation_link
 
 
@@ -277,14 +281,40 @@ def resolve_signal_attention_recipients(
     return pole or triage
 
 
+def _author_can_still_see_signal(
+    membership: EstablishmentMembership,
+    signal: Signal,
+) -> bool:
+    """Reuse signal read permission and pole-scope visibility. Do not reimplement them."""
+    return can_view_signal_detail(membership, signal) and signal_visible_in_membership_scope(
+        membership,
+        signal,
+    )
+
+
 def resolve_signal_reporter_recipients(*, signal: Signal) -> list[EstablishmentMembership]:
-    """All contributors, including aggregated/merged observations, once each."""
-    return list(
+    """Active source-observation authors who can still see this signal.
+
+    Establishment membership is not enough. An author whose poles no longer
+    cover the signal is omitted, as are authors who fail the signal read permission.
+    """
+    # Pole checks read these relations once, not once per author.
+    signal.responsible_business_unit
+    signal.affected_business_unit
+    candidates = (
         EstablishmentMembership.objects.filter(
             establishment_id=signal.establishment_id,
             status=EstablishmentMembership.Status.ACTIVE,
             id__in=signal.source_observation_links.filter(
                 observation__establishment_id=signal.establishment_id,
             ).values("observation__submitted_by_membership_id"),
-        ).select_related("user").distinct()
+        )
+        .select_related("user")
+        .prefetch_related("scope_links")
+        .distinct()
     )
+    return [
+        member
+        for member in candidates
+        if _author_can_still_see_signal(member, signal)
+    ]
