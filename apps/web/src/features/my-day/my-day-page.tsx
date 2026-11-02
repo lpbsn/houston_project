@@ -31,6 +31,9 @@ const textNavClassName = cn(
   terrain.primary,
 )
 
+// 12–14px copy on the beige feed (#F1EDEA) and its row hover (#E9E4DE). terrain.muted is below 4.5:1 there.
+const activitySecondaryTextClassName = 'text-[#676560]'
+
 function openInPage(
   event: MouseEvent<HTMLAnchorElement>,
   href: string,
@@ -339,10 +342,10 @@ function NewsPanel({
             <Bell className={cn('size-4 shrink-0', terrain.muted)} aria-hidden />
             Dernières nouvelles
           </h3>
-          <p className={cn('text-xs', terrain.muted)}>Activité récente</p>
+          <p className={cn('text-xs', activitySecondaryTextClassName)}>Activité récente</p>
         </div>
         {isPending && !hasItems ? (
-          <p role="status" className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', terrain.muted)}>
+          <p role="status" className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', activitySecondaryTextClassName)}>
             Chargement des notifications…
           </p>
         ) : null}
@@ -355,7 +358,7 @@ function NewsPanel({
           </div>
         ) : null}
         {!isPending && !isError && !hasItems ? (
-          <p className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', terrain.muted)}>
+          <p className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', activitySecondaryTextClassName)}>
             Aucune notification pour le moment.
           </p>
         ) : null}
@@ -389,11 +392,11 @@ function NewsPanel({
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold break-words">{notification.title}</span>
                       {notification.body ? (
-                        <span className={cn('mt-0.5 block line-clamp-2 text-sm', terrain.muted)}>
+                        <span className={cn('mt-0.5 block line-clamp-2 text-sm', activitySecondaryTextClassName)}>
                           {notification.body}
                         </span>
                       ) : null}
-                      <span className={cn('mt-1 block text-xs', terrain.muted)}>
+                      <span className={cn('mt-1 block text-xs', activitySecondaryTextClassName)}>
                         {formatNotificationRelativeTime(notification.created_at)}
                         {notification.priority === 'urgent' ? ' · Urgent' : null}
                         {isUnread ? <span className="sr-only"> Non lu</span> : null}
