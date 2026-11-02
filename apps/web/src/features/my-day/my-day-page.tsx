@@ -213,6 +213,36 @@ function WorkColumn({
                   <ul className="divide-y divide-[#E8E6DF]">
                     {rows.map((task) => {
                       const deadline = timeZone ? formatTaskDeadline(task, timeZone) : null
+                      const todayClock = task.bucket === 'today' && deadline !== null && /^\d{2}:\d{2}$/.test(deadline)
+                        ? deadline
+                        : null
+                      const badge = (
+                        <span className={cn(
+                          'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                          task.shared ? 'bg-[#E8E6DF] text-[#555]' : terrain.transcript,
+                        )}
+                        >
+                          {attributionLabel(task.shared)}
+                        </span>
+                      )
+                      const deadlineText = deadline ? (
+                        <p className={cn(
+                          'text-sm',
+                          task.bucket === 'overdue' ? cn('font-medium', terrain.danger) : terrain.muted,
+                        )}
+                        >
+                          {deadline}
+                        </p>
+                      ) : null
+                      const chevron = <ChevronRight className="size-4 shrink-0 text-[#a3a19a]" aria-hidden />
+                      const title = (
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold break-words">{task.title}</p>
+                          <p className={cn('mt-0.5 text-sm break-words', terrain.muted)}>
+                            {task.pole} · {task.execution_title}
+                          </p>
+                        </div>
+                      )
                       return (
                         <li key={task.id} className="@container/task">
                           <a
@@ -220,33 +250,25 @@ function WorkColumn({
                             className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left no-underline outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
                             onClick={(event) => openInPage(event, taskHref(task), onNavigate)}
                           >
-                            <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
-                              <div className="min-w-0 flex-1">
-                                <p className="font-semibold break-words">{task.title}</p>
-                                <p className={cn('mt-0.5 text-sm break-words', terrain.muted)}>
-                                  {task.pole} · {task.execution_title}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 flex-col items-start gap-1 @min-[32rem]/task:items-end">
-                                {deadline ? (
-                                  <p className={cn(
-                                    'text-sm',
-                                    task.bucket === 'overdue' ? cn('font-medium', terrain.danger) : terrain.muted,
-                                  )}
-                                  >
-                                    {deadline}
-                                  </p>
-                                ) : null}
-                                <span className={cn(
-                                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                  task.shared ? 'bg-[#E8E6DF] text-[#555]' : terrain.transcript,
-                                )}
-                                >
-                                  {attributionLabel(task.shared)}
-                                </span>
-                              </div>
-                            </div>
-                            <ChevronRight className="size-4 shrink-0 text-[#a3a19a]" aria-hidden />
+                            {task.bucket === 'today' ? (
+                              <>
+                                {title}
+                                {todayClock ? <p className={cn('shrink-0 text-sm', terrain.muted)}>{todayClock}</p> : null}
+                                {badge}
+                                {chevron}
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
+                                  {title}
+                                  <div className="flex shrink-0 flex-col items-start gap-1 @min-[32rem]/task:items-end">
+                                    {task.bucket === 'upcoming' ? badge : deadlineText}
+                                    {task.bucket === 'upcoming' ? deadlineText : badge}
+                                  </div>
+                                </div>
+                                {chevron}
+                              </>
+                            )}
                           </a>
                         </li>
                       )
