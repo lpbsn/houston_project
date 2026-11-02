@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { ArrowRight, AtSign, Bell, ChevronRight, ClipboardList, Mail, Sun } from 'lucide-react'
+import { ArrowRight, AtSign, Bell, ChevronDown, ChevronRight, ClipboardList, Mail, Sun } from 'lucide-react'
 import type { MouseEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -287,19 +287,30 @@ function WorkColumn({
       {isRefetchError ? (
         <TerrainErrorState message="Impossible d’actualiser votre travail." onRetry={onRetry} />
       ) : null}
-      {hasNextPage || isFetchNextPageError ? (
-        <Button type="button" variant="outline" disabled={isFetchingNextPage} onClick={onLoadMore}>
-          {isFetchingNextPage ? 'Chargement…' : 'Afficher la suite'}
-        </Button>
-      ) : null}
-      <a
-        href={plansHref}
-        className={textNavClassName}
-        onClick={(event) => openInPage(event, plansHref, onNavigate)}
-      >
-        Voir tous les plans d’exécution
-        <ArrowRight className="size-4" aria-hidden />
-      </a>
+      <div className={hasNextPage || isFetchNextPageError ? 'space-y-8' : undefined}>
+        {hasNextPage || isFetchNextPageError ? (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-sm px-3 text-sm font-medium text-[#676560] outline-none hover:bg-[#E8E6DF] hover:text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 disabled:opacity-60"
+              disabled={isFetchingNextPage}
+              aria-busy={isFetchingNextPage || undefined}
+              onClick={onLoadMore}
+            >
+              {isFetchingNextPage ? 'Chargement…' : 'Afficher plus de tâches'}
+              {isFetchingNextPage ? null : <ChevronDown className="size-4 shrink-0" aria-hidden />}
+            </button>
+          </div>
+        ) : null}
+        <a
+          href={plansHref}
+          className={textNavClassName}
+          onClick={(event) => openInPage(event, plansHref, onNavigate)}
+        >
+          Voir tous les plans d’exécution
+          <ArrowRight className="size-4" aria-hidden />
+        </a>
+      </div>
     </section>
   )
 }
