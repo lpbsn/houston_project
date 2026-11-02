@@ -308,7 +308,7 @@ describe('Ma journée', () => {
     mount()
 
     expect(await screen.findByText('Tester le micro')).toBeTruthy()
-    const panel = screen.getByRole('complementary')
+    const panel = screen.getByRole('complementary', { name: 'Dernières nouvelles' })
     expect(panel.innerHTML).toContain('bg-[#F1EDEA]')
     expect(panel.innerHTML).not.toContain('bg-white')
 
