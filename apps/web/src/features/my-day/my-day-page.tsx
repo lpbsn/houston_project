@@ -23,7 +23,7 @@ const sections: {
 ]
 
 const textNavClassName = cn(
-  'inline-flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40',
+  'inline-flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium no-underline outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40',
   terrain.primary,
 )
 
@@ -128,8 +128,9 @@ type WorkColumnProps = {
   hasNextPage: boolean
   onRetry: () => void
   onLoadMore: () => void
-  onOpen: (task: MyDayTask) => void
-  onSeePlans: () => void
+  taskHref: (task: MyDayTask) => string
+  plansHref: string
+  onNavigate: (path: string) => void
 }
 
 function WorkColumn({
@@ -143,15 +144,16 @@ function WorkColumn({
   hasNextPage,
   onRetry,
   onLoadMore,
-  onOpen,
-  onSeePlans,
+  taskHref,
+  plansHref,
+  onNavigate,
 }: WorkColumnProps) {
   const showGroups = tasks.length > 0
 
   return (
     <section className="min-w-0 space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">À traiter</h2>
+        <h3 className="text-lg font-semibold">À traiter</h3>
         <p className={cn('mt-1 text-sm', terrain.muted)}>
           Vos tâches personnelles et le travail de vos pôles.
         </p>
@@ -172,7 +174,7 @@ function WorkColumn({
             if (rows.length === 0) return null
             return (
               <section key={section.key}>
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
                   {section.dot ? (
                     <span
                       className={cn('size-2 shrink-0 rounded-full', terrainSectionDotVariants[section.dot])}
@@ -180,17 +182,20 @@ function WorkColumn({
                     />
                   ) : null}
                   {section.title}
-                </h3>
+                </h4>
                 <div className={terrainCardClassName()}>
                   <ul className="divide-y divide-[#E8E6DF]">
                     {rows.map((task) => {
                       const deadline = timeZone ? formatTaskDeadline(task, timeZone) : null
                       return (
                         <li key={task.id} className="@container/task">
-                          <button
-                            type="button"
-                            className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
-                            onClick={() => onOpen(task)}
+                          <a
+                            href={taskHref(task)}
+                            className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left no-underline outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                            onClick={(event) => {
+                              event.preventDefault()
+                              onNavigate(taskHref(task))
+                            }}
                           >
                             <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
                               <div className="min-w-0 flex-1">
@@ -219,7 +224,7 @@ function WorkColumn({
                               </div>
                             </div>
                             <ChevronRight className="size-4 shrink-0 text-[#a3a19a]" aria-hidden />
-                          </button>
+                          </a>
                         </li>
                       )
                     })}
@@ -242,10 +247,17 @@ function WorkColumn({
           {isFetchingNextPage ? 'Chargement…' : 'Afficher la suite'}
         </Button>
       ) : null}
-      <button type="button" className={textNavClassName} onClick={onSeePlans}>
+      <a
+        href={plansHref}
+        className={textNavClassName}
+        onClick={(event) => {
+          event.preventDefault()
+          onNavigate(plansHref)
+        }}
+      >
         Voir tous les plans d’exécution
         <ArrowRight className="size-4" aria-hidden />
-      </button>
+      </a>
     </section>
   )
 }
@@ -256,16 +268,25 @@ type NewsPanelProps = {
   isError: boolean
   onRetry: () => void
   onSelect: (notification: NotificationItem) => void
-  onSeeAll: () => void
+  notificationsHref: string
+  onNavigate: (path: string) => void
 }
 
-function NewsPanel({ items, isPending, isError, onRetry, onSelect, onSeeAll }: NewsPanelProps) {
+function NewsPanel({
+  items,
+  isPending,
+  isError,
+  onRetry,
+  onSelect,
+  notificationsHref,
+  onNavigate,
+}: NewsPanelProps) {
   const hasItems = items.length > 0
 
   return (
     <aside className="min-w-0 space-y-3">
       <div>
-        <h2 className="text-lg font-semibold">Dernières nouvelles</h2>
+        <h3 className="text-lg font-semibold">Dernières nouvelles</h3>
         <p className={cn('mt-1 text-sm', terrain.muted)}>Ce qui vous concerne</p>
       </div>
       <div className={terrainCardClassName()}>
@@ -327,10 +348,17 @@ function NewsPanel({ items, isPending, isError, onRetry, onSelect, onSeeAll }: N
           </div>
         ) : null}
         <div className="border-t border-[#E8E6DF] px-4">
-          <button type="button" className={textNavClassName} onClick={onSeeAll}>
+          <a
+            href={notificationsHref}
+            className={textNavClassName}
+            onClick={(event) => {
+              event.preventDefault()
+              onNavigate(notificationsHref)
+            }}
+          >
             Voir toutes les notifications
             <ArrowRight className="size-4" aria-hidden />
-          </button>
+          </a>
         </div>
       </div>
     </aside>
@@ -377,9 +405,9 @@ export function MyDayPage({ establishmentId, onNavigate }: {
                 {formatMyDayHeadingDate(timeZone)}
               </p>
             ) : null}
-            <h1 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
+            <h2 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
               Votre travail, en un coup d’œil.
-            </h1>
+            </h2>
           </div>
           <Button
             type="button"
@@ -404,8 +432,9 @@ export function MyDayPage({ establishmentId, onNavigate }: {
             hasNextPage={Boolean(query.hasNextPage)}
             onRetry={() => void query.refetch()}
             onLoadMore={() => void query.fetchNextPage()}
-            onOpen={(task) => onNavigate(`${base}/execution/${task.execution_id}`)}
-            onSeePlans={() => onNavigate(`${base}/execution`)}
+            taskHref={(task) => `${base}/execution/${task.execution_id}`}
+            plansHref={`${base}/execution`}
+            onNavigate={onNavigate}
           />
           <NewsPanel
             items={latest}
@@ -413,7 +442,8 @@ export function MyDayPage({ establishmentId, onNavigate }: {
             isError={notifications.isError}
             onRetry={() => void notifications.refetch()}
             onSelect={handleSelectNotification}
-            onSeeAll={() => onNavigate('/notifications-center')}
+            notificationsHref="/notifications-center"
+            onNavigate={onNavigate}
           />
         </div>
       </div>

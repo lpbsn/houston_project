@@ -95,8 +95,8 @@ describe('Ma journée', () => {
     const navigate = mount()
 
     expect(await screen.findByText('Contrôler la réparation du projecteur dans la salle de séminaire nord')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Votre travail, en un coup d’œil.' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'À traiter' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Votre travail, en un coup d’œil.' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'À traiter' })).toBeTruthy()
     expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.')).toBeTruthy()
     expect(screen.getByText('Loisirs · Préparer les salles')).toBeTruthy()
     expect(screen.getByText('Pour moi')).toBeTruthy()
@@ -109,15 +109,21 @@ describe('Ma journée', () => {
     expect(screen.queryByText(/actualités restent secondaires/)).toBeNull()
     expect(screen.getByText('Aucune notification pour le moment.')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', {
+    const taskLink = screen.getByRole('link', {
       name: /Contrôler la réparation du projecteur dans la salle de séminaire nord/,
-    }))
+    })
+    expect(taskLink.getAttribute('href')).toBe('/e/site-1/execution/plan-1')
+    fireEvent.click(taskLink)
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/execution/plan-1')
     fireEvent.click(screen.getByRole('button', { name: 'Partager une observation' }))
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/reporting')
-    fireEvent.click(screen.getByRole('button', { name: 'Voir tous les plans d’exécution' }))
+    const plansLink = screen.getByRole('link', { name: 'Voir tous les plans d’exécution' })
+    expect(plansLink.getAttribute('href')).toBe('/e/site-1/execution')
+    fireEvent.click(plansLink)
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/execution')
-    fireEvent.click(screen.getByRole('button', { name: 'Voir toutes les notifications' }))
+    const notificationsLink = screen.getByRole('link', { name: 'Voir toutes les notifications' })
+    expect(notificationsLink.getAttribute('href')).toBe('/notifications-center')
+    fireEvent.click(notificationsLink)
     expect(navigate).toHaveBeenLastCalledWith('/notifications-center')
   })
 
@@ -180,7 +186,7 @@ describe('Ma journée', () => {
     const navigate = mount()
 
     expect(await screen.findByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Voir tous les plans d’exécution' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Voir tous les plans d’exécution' }))
     expect(navigate).toHaveBeenCalledWith('/e/site-1/execution')
   })
 
@@ -230,7 +236,7 @@ describe('Ma journée', () => {
     expect(screen.getByText('Les notifications sont momentanément indisponibles.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(notifications.refetch).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /Tester le micro/ }))
+    fireEvent.click(screen.getByRole('link', { name: /Tester le micro/ }))
     expect(navigate).toHaveBeenCalledWith('/e/site-1/execution/plan-1')
   })
 
