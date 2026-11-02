@@ -628,6 +628,8 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'static') {
     switch (route.path) {
+      case '/my-day':
+        return 'my-day'
       case '/reporting':
         return 'reporting'
       case '/signals':
