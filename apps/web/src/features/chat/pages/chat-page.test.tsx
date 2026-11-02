@@ -184,6 +184,14 @@ vi.mock('../hooks', () => ({
   useDeleteGroupMutation: () => idleMutationMock(),
 }))
 
+vi.mock('@/app/app-routes', () => ({
+  useAppRoute: () => ({ navigate: vi.fn(), search: '' }),
+}))
+
+vi.mock('../workspace-api', () => ({
+  fetchWorkspace: vi.fn().mockResolvedValue({ items: [], cursor: null }),
+}))
+
 vi.mock('../components/chat-realtime-provider', () => ({
   useOptionalChatRealtime: () => ({
     connectionStatus: 'reconnecting',
@@ -323,6 +331,7 @@ describe('ChatPage flat conversation list', () => {
     renderChatPage()
 
     expect(screen.getByText('Aucune conversation')).toBeTruthy()
+    expect(screen.queryByText('Messages directs et équipes')).toBeNull()
     expect(screen.queryByText('Messages directs')).toBeNull()
     expect(screen.queryByText('Groupes')).toBeNull()
   })
@@ -1002,6 +1011,70 @@ describe('ChatPage flat conversation list', () => {
     expect(stub.getAttribute('data-conversation-id')).toBe('conv-dm')
     expect(stub.getAttribute('data-embedded')).toBe('true')
     expect(screen.queryByTestId('chat-desktop-empty')).toBeNull()
+  })
+
+  it('shows three underlined spaces and keeps content search out of the tab list', () => {
+    renderChatPage()
+
+    expect(screen.getByRole('button', { name: 'Discussions' }).getAttribute('aria-current')).toBe(
+      'page',
+    )
+    expect(screen.getByRole('button', { name: /Plans d.action/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Mentions' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Rechercher' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Rechercher dans les échanges' })).toBeTruthy()
+    expect(screen.getByRole('navigation', { name: 'Espaces de discussion' })).toBeTruthy()
+  })
+
+  it('filters the conversation list to unread threads after the name filter', () => {
+    conversationsQueryMock.mockReturnValue(
+      buildConversationsQueryState({
+        data: {
+          items: [
+            { ...buildConversation('conv-unread', 'dm', { peerDisplayName: 'Bob Martin' }), unread: true, unread_count: 2 },
+            buildConversation('conv-read', 'dm', { peerDisplayName: 'Claire Dupont' }),
+          ],
+        },
+      }),
+    )
+
+    renderChatPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Non lues' }))
+
+    expect(screen.getByText('Bob Martin')).toBeTruthy()
+    expect(screen.queryByText('Claire Dupont')).toBeNull()
+    expect(screen.queryByText('Récentes')).toBeNull()
+  })
+
+  it('shows a distinct empty state when every conversation is read', () => {
+    conversationsQueryMock.mockReturnValue(
+      buildConversationsQueryState({
+        data: { items: [buildConversation('conv-read', 'dm')] },
+      }),
+    )
+
+    renderChatPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Non lues' }))
+
+    expect(screen.getByText('Aucune conversation non lue')).toBeTruthy()
+    expect(screen.queryByText('Aucune conversation')).toBeNull()
+  })
+
+  it('opens content search without leaving the tab bar, then restores the previous tab', async () => {
+    renderChatPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Rechercher dans les échanges' }))
+
+    expect(await screen.findByLabelText('Rechercher dans les messages')).toBeTruthy()
+    expect(screen.getByLabelText('Auteur')).toBeTruthy()
+    expect(screen.getByLabelText('Depuis')).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: 'Avec pièce jointe' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Discussions' }).getAttribute('aria-current')).toBe(
+      'page',
+    )
+    expect(screen.queryByPlaceholderText('Rechercher une conversation')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+    expect(screen.getByPlaceholderText('Rechercher une conversation')).toBeTruthy()
   })
 
   it('keeps the stacked list on native large viewports', () => {
