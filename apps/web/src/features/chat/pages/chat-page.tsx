@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { CommunicationTabs, CommunicationWorkspace, type CommunicationTab } from '../components/communication-workspace'
 import { LoaderCircle, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -90,6 +91,7 @@ export function ChatPage({
   const active = auth.bootstrap?.active_membership
   const viewerMembershipId =
     fromList ?? (active?.establishment_id === establishmentId ? active.id : null) ?? null
+  const [tab, setTab] = useState<CommunicationTab>('team')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [listCollapsed, setListCollapsed] = useState(false)
@@ -354,6 +356,9 @@ export function ChatPage({
     )
   }
 
+  const tabs = <CommunicationTabs tab={tab} onChange={setTab} />
+  if (tab !== 'team') return <ChatPageRoot>{tabs}<CommunicationWorkspace key={`${establishmentId}-${tab}`} establishmentId={establishmentId} tab={tab} onOpenItem={() => setTab('team')} /></ChatPageRoot>
+
   const canCreate = statusQuery.data.can_create_dm || statusQuery.data.can_create_group
   const collapseLabel = listCollapsed
     ? 'Développer les discussions'
@@ -518,6 +523,7 @@ export function ChatPage({
   if (isDesktopWeb) {
     return (
       <ChatPageRoot>
+        {tabs}
         <div className="shrink-0">
           <ChatReconnectBanner status={connectionStatus} />
         </div>
@@ -607,6 +613,7 @@ export function ChatPage({
 
   return (
     <ChatPageRoot>
+      {tabs}
       <div className="shrink-0">
         <ChatReconnectBanner status={connectionStatus} />
       </div>

@@ -17,6 +17,7 @@ import { queryClient } from '@/lib/query-client'
 const COMMENT_INVALIDATION_REASONS = new Set([
   'comment.signal.created',
   'comment.signal.inherited',
+  'comment.execution.updated',
   'comment.execution.created',
   'comment.execution.resolved',
   'comment.execution.unresolved',
@@ -39,8 +40,8 @@ function buildEvent(
 
 describe('operational invalidation contract', () => {
   it('loads the expected number of operational events', () => {
-    expect(operationalInvalidationEvents).toHaveLength(23)
-    expect(operationalInvalidationEventPairs).toHaveLength(23)
+    expect(operationalInvalidationEvents).toHaveLength(24)
+    expect(operationalInvalidationEventPairs).toHaveLength(24)
   })
 
   it.each(operationalInvalidationEventPairs)(

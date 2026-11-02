@@ -1,3 +1,4 @@
+import { DictationButton } from './dictation-button'
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ClipboardEvent } from 'react'
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
@@ -381,6 +382,7 @@ export function ChatComposer({
         >
           <Paperclip className="h-5 w-5" />
         </Button>
+        {establishmentId && <DictationButton key={`${establishmentId}-${conversationId}`} establishmentId={establishmentId} disabled={disabled} remaining={CHAT_MESSAGE_BODY_MAX_LENGTH - draft.length - (draft ? 1 : 0)} onAppend={text => applyBody(draft ? `${draft} ${text}` : text)} />}
         <textarea
           ref={textareaRef}
           value={draft}

@@ -22,6 +22,7 @@ _ATTACHMENT_PREFETCH = Prefetch(
 )
 
 _COMMENT_PREFETCH = (
+    "acknowledgements",
     "author_membership__user",
     "resolved_by_membership__user",
     Prefetch(
