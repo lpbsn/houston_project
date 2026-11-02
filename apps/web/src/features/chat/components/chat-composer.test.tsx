@@ -327,6 +327,104 @@ describe('ChatComposer', () => {
       expect(screen.getByRole('button', { name: 'Dicter un message' })).toBeTruthy()
     })
 
+    it('refuses to send an unfinished recording and sends once the transcript is in the draft', async () => {
+      let finish!: (value: { text: string }) => void
+      vi.mocked(transcribeAudio).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      const { onSend, container } = renderComposer()
+      const textarea = screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'Bonjour' } })
+      const file = new File(['img'], 'plan.png', { type: 'image/png' })
+      const input = container.querySelector('input[type="file"]') as HTMLInputElement
+      fireEvent.change(input, { target: { files: [file] } })
+      expect(screen.getByText('plan.png')).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dicter un message' }))
+      const stop = await screen.findByRole('button', { name: 'Arrêter l’enregistrement' })
+      const send = screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement
+      expect(send.disabled).toBe(true)
+      expect(textarea.disabled).toBe(false)
+      fireEvent.keyDown(textarea, { key: 'Enter' })
+      fireEvent.click(send)
+      expect(onSend).not.toHaveBeenCalled()
+      expect(textarea.value).toBe('Bonjour')
+      expect(screen.getByText('plan.png')).toBeTruthy()
+      expect(stop.getAttribute('data-mic-state')).toBe('recording')
+      expect(stopTrack).not.toHaveBeenCalled()
+
+      fireEvent.click(stop)
+      expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Transcription en cours…')
+      expect((screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement).disabled).toBe(true)
+      await act(async () => finish({ text: 'vocale.' }))
+      await waitFor(() => {
+        expect(textarea.value).toBe('Bonjour vocale.')
+      })
+      expect(screen.getByText('plan.png')).toBeTruthy()
+      const ready = screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement
+      expect(ready.disabled).toBe(false)
+      fireEvent.click(ready)
+      expect(onSend).toHaveBeenCalledTimes(1)
+      expect(onSend).toHaveBeenCalledWith({
+        body: 'Bonjour vocale.',
+        mentions: [],
+        replyToId: null,
+        files: [expect.any(File)],
+      })
+      expect(onSend.mock.calls[0]?.[0].files[0].name).toBe('plan.png')
+      expect(screen.queryByText('plan.png')).toBeNull()
+    })
+
+    it('sends the unchanged draft after the recording is cancelled', async () => {
+      const stopEarly = vi.fn()
+      let releaseMic!: (stream: { getTracks: () => Array<{ stop: () => void }> }) => void
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: vi.fn().mockImplementation(
+            () =>
+              new Promise((resolve) => {
+                releaseMic = resolve
+              }),
+          ),
+        },
+      })
+      const { onSend } = renderComposer()
+      const textarea = screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'Bonjour' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dicter un message' }))
+      const stop = await screen.findByRole('button', { name: 'Arrêter l’enregistrement' })
+      const blocked = screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement
+      expect(blocked.disabled).toBe(true)
+      fireEvent.keyDown(textarea, { key: 'Enter' })
+      fireEvent.click(blocked)
+      expect(onSend).not.toHaveBeenCalled()
+      expect(textarea.value).toBe('Bonjour')
+
+      fireEvent.click(stop)
+      await act(async () => {
+        releaseMic({ getTracks: () => [{ stop: stopEarly }] })
+      })
+
+      expect(screen.getByRole('button', { name: 'Dicter un message' })).toBeTruthy()
+      expect(textarea.value).toBe('Bonjour')
+      expect(transcribeAudio).not.toHaveBeenCalled()
+      expect(stopEarly).toHaveBeenCalled()
+      const send = screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement
+      expect(send.disabled).toBe(false)
+      fireEvent.click(send)
+      expect(onSend).toHaveBeenCalledWith({
+        body: 'Bonjour',
+        mentions: [],
+        replyToId: null,
+        files: [],
+      })
+    })
+
     it('does not apply a late transcription after the conversation changes', async () => {
       let finish!: (value: { text: string }) => void
       vi.mocked(transcribeAudio).mockImplementation(

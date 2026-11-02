@@ -249,9 +249,11 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       }
     }
 
+    const dictationBusy = dictation.phase === 'recording' || dictation.phase === 'transcribing'
+
     function handleSubmit() {
       const trimmed = draft.trim()
-      if (!trimmed || disabled || dictation.phase === 'transcribing') {
+      if (!trimmed || disabled || dictationBusy) {
         return
       }
       if (pendingAttachments.some((item) => item.status === 'uploading')) {
@@ -301,7 +303,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     const planAppearance = appearance === 'plan' && !isReply
     const sendDisabled =
       disabled ||
-      dictation.phase === 'transcribing' ||
+      dictationBusy ||
       !draft.trim() ||
       pendingAttachments.some((item) => item.status === 'uploading')
     const attachIconButton = attachEnabled && attachTrigger === 'icon' ? (
