@@ -25,12 +25,10 @@ export function WorkspaceSectionHeader({
   eyebrow,
   title,
   description,
-  hint,
 }: {
   eyebrow: string
   title: string
   description: string
-  hint?: string
 }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -41,11 +39,6 @@ export function WorkspaceSectionHeader({
         <h2 className="mt-1 text-xl font-semibold tracking-tight text-[#1a1a1a]">{title}</h2>
         <p className="mt-1 max-w-xl text-[13px] leading-snug text-[#6d7c72]">{description}</p>
       </div>
-      {hint ? (
-        <p className="inline-flex max-w-xs items-center rounded-lg bg-[#e8f0e9] px-3 py-2 text-[11px] font-medium text-[#547360]">
-          {hint}
-        </p>
-      ) : null}
     </div>
   )
 }

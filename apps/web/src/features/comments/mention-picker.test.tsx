@@ -49,6 +49,30 @@ describe('MentionPicker', () => {
     )
   })
 
+  it('uses the shared first-and-last initials for a three-part name', () => {
+    render(
+      <MentionPicker
+        results={[
+          {
+            membership_id: 'member-2',
+            display_name: 'Jean Paul Dupont',
+            role: 'staff',
+            id: 'user-2',
+            username: 'jean',
+            email: 'jean@example.com',
+            business_unit_ids: [],
+          },
+        ]}
+        isLoading={false}
+        query="je"
+        selectedMembershipIds={[]}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('JD')).toBeTruthy()
+  })
+
   it('shows minimum length hint before two characters', () => {
     render(
       <MentionPicker
