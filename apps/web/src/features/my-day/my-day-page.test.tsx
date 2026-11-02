@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NotificationItem } from '@/features/notifications/types'
 
-import { fetchMyDay, type MyDayTask } from './api'
+import { fetchMyDay, myDayQueryKey, type MyDayTask } from './api'
 import { formatMyDayHeadingDate, formatTaskDeadline, MyDayPage } from './my-day-page'
 
 const notifications = vi.hoisted(() => ({
@@ -79,7 +79,7 @@ function mount(establishmentId: string | null = 'site-1') {
       <MyDayPage establishmentId={establishmentId} onNavigate={navigate} />
     </QueryClientProvider>,
   )
-  return navigate
+  return { navigate, client }
 }
 
 describe('Ma journée', () => {
@@ -92,7 +92,7 @@ describe('Ma journée', () => {
       next_offset: null,
       timezone: 'Europe/Paris',
     })
-    const navigate = mount()
+    const { navigate } = mount()
 
     expect(await screen.findByText('Contrôler la réparation du projecteur dans la salle de séminaire nord')).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: 'Votre travail, en un coup d’œil.' })).toBeTruthy()
@@ -135,7 +135,7 @@ describe('Ma journée', () => {
 
   it('leaves modified anchor clicks to the browser', async () => {
     vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
-    const navigate = mount()
+    const { navigate } = mount()
     const links = [
       await screen.findByRole('link', { name: /Tester le micro/ }),
       screen.getByRole('link', { name: 'Partager une observation' }),
@@ -216,9 +216,26 @@ describe('Ma journée', () => {
     expect(screen.queryByText(formatMyDayHeadingDate('Europe/Paris'))).toBeNull()
   })
 
+  it('keeps an empty queue when a refresh fails', async () => {
+    vi.mocked(fetchMyDay)
+      .mockResolvedValueOnce({ items: [], next_offset: null, timezone: 'Europe/Paris' })
+      .mockRejectedValueOnce(new Error('offline'))
+    const { client } = mount()
+
+    expect(await screen.findByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
+    await client.refetchQueries({ queryKey: myDayQueryKey('site-1') })
+
+    expect(await screen.findByText('Impossible d’actualiser votre travail.')).toBeTruthy()
+    expect(screen.getByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
+    expect(screen.queryByText('Impossible de charger votre travail.')).toBeNull()
+    expect(screen.queryByText('Impossible de charger la suite.')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Réessayer' })).toHaveLength(1)
+    expect(screen.getByText(formatMyDayHeadingDate('Europe/Paris'))).toBeTruthy()
+  })
+
   it('states an empty queue without claiming the establishment is finished', async () => {
     vi.mocked(fetchMyDay).mockResolvedValue({ items: [], next_offset: null, timezone: 'Europe/Paris' })
-    const navigate = mount()
+    const { navigate } = mount()
 
     expect(await screen.findByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
     fireEvent.click(screen.getByRole('link', { name: 'Voir tous les plans d’exécution' }))
@@ -265,7 +282,7 @@ describe('Ma journée', () => {
   it('keeps the work queue usable when notifications fail', async () => {
     vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
     notifications.isError = true
-    const navigate = mount()
+    const { navigate } = mount()
 
     expect(await screen.findByText('Tester le micro')).toBeTruthy()
     expect(screen.getByText('Les notifications sont momentanément indisponibles.')).toBeTruthy()

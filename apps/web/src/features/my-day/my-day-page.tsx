@@ -144,7 +144,7 @@ type WorkColumnProps = {
   tasks: MyDayTask[]
   timeZone: string | undefined
   isPending: boolean
-  isError: boolean
+  isLoadingError: boolean
   isRefetchError: boolean
   isFetchNextPageError: boolean
   isFetchingNextPage: boolean
@@ -160,7 +160,7 @@ function WorkColumn({
   tasks,
   timeZone,
   isPending,
-  isError,
+  isLoadingError,
   isRefetchError,
   isFetchNextPageError,
   isFetchingNextPage,
@@ -183,10 +183,10 @@ function WorkColumn({
       </div>
 
       {isPending ? <p role="status">Chargement de votre journée…</p> : null}
-      {isError && !showGroups ? (
+      {isLoadingError ? (
         <TerrainErrorState message="Impossible de charger votre travail." onRetry={onRetry} />
       ) : null}
-      {!isPending && !isError && !showGroups ? (
+      {!isPending && !isLoadingError && !showGroups ? (
         <TerrainEmptyState title="Aucune tâche à traiter pour le moment." />
       ) : null}
 
@@ -440,7 +440,7 @@ export function MyDayPage({ establishmentId, onNavigate }: {
             tasks={tasks}
             timeZone={timeZone}
             isPending={query.isPending}
-            isError={query.isError}
+            isLoadingError={query.isLoadingError}
             isRefetchError={query.isRefetchError}
             isFetchNextPageError={query.isFetchNextPageError}
             isFetchingNextPage={query.isFetchingNextPage}
