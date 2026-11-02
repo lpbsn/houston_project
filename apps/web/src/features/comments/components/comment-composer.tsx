@@ -7,7 +7,7 @@ import {
   useState,
   type ChangeEvent,
 } from 'react'
-import { Paperclip, SendHorizonal, X } from 'lucide-react'
+import { Paperclip, Send, SendHorizonal, X } from 'lucide-react'
 
 import { commentThread, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -51,6 +51,7 @@ type CommentComposerProps = {
   placeholder?: string
   variant?: 'default' | 'reply'
   compactOnLg?: boolean
+  appearance?: 'default' | 'plan'
   attachEnabled?: boolean
   attachTrigger?: 'label' | 'icon'
   executionId?: string | null
@@ -70,6 +71,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       placeholder = 'Ajouter un commentaire...',
       variant = 'default',
       compactOnLg = false,
+      appearance = 'default',
       attachEnabled = false,
       attachTrigger = 'label',
       executionId = null,
@@ -276,20 +278,25 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         }}
       />
     ) : null
+    const planAppearance = appearance === 'plan' && !isReply
+    const sendDisabled =
+      disabled ||
+      !draft.trim() ||
+      pendingAttachments.some((item) => item.status === 'uploading')
     const attachIconButton = attachEnabled && attachTrigger === 'icon' ? (
       <button
         type="button"
         className={cn(
-          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#5F5A52]',
-          'hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
-          'disabled:opacity-40',
+          planAppearance
+            ? 'inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[#6a726c] focus-visible:ring-2 focus-visible:ring-[#245d4a]/30 focus-visible:outline-none disabled:opacity-40'
+            : 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#5F5A52] hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none disabled:opacity-40',
         )}
         disabled={attachDisabled}
         title={COMMENT_ATTACHMENT_LIMITS_LABEL}
         aria-label="Joindre un fichier"
         onClick={() => fileInputRef.current?.click()}
       >
-        <Paperclip className="h-5 w-5" />
+        <Paperclip className={planAppearance ? 'size-4' : 'h-5 w-5'} />
       </button>
     ) : null
 
@@ -299,7 +306,12 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         establishmentId={establishmentId}
         disabled={disabled}
         remaining={MAX_COMMENT_LENGTH - draft.length - (draft ? 1 : 0)}
-        onAppend={(text) => setDraft((current) => current ? `${current} ${text}` : text)}
+        className={
+          planAppearance
+            ? 'size-8 rounded-full border border-[#e3e3e0] bg-[#f9f9f7] text-[#6a726c] hover:bg-white'
+            : undefined
+        }
+        onAppend={(text) => setDraft((current) => (current ? `${current} ${text}` : text))}
       />
     )
 
@@ -335,16 +347,52 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
                 'disabled:opacity-40',
               )}
-              disabled={
-                disabled ||
-                !draft.trim() ||
-                pendingAttachments.some((item) => item.status === 'uploading')
-              }
+              disabled={sendDisabled}
               onClick={handleSubmit}
               aria-label="Publier le commentaire"
             >
               <SendHorizonal className="h-5 w-5" />
             </button>
+          </div>
+        ) : planAppearance ? (
+          <div>
+            <div
+              className={cn(
+                'flex min-h-14 items-center gap-1.5 rounded-full border border-[#e1e2df] bg-[#f6f5f2] py-1.5 pr-1.5 pl-4',
+                'focus-within:border-[#245d4a]/35',
+              )}
+            >
+              <textarea
+                {...textareaProps}
+                rows={1}
+                className={cn(
+                  'max-h-28 min-h-6 min-w-0 flex-1 resize-none border-0 bg-transparent py-1',
+                  'text-base leading-snug text-[#202421] placeholder:text-[#6e7471]',
+                  'focus-visible:outline-none',
+                )}
+              />
+              <div className="flex shrink-0 items-center gap-0.5">
+                {dictationButton}
+                {attachIconButton}
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-9 shrink-0 items-center justify-center rounded-full text-white',
+                    'bg-[#245d4a] hover:bg-[#1e4e3e]',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#245d4a]/30',
+                    'disabled:bg-[#a5b7ad] disabled:opacity-100',
+                  )}
+                  disabled={sendDisabled}
+                  onClick={handleSubmit}
+                  aria-label="Publier le commentaire"
+                >
+                  <Send className="size-4" />
+                </button>
+              </div>
+            </div>
+            <p className="mt-1.5 px-1 text-right text-xs tabular-nums text-[#aaaead]">
+              {draft.length}/{MAX_COMMENT_LENGTH}
+            </p>
           </div>
         ) : (
           <div className="relative">
@@ -375,11 +423,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
                   'disabled:opacity-40',
                 )}
-                disabled={
-                  disabled ||
-                  !draft.trim() ||
-                  pendingAttachments.some((item) => item.status === 'uploading')
-                }
+                disabled={sendDisabled}
                 onClick={handleSubmit}
                 aria-label="Publier le commentaire"
               >

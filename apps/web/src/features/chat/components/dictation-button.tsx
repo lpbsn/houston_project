@@ -10,11 +10,13 @@ export function DictationButton({
   disabled,
   remaining,
   onAppend,
+  className,
 }: {
   establishmentId: string
   disabled?: boolean
   remaining: number
   onAppend: (text: string) => void
+  className?: string
 }) {
   const [open, setOpen] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -110,6 +112,7 @@ export function DictationButton({
         type="button"
         variant="ghost"
         size="icon"
+        className={className}
         aria-label="Dicter un message"
         disabled={disabled}
         onClick={() => {
