@@ -807,20 +807,24 @@ function ExecutionFeedPageContent({
           onReplace={quickActions.replacePin}
         />
       ) : null}
-      {!isCross && (
-        <button
-          type="button"
-          className="mx-4 mt-2 self-start rounded-lg border border-[#D7E1E5] bg-white px-3 py-2 text-sm font-semibold text-[#114660]"
-          onClick={() =>
-            onNavigate?.(
-              isDesktopWeb && establishmentId ? `/e/${establishmentId}/my-day` : '/my-day',
-            )
-          }
-        >
-          Ma journée →
-        </button>
-      )}
-      <TerrainHubTitleSlot>{viewTabs}</TerrainHubTitleSlot>
+      <TerrainHubTitleSlot>
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          {viewTabs}
+          {!isCross ? (
+            <button
+              type="button"
+              className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md border border-[#D7E1E5] bg-white px-2.5 text-[12px] font-semibold leading-none text-[#114660] focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-[#1B4FD8]/30"
+              onClick={() =>
+                onNavigate?.(
+                  isDesktopWeb && establishmentId ? `/e/${establishmentId}/my-day` : '/my-day',
+                )
+              }
+            >
+              Ma journée →
+            </button>
+          ) : null}
+        </div>
+      </TerrainHubTitleSlot>
       <TerrainHubSubheader>
         <div className={cn('flex flex-col', isDesktopWeb ? 'gap-2' : 'gap-0')}>
           <TerrainHubViewToolbar

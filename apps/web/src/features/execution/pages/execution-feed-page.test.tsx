@@ -1627,6 +1627,31 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.queryByText('Épinglage impossible.')).toBeNull()
   })
 
+  it('places Ma journée immediately after the view selector in the title slot', () => {
+    showOperationalFeed()
+    renderExecutionFeedPage({ establishmentId: 'est-1' })
+
+    const slot = screen.getByTestId('title-slot')
+    const tabs = screen.getByRole('tablist', { name: 'Mode de vue' })
+    const myDay = screen.getByRole('button', { name: 'Ma journée →' })
+
+    expect(slot.contains(tabs)).toBe(true)
+    expect(slot.contains(myDay)).toBe(true)
+    expect(tabs.compareDocumentPosition(myDay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(myDay.className).not.toContain('mx-4')
+    expect(myDay.className).not.toContain('mt-2')
+    expect(myDay.parentElement?.className).toContain('flex-wrap')
+    expect(myDay.parentElement?.className).toContain('max-w-full')
+  })
+
+  it('hides Ma journée on the cross feed', () => {
+    serializeAppRouteMockPath = '/cross/execution'
+    renderExecutionFeedPage({ source: 'cross' })
+
+    expect(screen.queryByRole('button', { name: 'Ma journée →' })).toBeNull()
+    expect(screen.getByRole('tablist', { name: 'Mode de vue' })).toBeTruthy()
+  })
+
   it('opens Ma journée in the current establishment on desktop', () => {
     stubLgViewport(true)
     showOperationalFeed()
