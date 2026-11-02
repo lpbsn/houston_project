@@ -388,8 +388,13 @@ export function ChatPage({
     </div>
   )
 
-  if (searchOpen || tab !== 'team') {
-    const workspaceTab = searchOpen ? 'search' : tab
+  const workspaceTab = searchOpen
+    ? 'search'
+    : tab === 'plans' || tab === 'mentions'
+      ? tab
+      : null
+
+  if (workspaceTab) {
     return (
       <ChatPageRoot>
         {tabs}
