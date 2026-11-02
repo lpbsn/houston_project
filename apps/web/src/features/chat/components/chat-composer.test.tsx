@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   __resetChatOutboxTestStores,
@@ -11,8 +11,32 @@ import {
   composerDraftId,
   type ChatComposerPersistedDraft,
 } from '../lib/chat-outbox'
+import { transcribeAudio } from '@/features/observations/api'
+import { CHAT_MESSAGE_BODY_MAX_LENGTH } from '../lib/chat-limits'
 import { ChatComposer } from './chat-composer'
 import type { ChatParticipantSummary } from '../types'
+
+vi.mock('@/features/observations/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/observations/api')>()
+  return { ...actual, transcribeAudio: vi.fn() }
+})
+
+const stopTrack = vi.fn()
+
+class Recorder {
+  state = 'inactive'
+  mimeType = 'audio/webm'
+  ondataavailable?: (event: { data: Blob }) => void
+  onstop?: (() => void) | null
+  start() {
+    this.state = 'recording'
+  }
+  stop() {
+    this.state = 'inactive'
+    this.ondataavailable?.({ data: new Blob(['audio']) })
+    this.onstop?.()
+  }
+}
 
 const participants: ChatParticipantSummary[] = [
   {
@@ -215,5 +239,122 @@ describe('ChatComposer', () => {
     })
     expect(conv2?.body ?? '').not.toBe('old conversation draft')
     expect(items.get(conv1Id)?.body).toBe('old conversation draft')
+  })
+
+  describe('dictation', () => {
+    beforeEach(() => {
+      vi.mocked(transcribeAudio).mockReset()
+      stopTrack.mockClear()
+      vi.stubGlobal('MediaRecorder', Recorder)
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: stopTrack }] }),
+        },
+      })
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    async function recordAndStop() {
+      fireEvent.click(screen.getByRole('button', { name: 'Dicter un message' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Arrêter l’enregistrement' }))
+    }
+
+    function renderComposer(onSend = vi.fn(), conversationId = 'conv-1') {
+      const view = render(
+        <ChatComposer
+          participants={participants}
+          viewerMembershipId="mbr-viewer"
+          establishmentId="est-1"
+          conversationId={conversationId}
+          onSend={onSend}
+        />,
+      )
+      return { onSend, ...view }
+    }
+
+    it('appends a transcription onto edits made while it is in progress and blocks send', async () => {
+      let finish!: (value: { text: string }) => void
+      vi.mocked(transcribeAudio).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      const { onSend } = renderComposer()
+      const textarea = screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'Texte initial.' } })
+
+      await recordAndStop()
+      expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Transcription en cours…')
+      expect((textarea as HTMLTextAreaElement).disabled).toBe(false)
+      expect((screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement).disabled).toBe(
+        true,
+      )
+      fireEvent.keyDown(textarea, { key: 'Enter' })
+      expect(onSend).not.toHaveBeenCalled()
+
+      fireEvent.change(textarea, { target: { value: 'Texte édité pendant.' } })
+      await act(async () => finish({ text: 'Résultat vocal.' }))
+
+      await waitFor(() => {
+        expect(textarea.value).toBe('Texte édité pendant. Résultat vocal.')
+      })
+      expect(screen.queryByRole('status')).toBeNull()
+      expect((screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      )
+      expect(stopTrack).toHaveBeenCalled()
+    })
+
+    it('keeps the draft unchanged when the transcription does not fit', async () => {
+      vi.mocked(transcribeAudio).mockResolvedValue({ text: 'trop long pour tenir' })
+      renderComposer()
+      const textarea = screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement
+      const draft = 'a'.repeat(CHAT_MESSAGE_BODY_MAX_LENGTH - 3)
+      fireEvent.change(textarea, { target: { value: draft } })
+
+      await recordAndStop()
+
+      expect(await screen.findByRole('alert')).toHaveProperty(
+        'textContent',
+        'La transcription dépasse la taille maximale. Votre brouillon est conservé.',
+      )
+      expect(textarea.value).toBe(draft)
+      expect(screen.getByRole('button', { name: 'Dicter un message' })).toBeTruthy()
+    })
+
+    it('does not apply a late transcription after the conversation changes', async () => {
+      let finish!: (value: { text: string }) => void
+      vi.mocked(transcribeAudio).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      const view = renderComposer()
+      const textarea = screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'Brouillon conv-1.' } })
+      await recordAndStop()
+      await screen.findByRole('status')
+
+      view.rerender(
+        <ChatComposer
+          participants={participants}
+          viewerMembershipId="mbr-viewer"
+          establishmentId="est-1"
+          conversationId="conv-2"
+          onSend={vi.fn()}
+        />,
+      )
+      await act(async () => finish({ text: 'Ne doit pas s’ajouter.' }))
+      expect(
+        (screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement).value,
+      ).toBe('Brouillon conv-1.')
+      expect(screen.queryByDisplayValue(/Ne doit pas s’ajouter/)).toBeNull()
+    })
   })
 })

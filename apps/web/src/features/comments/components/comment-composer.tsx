@@ -1,4 +1,13 @@
-import { DictationButton } from '@/features/chat/components/dictation-button'
+import {
+  DictationButton,
+  DictationNotice,
+  IDLE_DICTATION,
+  type DictationActivity,
+} from '@/features/chat/components/dictation-button'
+import {
+  appendDictationText,
+  DICTATION_TOO_LONG_MESSAGE,
+} from '@/features/chat/lib/append-dictation-text'
 import {
   forwardRef,
   useEffect,
@@ -81,6 +90,8 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const [draft, setDraft] = useState('')
+    const draftRef = useRef(draft)
+    const [dictation, setDictation] = useState<DictationActivity>(IDLE_DICTATION)
     const [selectedMentions, setSelectedMentions] = useState<SelectedMention[]>([])
     const [cursorPosition, setCursorPosition] = useState(0)
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
@@ -110,6 +121,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
 
     useImperativeHandle(ref, () => ({
       reset() {
+        draftRef.current = ''
         setDraft('')
         setSelectedMentions([])
         setCursorPosition(0)
@@ -135,8 +147,12 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       }
 
       const mentionText = `@${user.display_name} `
-      const nextDraft = `${beforeCursor.slice(0, atIndex)}${mentionText}${afterCursor}`
-      setDraft(nextDraft.slice(0, MAX_COMMENT_LENGTH))
+      const nextDraft = `${beforeCursor.slice(0, atIndex)}${mentionText}${afterCursor}`.slice(
+        0,
+        MAX_COMMENT_LENGTH,
+      )
+      draftRef.current = nextDraft
+      setDraft(nextDraft)
       setSelectedMentions((current) => {
         if (current.some((mention) => mention.membershipId === user.membership_id)) {
           return current
@@ -168,7 +184,9 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         current.filter((item) => item.membershipId !== membershipId),
       )
       if (mention) {
-        setDraft((current) => stripFirstMentionText(current, mention.displayName))
+        const next = stripFirstMentionText(draftRef.current, mention.displayName)
+        draftRef.current = next
+        setDraft(next)
       }
     }
 
@@ -233,7 +251,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
 
     function handleSubmit() {
       const trimmed = draft.trim()
-      if (!trimmed || disabled) {
+      if (!trimmed || disabled || dictation.phase === 'transcribing') {
         return
       }
       if (pendingAttachments.some((item) => item.status === 'uploading')) {
@@ -253,7 +271,9 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       ref: textareaRef,
       value: draft,
       onChange: (event: ChangeEvent<HTMLTextAreaElement>) => {
-        setDraft(event.target.value.slice(0, MAX_COMMENT_LENGTH))
+        const next = event.target.value.slice(0, MAX_COMMENT_LENGTH)
+        draftRef.current = next
+        setDraft(next)
         setCursorPosition(event.target.selectionStart)
       },
       onClick: updateCursorPosition,
@@ -281,6 +301,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     const planAppearance = appearance === 'plan' && !isReply
     const sendDisabled =
       disabled ||
+      dictation.phase === 'transcribing' ||
       !draft.trim() ||
       pendingAttachments.some((item) => item.status === 'uploading')
     const attachIconButton = attachEnabled && attachTrigger === 'icon' ? (
@@ -305,13 +326,21 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         key={`${establishmentId}-${executionId}`}
         establishmentId={establishmentId}
         disabled={disabled}
-        remaining={MAX_COMMENT_LENGTH - draft.length - (draft ? 1 : 0)}
         className={
           planAppearance
             ? 'size-8 rounded-full border border-[#e3e3e0] bg-[#f9f9f7] text-[#6a726c] hover:bg-white'
             : undefined
         }
-        onAppend={(text) => setDraft((current) => (current ? `${current} ${text}` : text))}
+        onActivityChange={setDictation}
+        onAppend={(text) => {
+          const result = appendDictationText(draftRef.current, text, MAX_COMMENT_LENGTH)
+          if (result.status === 'too_long') return DICTATION_TOO_LONG_MESSAGE
+          if (result.status === 'appended') {
+            draftRef.current = result.value
+            setDraft(result.value)
+          }
+          return null
+        }}
       />
     )
 
@@ -536,6 +565,12 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             selectedMembershipIds={selectedMembershipIds}
             onSelect={handleSelectMention}
           />
+        ) : null}
+
+        {dictation.phase === 'transcribing' || dictation.error ? (
+          <div className="mt-2">
+            <DictationNotice activity={dictation} />
+          </div>
         ) : null}
 
         {errorMessage ? (
