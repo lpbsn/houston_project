@@ -45,7 +45,6 @@ type CommentSectionProps = {
   readOnly?: boolean
   attachEnabled?: boolean
   attachTrigger?: 'label' | 'icon'
-  documentFlowTitle?: ReactNode
   /** Page flow: the thread grows with its content. The panel layout keeps an internal scroller. */
   documentFlow?: boolean
   pinComposer?: boolean
@@ -141,7 +140,6 @@ export function CommentSection({
   readOnly = false,
   attachEnabled = false,
   attachTrigger = 'label',
-  documentFlowTitle,
   documentFlow = false,
   pinComposer = true,
 }: CommentSectionProps) {
@@ -276,11 +274,6 @@ export function CommentSection({
             {mediaAccessButton}
           </div>
           {executionToolbar}
-        </div>
-      ) : documentFlow && documentFlowTitle ? (
-        <div className="flex items-center justify-between gap-2">
-          {documentFlowTitle}
-          {mediaAccessButton}
         </div>
       ) : (
         <div className="flex items-center gap-2">

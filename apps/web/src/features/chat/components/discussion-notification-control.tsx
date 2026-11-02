@@ -1,5 +1,7 @@
 import { Bell, ChevronDown } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+import { chatQueryKeys } from '../api'
 import {
   setConversationNotifications,
   setPlanDiscussionPreference,
@@ -24,7 +26,13 @@ export function DiscussionNotificationControl({
       kind === 'chat'
         ? setConversationNotifications(establishmentId, parentId, value)
         : setPlanDiscussionPreference(establishmentId, parentId, { mode: value }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['chat'] }),
+    onSuccess: () =>
+      client.invalidateQueries({
+        queryKey:
+          kind === 'chat'
+            ? chatQueryKeys.conversation(establishmentId, parentId)
+            : ['chat', 'plan-preference', establishmentId, parentId],
+      }),
   })
   const select = (
     <select
