@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ChevronRight, ClipboardList, ExternalLink, MessageCircle } from 'lucide-react'
+import { ArrowUpRight, ChevronRight, ClipboardList, ExternalLink, MessageCircle } from 'lucide-react'
 
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { terrainFeedAvatar } from '@/lib/terrain-styles'
@@ -225,21 +225,51 @@ export function SearchResultRow({
   item: WorkspaceItem
   onActivate: () => void
 }) {
+  const isPlan = item.kind === 'plan'
   return (
-    <li>
+    <li className="border-t border-[#edf0ed] first:border-t-0">
       <button
         type="button"
         data-testid={`workspace-row-${item.kind}-${item.id}`}
+        aria-label={
+          isPlan
+            ? `Ouvrir le commentaire du plan : ${item.title}`
+            : `Ouvrir le message de discussion : ${item.title}`
+        }
         onClick={onActivate}
-        className="w-full rounded-2xl border border-[#E8E6DF] bg-white p-4 text-left outline-none hover:bg-[#f7f8f6] focus-visible:ring-2 focus-visible:ring-[#265d4c]/40"
+        className="group flex w-full items-start gap-2.5 bg-transparent px-3 py-3.5 text-left text-inherit outline-none transition-colors hover:bg-[#f7faf7] focus-visible:ring-2 focus-visible:ring-[#265d4c]/40 focus-visible:ring-inset sm:gap-[13px] sm:px-[18px] sm:py-4"
       >
-        <span className="block font-semibold text-[#1a1a1a]">{item.title}</span>
-        <span className="mt-1 block text-xs text-[#6d7c72]">
-          {item.author} · {formatChatRelativeTime(item.created_at)} · {kindLabel(item.kind)}
+        <span
+          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-[#e9f3ed] text-[#306450] sm:h-[33px] sm:w-[33px] sm:rounded-[10px]"
+          aria-hidden="true"
+        >
+          {isPlan ? (
+            <ClipboardList className="h-4 w-4" strokeWidth={1.7} />
+          ) : (
+            <MessageCircle className="h-4 w-4" strokeWidth={1.7} />
+          )}
         </span>
-        <span className="mt-2 line-clamp-3 block whitespace-pre-wrap text-sm text-[#1a1a1a]">
-          {itemExcerpt(item)}
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="text-xs leading-snug font-semibold break-words text-[#24342b] sm:text-[13px]">
+              {item.title}
+            </span>
+            <span className="rounded-[5px] bg-[#eef4ef] px-[7px] py-[3px] text-[10px] font-semibold whitespace-nowrap text-[#426651]">
+              {isPlan ? 'Plan' : 'Discussion'}
+            </span>
+          </span>
+          <span className="mt-1 mb-1.5 block text-[10px] text-[#829087] sm:text-[11px]">
+            {item.author} · {formatChatRelativeTime(item.created_at)}
+          </span>
+          <span className="line-clamp-2 block text-xs leading-normal whitespace-pre-wrap text-[#515d55]">
+            {itemExcerpt(item)}
+          </span>
         </span>
+        <ArrowUpRight
+          className="mt-0.5 ml-auto h-[17px] w-[17px] shrink-0 text-[#96a39b] group-hover:text-[#265d4c]"
+          strokeWidth={1.7}
+          aria-hidden="true"
+        />
       </button>
     </li>
   )
