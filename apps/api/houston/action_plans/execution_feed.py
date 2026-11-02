@@ -111,6 +111,10 @@ def _scheduled_summary_from_execution(
     )
 
 
+def _overdue_included(category: ExecutionFeedCategory, include_overdue: bool) -> bool:
+    return include_overdue and category == "in_progress"
+
+
 def build_action_plan_execution_feed_page(
     *,
     membership: EstablishmentMembership,
@@ -118,7 +122,9 @@ def build_action_plan_execution_feed_page(
     category: ExecutionFeedCategory,
     page_size: int,
     cursor: ActionPlanExecutionFeedCursor | None = None,
+    include_overdue: bool = False,
 ) -> ActionPlanExecutionFeedPage:
+    include_overdue = _overdue_included(category, include_overdue)
     membership = prepare_execution_read_membership(membership)
     materialized_count = ensure_visible_action_plan_executions_materialized(
         membership=membership,
@@ -140,6 +146,7 @@ def build_action_plan_execution_feed_page(
         view_mode=view_mode,
         category=category,
         scope="establishment",
+        include_overdue=include_overdue,
     )
     if cursor is not None:
         validate_action_plan_execution_feed_cursor_context(
@@ -157,6 +164,7 @@ def build_action_plan_execution_feed_page(
         sorted_qs = filter_action_plan_execution_feed_category(
             sorted_qs.filter(is_feed_pinned=False),
             category=category,
+            include_overdue=include_overdue,
         )
     else:
         as_of = timezone.now()
@@ -165,6 +173,7 @@ def build_action_plan_execution_feed_page(
             membership=membership,
             as_of=as_of,
             category=category,
+            include_overdue=include_overdue,
         )
 
     candidates = list(sorted_qs[: page_size + 1])
@@ -194,6 +203,7 @@ def build_action_plan_execution_feed_page(
         membership=membership,
         as_of=as_of,
         category=category,
+        include_overdue=include_overdue,
     )
     pins = list(
         action_plan_execution_feed_pins_queryset(
@@ -201,6 +211,7 @@ def build_action_plan_execution_feed_page(
             membership=membership,
             as_of=as_of,
             category=category,
+            include_overdue=include_overdue,
         )[:ACTION_PLAN_EXECUTION_FEED_PIN_LIMIT]
     )
     hydrate_action_plan_execution_feed_items([*served, *pins])
@@ -235,7 +246,9 @@ def build_cross_action_plan_execution_feed_page(
     category: ExecutionFeedCategory,
     page_size: int,
     cursor: ActionPlanExecutionFeedCursor | None = None,
+    include_overdue: bool = False,
 ) -> ActionPlanExecutionFeedPage:
+    include_overdue = _overdue_included(category, include_overdue)
     if not memberships:
         as_of = timezone.now()
         return ActionPlanExecutionFeedPage(
@@ -275,6 +288,7 @@ def build_cross_action_plan_execution_feed_page(
             view_mode=view_mode,
             category=category,
             scope="cross",
+            include_overdue=include_overdue,
         )
         validate_action_plan_execution_feed_cursor_context(
             cursor,
@@ -291,6 +305,7 @@ def build_cross_action_plan_execution_feed_page(
         sorted_qs = filter_action_plan_execution_feed_category(
             sorted_qs.filter(is_feed_pinned=False),
             category=category,
+            include_overdue=include_overdue,
         )
     else:
         as_of = timezone.now()
@@ -299,12 +314,14 @@ def build_cross_action_plan_execution_feed_page(
             view_mode=view_mode,
             category=category,
             scope="cross",
+            include_overdue=include_overdue,
         )
         sorted_qs = action_plan_execution_feed_list_queryset(
             combined,
             memberships=prepared_memberships,
             as_of=as_of,
             category=category,
+            include_overdue=include_overdue,
         )
 
     candidates = list(sorted_qs[: page_size + 1])
@@ -334,6 +351,7 @@ def build_cross_action_plan_execution_feed_page(
         memberships=prepared_memberships,
         as_of=as_of,
         category=category,
+        include_overdue=include_overdue,
     )
     scheduled_count, scheduled_next_row = scheduled_executions_cross_summary(
         memberships=prepared_memberships,
@@ -366,7 +384,9 @@ def build_cross_action_plan_execution_feed_pins_page(
     category: ExecutionFeedCategory,
     page_size: int,
     cursor: ActionPlanExecutionFeedPinCursor | None = None,
+    include_overdue: bool = False,
 ) -> ActionPlanExecutionFeedPinsPage:
+    include_overdue = _overdue_included(category, include_overdue)
     if not memberships:
         return ActionPlanExecutionFeedPinsPage(
             items=[],
@@ -401,6 +421,7 @@ def build_cross_action_plan_execution_feed_pins_page(
         view_mode=view_mode,
         category=category,
         scope="cross",
+        include_overdue=include_overdue,
     )
     if cursor is not None:
         validate_action_plan_execution_feed_cursor_context(
@@ -418,6 +439,7 @@ def build_cross_action_plan_execution_feed_pins_page(
         memberships=prepared_memberships,
         as_of=as_of,
         category=category,
+        include_overdue=include_overdue,
     )
     if cursor is not None:
         pins_qs = apply_action_plan_execution_feed_pin_cursor(pins_qs, cursor)

@@ -2,7 +2,7 @@ import { todayCivilDate } from '@/lib/business-timezone'
 import type { ActionPlanExecutionFeedCategory } from '@/features/action-plans/api'
 import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
-export type ExecutionFeedLayout = 'list' | 'calendar'
+export type ExecutionFeedLayout = 'list' | 'calendar' | 'board'
 export type ExecutionCalendarGranularity = 'day' | 'week' | 'month'
 
 export type ExecutionFeedUrlState = {
@@ -17,7 +17,7 @@ export type ExecutionFeedUrlStateOptions = {
   defaultViewMode?: ExecutionViewMode
 }
 
-const LAYOUTS = new Set<ExecutionFeedLayout>(['list', 'calendar'])
+const LAYOUTS = new Set<ExecutionFeedLayout>(['list', 'calendar', 'board'])
 const GRANULARITIES = new Set<ExecutionCalendarGranularity>(['day', 'week', 'month'])
 const VIEW_MODES = new Set<ExecutionViewMode>(['personal', 'general'])
 const CATEGORIES = new Set<ActionPlanExecutionFeedCategory>([

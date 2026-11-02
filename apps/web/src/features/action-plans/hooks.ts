@@ -143,10 +143,15 @@ export function useActionPlanDetailQuery(
 export function useActionPlanExecutionFeedQuery(
   establishmentId: string | null,
   viewMode: ActionPlanExecutionFeedViewMode,
-  options?: { category?: ActionPlanExecutionFeedCategory; source?: 'establishment' | 'cross' },
+  options?: {
+    category?: ActionPlanExecutionFeedCategory
+    source?: 'establishment' | 'cross'
+    includeOverdue?: boolean
+  },
 ) {
   const source = options?.source ?? 'establishment'
   const category = options?.category ?? 'all'
+  const includeOverdue = options?.includeOverdue === true && category === 'in_progress'
   const enabled = source === 'cross' || Boolean(establishmentId)
   const queryClient = useQueryClient()
   const refreshEpoch = useRef(0)
@@ -158,23 +163,27 @@ export function useActionPlanExecutionFeedQuery(
   const queryKey = useMemo(
     () =>
       source === 'cross'
-        ? actionPlansQueryKeys.crossExecutionFeed(viewMode, category)
+        ? actionPlansQueryKeys.crossExecutionFeed(viewMode, category, includeOverdue)
         : establishmentId
-          ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode, category)
+          ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode, category, includeOverdue)
           : (['action-plans', 'action-plan-execution-feed', 'none'] as const),
-    [category, establishmentId, source, viewMode],
+    [category, establishmentId, includeOverdue, source, viewMode],
   )
   const fetchPage = useCallback(
     (cursor?: string) => {
       if (source === 'cross') {
-        return fetchCrossActionPlanExecutionFeed(viewMode, { category, cursor })
+        return fetchCrossActionPlanExecutionFeed(viewMode, { category, cursor, includeOverdue })
       }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchActionPlanExecutionFeed(establishmentId, viewMode, { category, cursor })
+      return fetchActionPlanExecutionFeed(establishmentId, viewMode, {
+        category,
+        cursor,
+        includeOverdue,
+      })
     },
-    [category, establishmentId, source, viewMode],
+    [category, establishmentId, includeOverdue, source, viewMode],
   )
   const query = useQuery({
     queryKey,
@@ -366,15 +375,16 @@ export function useActionPlanExecutionFeedQuery(
 export function useCrossActionPlanExecutionFeedPinsQuery(
   viewMode: ActionPlanExecutionFeedViewMode,
   category: ActionPlanExecutionFeedCategory,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; includeOverdue?: boolean },
 ) {
   const queryClient = useQueryClient()
   const continuationEpoch = useRef(0)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [continuationError, setContinuationError] = useState<unknown>(null)
+  const includeOverdue = options?.includeOverdue === true && category === 'in_progress'
   const queryKey = useMemo(
-    () => actionPlansQueryKeys.crossExecutionFeedPins(viewMode, category),
-    [category, viewMode],
+    () => actionPlansQueryKeys.crossExecutionFeedPins(viewMode, category, includeOverdue),
+    [category, includeOverdue, viewMode],
   )
   const query = useQuery({
     queryKey,
@@ -382,6 +392,7 @@ export function useCrossActionPlanExecutionFeedPinsQuery(
       const page = await fetchCrossActionPlanExecutionFeedPins(viewMode, {
         category,
         pageSize: 3,
+        includeOverdue,
       })
       const previous = queryClient.getQueryData<ExecutionPinsCacheState>(queryKey)
       return executionPinsCacheFromPage(page, (previous?.window.generation ?? 0) + 1)
@@ -404,6 +415,7 @@ export function useCrossActionPlanExecutionFeedPinsQuery(
         category,
         cursor: requestedCursor,
         pageSize: 10,
+        includeOverdue,
       })
       if (ticket !== continuationEpoch.current) {
         return
@@ -426,7 +438,7 @@ export function useCrossActionPlanExecutionFeedPinsQuery(
         setIsLoadingMore(false)
       }
     }
-  }, [category, queryClient, queryKey, viewMode])
+  }, [category, includeOverdue, queryClient, queryKey, viewMode])
   const retryStalledContinuation = useCallback(async () => {
     if (
       continuationError instanceof ActionPlansApiError &&

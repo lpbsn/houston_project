@@ -1,3 +1,7 @@
+import { Button } from '@/components/ui/button'
+import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
+import { ActionPlanQuickEdit } from '../components/action-plan-quick-edit'
+import { canShowActionPlanExecutionUpdate } from '../lib/action-plan-permission-hints'
 import { LoaderCircle, MoreHorizontal } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -113,6 +117,8 @@ function ActionPlanExecutionDetailPageContent({
     establishmentId,
     executionId,
   )
+
+  const [isQuickEditing, setIsQuickEditing] = useState(false)
 
   const initialDeepLink = parseDetailDeepLink(locationSearch)
   const validationActionsRef = useRef<HTMLDivElement | null>(null)
@@ -519,6 +525,15 @@ function ActionPlanExecutionDetailPageContent({
         data-testid="execution-detail-frame"
         className="flex w-full flex-1 flex-col"
       >
+      {source !== 'cross' && activeMembership?.establishment_id === establishmentId && (
+        <div className="mx-auto w-full max-w-7xl space-y-3 px-4 pt-3">
+          <div className="flex flex-wrap gap-2">
+            {canShowActionPlanExecutionUpdate(permissionHints) && <Button type="button" variant="outline" onClick={() => setIsQuickEditing((value) => !value)}>Modifier ici</Button>}
+            {getBootstrapPermissionHints(bootstrap).can_create_action_plan && <Button type="button" variant="outline" onClick={() => navigate(`/action-plans/new?from=execution&duplicate=${executionId}`)}>Dupliquer</Button>}
+          </div>
+          {isQuickEditing && canShowActionPlanExecutionUpdate(permissionHints) && <ActionPlanQuickEdit key={executionId} execution={execution} establishmentId={establishmentId} onClose={() => setIsQuickEditing(false)} />}
+        </div>
+      )}
       {isDesktopWeb ? (
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 pt-4 pb-8">
           <TerrainDetailTrailingSlot>

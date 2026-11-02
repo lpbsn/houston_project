@@ -1,4 +1,4 @@
-import { ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, GripVertical, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { TerrainCard, TerrainFieldLabel, TerrainSectionLabel } from '@/components/ui/terrain'
@@ -16,6 +16,7 @@ import {
   ACTION_PLAN_FIELD_ATTR,
 } from '../lib/action-plan-form-guidance'
 import { actionPlanTaskFieldKey } from '../lib/action-plan-field-errors'
+import { reorderDraftTasks } from '../lib/reorder-draft-tasks'
 import type { ActionPlanTaskDraft } from '../lib/action-plan-form-validation'
 import {
   applyAssigneeSelectionToTask,
@@ -47,6 +48,7 @@ type ActionPlanTaskDraftEditorProps = {
   expandAdvancedTaskIds?: ReadonlySet<string> | readonly string[]
   density?: 'default' | 'compact'
   sectionLabel?: string
+  maxTasks?: number
   onTasksChange: (
     update: ActionPlanTaskDraft[] | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[]),
   ) => void
@@ -447,6 +449,7 @@ export function ActionPlanTaskDraftEditor({
   expandAdvancedTaskIds,
   density = 'default',
   sectionLabel = 'Tâches',
+  maxTasks = 10,
   onTasksChange,
   onTaskFieldChange,
 }: ActionPlanTaskDraftEditorProps) {
@@ -456,12 +459,25 @@ export function ActionPlanTaskDraftEditor({
       : new Set(expandAdvancedTaskIds ?? [])
 
   const isCompact = density === 'compact'
+  const [quickTitle, setQuickTitle] = useState('')
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+
+  function moveTask(id: string, targetId: string) {
+    onTasksChange((previous) => reorderDraftTasks(previous, id, targetId))
+  }
+
+  function addQuickTask() {
+    if (!quickTitle.trim() || tasks.length >= maxTasks) return
+    const task = { ...createActionPlanTaskDraftEditorItem(), task: quickTitle.trim() }
+    onTasksChange((previous) => previous.length < maxTasks ? [...previous, task] : previous)
+    setQuickTitle('')
+  }
 
   function addTask() {
-    onTasksChange((previousTasks) => [
+    onTasksChange((previousTasks) => previousTasks.length < maxTasks ? [
       ...previousTasks,
       createActionPlanTaskDraftEditorItem(),
-    ])
+    ] : previousTasks)
   }
 
   function renderTask(task: ActionPlanTaskDraft) {
@@ -500,7 +516,24 @@ export function ActionPlanTaskDraftEditor({
     )
   }
 
-  const taskRows = tasks.map((task) => renderTask(task))
+  const taskRows = tasks.map((task, index) => (
+    <div key={task.id} className="rounded-xl border border-[#E8E6DF] bg-white"
+      onDragOver={(event) => { if (draggedId) event.preventDefault() }}
+      onDrop={(event) => { event.preventDefault(); if (draggedId) moveTask(draggedId, task.id); setDraggedId(null) }}>
+      <div className="flex items-center gap-1 px-3 pt-2 text-[#42433F]">
+        <span draggable aria-label={`Déplacer la tâche ${index + 1}`} title="Glisser pour réordonner"
+          className="cursor-grab p-2"
+          onDragStart={(event) => { setDraggedId(task.id); event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }}
+          onDragEnd={() => setDraggedId(null)}><GripVertical className="size-4" /></span>
+        <span className="flex-1 text-xs font-semibold">Tâche {index + 1}</span>
+        <button type="button" className="min-h-10 min-w-10 disabled:opacity-30" disabled={index === 0}
+          aria-label={`Monter la tâche ${index + 1}`} onClick={() => moveTask(task.id, tasks[index - 1].id)}><ArrowUp className="mx-auto size-4" /></button>
+        <button type="button" className="min-h-10 min-w-10 disabled:opacity-30" disabled={index === tasks.length - 1}
+          aria-label={`Descendre la tâche ${index + 1}`} onClick={() => moveTask(task.id, tasks[index + 1].id)}><ArrowDown className="mx-auto size-4" /></button>
+      </div>
+      {renderTask(task)}
+    </div>
+  ))
 
   return (
     <section className="space-y-2" {...{ [ACTION_PLAN_FIELD_ATTR]: 'tasks' }}>
@@ -511,7 +544,7 @@ export function ActionPlanTaskDraftEditor({
               type="button"
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#E8E6DF] bg-white text-[#1B4FD8] disabled:opacity-40"
               aria-label="Ajouter une tâche"
-              disabled={tasks.length >= 10}
+              disabled={tasks.length >= maxTasks}
               onClick={addTask}
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -536,7 +569,7 @@ export function ActionPlanTaskDraftEditor({
             type="button"
             variant="outline"
             className="h-11 w-full rounded-xl border-dashed border-[#C8C6BF] bg-white text-[#1B4FD8]"
-            disabled={tasks.length >= 10}
+            disabled={tasks.length >= maxTasks}
             onClick={addTask}
           >
             <Plus className="mr-2 h-4 w-4" aria-hidden />
@@ -545,6 +578,12 @@ export function ActionPlanTaskDraftEditor({
         </div>
         </>
       )}
+      <div className="flex gap-2">
+        <Input aria-label="Nouvelle tâche" placeholder="Une tâche, puis Entrée…" value={quickTitle}
+          disabled={tasks.length >= maxTasks} onChange={(event) => setQuickTitle(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); addQuickTask() } }} />
+        <Button type="button" variant="outline" onClick={addQuickTask} disabled={!quickTitle.trim() || tasks.length >= maxTasks}>Ajouter</Button>
+      </div>
       {fieldErrors.tasks ? (
         <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
       ) : null}

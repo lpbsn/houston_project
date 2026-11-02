@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -27,6 +27,19 @@ import { calendarWeekdayLabel } from '../lib/execution-calendar-window'
 
 const DESKTOP_WEEK_COLUMN_MIN_REM = 11
 
+function canDragCalendarDeadline(item: ActionPlanExecutionFeedItem, showEstablishment: boolean) {
+  return (
+    !showEstablishment &&
+    item.status !== 'pending_validation' &&
+    item.permission_hints?.can_update === true
+  )
+}
+
+function CalendarRecordLink({ item }: { item: ActionPlanExecutionFeedItem }) {
+  if (item.status !== 'pending_validation') return null
+  return <span className="block truncate text-[11px] font-medium underline">Ouvrir la fiche</span>
+}
+
 type DesktopExecutionCalendarProps = {
   granularity: ExecutionCalendarGranularity
   days: string[]
@@ -39,6 +52,7 @@ type DesktopExecutionCalendarProps = {
   showEmpty: boolean
   onOpenExecution: (executionId: string) => void
   onOpenDay: (anchor: string) => void
+  onDeadlineDrop?: (executionId: string, date: string) => void
 }
 
 function eventAccessibleLabel(
@@ -87,6 +101,8 @@ function EventCard({
     <button
       type="button"
       data-testid={`calendar-event-${item.id}`}
+      data-calendar-execution={item.id}
+      draggable={canDragCalendarDeadline(item, showEstablishment)}
       className="flex w-full min-w-0 flex-col gap-0.5 rounded-lg border border-black/10 px-2 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
       style={{
         backgroundColor: presentation.chrome.background,
@@ -109,6 +125,7 @@ function EventCard({
           {establishment}
         </span>
       ) : null}
+      <CalendarRecordLink item={item} />
     </button>
   )
 }
@@ -137,6 +154,8 @@ function BandButton({
     <button
       type="button"
       data-testid={`calendar-span-${span.item.id}`}
+      data-calendar-execution={span.item.id}
+      draggable={canDragCalendarDeadline(span.item, showEstablishment)}
       data-continues-before={span.continuesBefore || undefined}
       data-continues-after={span.continuesAfter || undefined}
       className={cn(
@@ -169,6 +188,7 @@ function BandButton({
         ) : null}
       </span>
       {span.continuesAfter ? <ChevronRight className="h-3 w-3 shrink-0" aria-hidden /> : null}
+      <CalendarRecordLink item={span.item} />
     </button>
   )
 }
@@ -228,6 +248,8 @@ function WeekEventLine({
     <button
       type="button"
       data-testid={`calendar-event-${item.id}`}
+      data-calendar-execution={item.id}
+      draggable={canDragCalendarDeadline(item, showEstablishment)}
       className="flex w-full min-w-0 items-start gap-1 px-1 py-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
       aria-label={eventAccessibleLabel(item, timeZone, showEstablishment)}
       title={item.title}
@@ -257,6 +279,7 @@ function WeekEventLine({
           </span>
         ) : null}
       </span>
+      <CalendarRecordLink item={item} />
     </button>
   )
 }
@@ -278,6 +301,8 @@ function MonthEventLine({
     <button
       type="button"
       data-testid={`calendar-event-${item.id}`}
+      data-calendar-execution={item.id}
+      draggable={canDragCalendarDeadline(item, showEstablishment)}
       className="flex w-full min-w-0 items-center gap-1 rounded px-0.5 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#114660]"
       aria-label={eventAccessibleLabel(item, timeZone, showEstablishment)}
       onClick={() => onOpenExecution(item.id)}
@@ -297,6 +322,7 @@ function MonthEventLine({
           {establishment}
         </span>
       ) : null}
+      <CalendarRecordLink item={item} />
     </button>
   )
 }
@@ -321,8 +347,9 @@ function WeekdayHeader({
         <div
           key={day}
           data-testid={`calendar-weekday-${day}`}
+          data-calendar-day={day}
           className={cn(
-            'border-l border-[#E8E6DF] bg-[#FAFAF8] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a] first:border-l-0',
+            'border-l border-[#E8E6DF] bg-[#FAFAF8] group-data-[dragging=true]:bg-[#DDEFE8] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a] first:border-l-0',
             outsideMonth && !day.startsWith(month) && 'bg-[#F5F4F0]',
           )}
         >
@@ -421,8 +448,9 @@ function DesktopWeek({
           <div
             key={day}
             data-testid={`calendar-weekday-${day}`}
+          data-calendar-day={day}
             className={cn(
-              'border-b border-[#E8E6DF] bg-[#FAFAF8] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a]',
+              'border-b border-[#E8E6DF] bg-[#FAFAF8] group-data-[dragging=true]:bg-[#DDEFE8] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a]',
               index > 0 && 'border-l border-[#E8E6DF]',
             )}
           >
@@ -453,6 +481,7 @@ function DesktopWeek({
           <div
             key={column.day}
             data-testid={`calendar-desktop-column-${column.day}`}
+            data-calendar-day={column.day}
             className={cn(
               'flex min-w-0 flex-col divide-y divide-[#E8E6DF] px-1',
               index > 0 && 'border-l border-[#E8E6DF]',
@@ -521,6 +550,7 @@ function DesktopMonthRow({
           {row.days.map((cell) => (
             <div
               key={cell.day}
+              data-calendar-day={cell.day}
               className={cn(
                 'flex min-w-0 flex-col gap-0.5 border-l border-[#E8E6DF] px-1 py-1 first:border-l-0',
                 !cell.day.startsWith(month) && 'bg-[#F5F4F0]',
@@ -599,11 +629,31 @@ function DesktopMonth({
 }
 
 export function DesktopExecutionCalendar(props: DesktopExecutionCalendarProps) {
-  if (props.granularity === 'day') {
-    return <DesktopDay {...props} />
-  }
-  if (props.granularity === 'week') {
-    return <DesktopWeek {...props} />
-  }
-  return <DesktopMonth {...props} />
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const canMove = Boolean(props.onDeadlineDrop) && !props.showEstablishment
+  return <div className="group flex min-h-0 flex-1 flex-col" data-dragging={Boolean(draggedId)}
+    onDragStart={(event) => {
+      const id = (event.target as HTMLElement).closest<HTMLElement>('[data-calendar-execution]')?.dataset.calendarExecution
+      const item = props.items.find((candidate) => candidate.id === id)
+      if (!canMove || !item || !canDragCalendarDeadline(item, Boolean(props.showEstablishment))) {
+        event.preventDefault()
+        return
+      }
+      setDraggedId(item.id)
+      event.dataTransfer.setData('text/plain', item.id)
+      event.dataTransfer.effectAllowed = 'move'
+    }}
+    onDragEnd={() => setDraggedId(null)}
+    onDragOver={(event) => {
+      if (draggedId && (event.target as HTMLElement).closest('[data-calendar-day]')) event.preventDefault()
+    }}
+    onDrop={(event) => {
+      event.preventDefault()
+      const date = (event.target as HTMLElement).closest<HTMLElement>('[data-calendar-day]')?.dataset.calendarDay
+      if (draggedId && date && props.days.includes(date)) props.onDeadlineDrop?.(draggedId, date)
+      setDraggedId(null)
+    }}>
+    {canMove && <p className="px-3 py-2 text-xs text-[#42433F]">Glissez un plan sur une date pour proposer une nouvelle échéance. Un plan à valider ne se déplace pas : ouvrez sa fiche.</p>}
+    {props.granularity === 'day' ? <DesktopDay {...props} /> : props.granularity === 'week' ? <DesktopWeek {...props} /> : <DesktopMonth {...props} />}
+  </div>
 }

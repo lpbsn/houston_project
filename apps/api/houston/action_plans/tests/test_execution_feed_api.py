@@ -1821,3 +1821,47 @@ def test_scheduled_visible_from_gates_feed_and_upcoming(
     assert str(null_visible.id) in upcoming_ids
     assert str(future_visible.id) in upcoming_ids
     assert str(reached.id) in upcoming_ids
+
+
+def test_in_progress_feed_includes_overdue_only_when_requested(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    overdue = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Overdue plan",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        end_at=now - timezone.timedelta(hours=2),
+    )
+    active = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Active plan",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        end_at=now + timezone.timedelta(hours=2),
+    )
+    token = login(api_client, user=owner_membership.user)
+    base = action_plan_execution_feed_url(owner_membership.establishment_id)
+
+    exclusive = api_client.get(
+        base + "?view_mode=general&category=in_progress",
+        **auth_headers(token),
+    )
+    assert exclusive.status_code == 200
+    exclusive_ids = feed_execution_ids(exclusive.json())
+    assert str(active.id) in exclusive_ids
+    assert str(overdue.id) not in exclusive_ids
+
+    inclusive = api_client.get(
+        base + "?view_mode=general&category=in_progress&include_overdue=true",
+        **auth_headers(token),
+    )
+    assert inclusive.status_code == 200
+    inclusive_ids = set(feed_execution_ids(inclusive.json()))
+    assert inclusive_ids == {str(overdue.id), str(active.id)}
+    body = inclusive.json()
+    assert body["section_counts"]["overdue"] >= 1
+    assert body["section_counts"]["in_progress"] >= 1

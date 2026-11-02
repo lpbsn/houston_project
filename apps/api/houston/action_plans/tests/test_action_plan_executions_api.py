@@ -478,3 +478,34 @@ def test_mentioned_out_of_scope_staff_cannot_run_execution_commands(
         **auth_headers(token),
     )
     assert cancel.status_code == 403
+
+
+def test_validate_refuses_direct_done_while_in_progress_even_for_a_validator(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    """A validator cannot skip pending validation by posting validate/ from in progress."""
+    from houston.action_plans.models import ActionPlanExecutionReview
+
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert execution.requires_validation is True
+    token = login(api_client, user=owner_membership.user)
+
+    response = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "validate/"),
+        {"stars": 5, "comment": "Passage direct"},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_action_plan_state"
+    execution.refresh_from_db()
+    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert execution.validated_at is None
+    assert not ActionPlanExecutionReview.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).exists()

@@ -17,6 +17,10 @@ import {
   validateActionPlanExecutionEditForm,
   type ActionPlanExecutionEditFormValues,
 } from '../lib/action-plan-execution-edit-form'
+import {
+  EDIT_EXECUTION_RELOADED_MESSAGE,
+  EDIT_EXECUTION_RELOAD_ERROR,
+} from '../lib/execution-form-reload'
 
 type UseActionPlanExecutionEditSubmitOptions = {
   establishmentId: string
@@ -25,7 +29,7 @@ type UseActionPlanExecutionEditSubmitOptions = {
   staffMode: boolean
   membershipId?: string
   onNavigate: (pathname: string) => void
-  onConflictReload: () => Promise<void>
+  onConflictReload: () => Promise<boolean>
   returnPath?: string
 }
 
@@ -87,12 +91,8 @@ export function useActionPlanExecutionEditSubmit({
             : { status: undefined, code: null, detail: '' }
 
       if (isActionPlanExecutionEditConflictError(apiError)) {
-        setGlobalError(
-          error instanceof ActionPlansApiError && error.detail
-            ? error.detail
-            : 'Ce plan a changé. Les données ont été rechargées.',
-        )
-        await onConflictReload()
+        const reloaded = await onConflictReload()
+        setGlobalError(reloaded ? EDIT_EXECUTION_RELOADED_MESSAGE : EDIT_EXECUTION_RELOAD_ERROR)
         return false
       }
 

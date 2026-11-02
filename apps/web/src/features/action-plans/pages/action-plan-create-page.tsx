@@ -47,7 +47,13 @@ import {
 import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-editor'
 import { useActionPlanCreateSubmit } from '../hooks/use-action-plan-create-submit'
 import { useActionPlanEditSubmit } from '../hooks/use-action-plan-edit-submit'
-import { useActionPlanDetailQuery } from '../hooks'
+import { useActionPlanDetailQuery, useActionPlanExecutionDetailQuery } from '../hooks'
+import { duplicateExecutionDraft } from '../lib/duplicate-execution-draft'
+import {
+  DUPLICATE_EXECUTION_LOAD_ERROR,
+  executionDetailLoadMessage,
+  reloadExecutionDetail,
+} from '../lib/execution-form-reload'
 import {
   ACTION_PLAN_DESKTOP_PILOT_LABEL,
   ACTION_PLAN_DESKTOP_SAVE_LABEL,
@@ -108,7 +114,8 @@ export function ActionPlanCreatePage({
   actionPlanId,
   onBack,
 }: ActionPlanCreatePageProps) {
-  const { navigate } = useAppRoute()
+  const { navigate, search } = useAppRoute()
+  const duplicateId = mode === 'execution' ? new URLSearchParams(search).get('duplicate') : null
   function leave(fallback: string) {
     if (onBack) {
       onBack()
@@ -168,6 +175,9 @@ export function ActionPlanCreatePage({
     isTemplateEdit ? (actionPlanId ?? null) : null,
   )
 
+  const duplicateQuery = useActionPlanExecutionDetailQuery(establishmentId, duplicateId)
+  const [duplicateHydrated, setDuplicateHydrated] = useState<string | null>(null)
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [pilotBusinessUnitId, setPilotBusinessUnitId] = useState('')
@@ -202,6 +212,18 @@ export function ActionPlanCreatePage({
       setIsTemplateHydrated(true)
     })
   }, [isTemplateEdit, isTemplateHydrated, templateDetailQuery.data])
+
+  useEffect(() => {
+    if (!duplicateId || duplicateHydrated === duplicateId || !duplicateQuery.data) return
+    const draft = duplicateExecutionDraft(duplicateQuery.data)
+    startTransition(() => {
+      setTitle(draft.title)
+      setDescription(draft.description)
+      setPilotBusinessUnitId(draft.pilotBusinessUnitId)
+      setTasks(draft.tasks)
+      setDuplicateHydrated(duplicateId)
+    })
+  }, [duplicateId, duplicateHydrated, duplicateQuery.data])
 
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = useMemo(
@@ -504,6 +526,20 @@ export function ActionPlanCreatePage({
 
   if (!establishmentId) {
     return null
+  }
+
+  if (duplicateId && (duplicateQuery.isError || (!duplicateQuery.isLoading && !duplicateQuery.data))) {
+    return (
+      <TerrainErrorState
+        message={executionDetailLoadMessage(duplicateQuery.error, DUPLICATE_EXECUTION_LOAD_ERROR)}
+        onRetry={() => {
+          void reloadExecutionDetail(() => duplicateQuery.refetch(), DUPLICATE_EXECUTION_LOAD_ERROR)
+        }}
+      />
+    )
+  }
+  if (duplicateId && duplicateHydrated !== duplicateId) {
+    return <p className="p-4" role="status">Préparation de la copie…</p>
   }
 
   if (isSignalLinked && !signalId) {
