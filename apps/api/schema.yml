@@ -1926,6 +1926,12 @@ paths:
         schema:
           type: string
       - in: query
+        name: include_overdue
+        schema:
+          type: boolean
+        description: With category=in_progress, also return plans past their deadline.
+          Ignored for every other category. Defaults to false.
+      - in: query
         name: page_size
         schema:
           type: integer
@@ -1990,6 +1996,12 @@ paths:
         name: establishment_id
         schema:
           type: string
+      - in: query
+        name: include_overdue
+        schema:
+          type: boolean
+        description: With category=in_progress, also return pinned plans past their
+          deadline. Ignored for every other category. Defaults to false.
       - in: query
         name: page_size
         schema:
@@ -2541,6 +2553,12 @@ paths:
           type: string
           format: uuid
         required: true
+      - in: query
+        name: include_overdue
+        schema:
+          type: boolean
+        description: With category=in_progress, also return plans past their deadline.
+          Ignored for every other category. Defaults to false.
       - in: query
         name: page_size
         schema:

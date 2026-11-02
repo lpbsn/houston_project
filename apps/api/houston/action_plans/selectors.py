@@ -839,6 +839,7 @@ def filter_action_plan_execution_feed_category(
     queryset: QuerySet[ActionPlanExecution],
     *,
     category: ExecutionFeedCategory,
+    include_overdue: bool = False,
 ) -> QuerySet[ActionPlanExecution]:
     if category == "all":
         return queryset
@@ -850,9 +851,10 @@ def filter_action_plan_execution_feed_category(
             deadline_bucket=DEADLINE_BUCKET_OVERDUE,
         )
     if category == "in_progress":
-        return queryset.filter(status=EXECUTION_STATUS_IN_PROGRESS).exclude(
-            deadline_bucket=DEADLINE_BUCKET_OVERDUE,
-        )
+        active = queryset.filter(status=EXECUTION_STATUS_IN_PROGRESS)
+        if include_overdue:
+            return active
+        return active.exclude(deadline_bucket=DEADLINE_BUCKET_OVERDUE)
     if category == "done":
         return queryset.filter(status=EXECUTION_STATUS_DONE)
     if category == "canceled":
@@ -867,6 +869,7 @@ def action_plan_execution_feed_pins_queryset(
     memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
     category: ExecutionFeedCategory,
+    include_overdue: bool = False,
 ) -> QuerySet[ActionPlanExecution]:
     annotated = annotate_action_plan_execution_feed_sort_keys(
         queryset,
@@ -877,6 +880,7 @@ def action_plan_execution_feed_pins_queryset(
     return filter_action_plan_execution_feed_category(
         annotated.filter(is_feed_pinned=True),
         category=category,
+        include_overdue=include_overdue,
     ).order_by(*action_plan_execution_feed_pin_order_by())
 
 
@@ -887,6 +891,7 @@ def action_plan_execution_feed_list_queryset(
     memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
     category: ExecutionFeedCategory,
+    include_overdue: bool = False,
 ) -> QuerySet[ActionPlanExecution]:
     annotated = annotate_action_plan_execution_feed_sort_keys(
         queryset,
@@ -897,6 +902,7 @@ def action_plan_execution_feed_list_queryset(
     return filter_action_plan_execution_feed_category(
         annotated.filter(is_feed_pinned=False),
         category=category,
+        include_overdue=include_overdue,
     ).order_by(*action_plan_execution_feed_order_by())
 
 
@@ -907,6 +913,7 @@ def action_plan_execution_feed_section_counts(
     memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
     category: ExecutionFeedCategory = "all",
+    include_overdue: bool = False,
 ) -> dict[str, int]:
     """Server totals for the operational feed, with business counts including pins."""
     annotated = annotate_action_plan_execution_feed_sort_keys(
@@ -918,6 +925,7 @@ def action_plan_execution_feed_section_counts(
     pinned_count = filter_action_plan_execution_feed_category(
         annotated.filter(is_feed_pinned=True),
         category=category,
+        include_overdue=include_overdue,
     ).count()
     aggregates = annotated.aggregate(
         pending_validation=Count(

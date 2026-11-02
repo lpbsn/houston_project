@@ -12,6 +12,7 @@ from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.action_plans.api.feed_params import (
     parse_execution_feed_category,
     parse_feed_page_size,
+    parse_include_overdue,
 )
 from houston.action_plans.api.serializers import (
     ActionPlanExecutionDetailSerializer,
@@ -117,6 +118,15 @@ class CrossActionPlanExecutionFeedView(APIView):
                 enum=["all", "pending_validation", "overdue", "in_progress", "done", "canceled"],
                 description="Defaults to all.",
             ),
+            OpenApiParameter(
+                name="include_overdue",
+                required=False,
+                type=bool,
+                description=(
+                    "With category=in_progress, also return plans past their deadline. "
+                    "Ignored for every other category. Defaults to false."
+                ),
+            ),
             OpenApiParameter(name="page_size", required=False, type=int),
             OpenApiParameter(name="cursor", required=False, type=str),
         ],
@@ -144,6 +154,7 @@ class CrossActionPlanExecutionFeedView(APIView):
         )
         if category_error is not None:
             return category_error
+        include_overdue = parse_include_overdue(request.query_params.get("include_overdue"))
         try:
             cursor = parse_action_plan_execution_feed_cursor(
                 request.query_params.get("cursor"),
@@ -161,6 +172,7 @@ class CrossActionPlanExecutionFeedView(APIView):
                 category=category,  # type: ignore[arg-type]
                 page_size=page_size,
                 cursor=cursor,
+                include_overdue=include_overdue,
             )
         except ActionPlanExecutionFeedCursorError as exc:
             return Response(
@@ -248,6 +260,15 @@ class CrossActionPlanExecutionFeedPinsView(APIView):
                 enum=["all", "pending_validation", "overdue", "in_progress", "done", "canceled"],
                 description="Defaults to all.",
             ),
+            OpenApiParameter(
+                name="include_overdue",
+                required=False,
+                type=bool,
+                description=(
+                    "With category=in_progress, also return pinned plans past their deadline. "
+                    "Ignored for every other category. Defaults to false."
+                ),
+            ),
             OpenApiParameter(name="page_size", required=False, type=int),
             OpenApiParameter(name="cursor", required=False, type=str),
         ],
@@ -273,6 +294,7 @@ class CrossActionPlanExecutionFeedPinsView(APIView):
         )
         if category_error is not None:
             return category_error
+        include_overdue = parse_include_overdue(request.query_params.get("include_overdue"))
         raw_page_size = request.query_params.get("page_size")
         page_size = (
             CROSS_EXECUTION_PIN_PREVIEW_SIZE
@@ -287,6 +309,7 @@ class CrossActionPlanExecutionFeedPinsView(APIView):
                 memberships=memberships,
                 view_mode=view_mode,
                 category=category,  # type: ignore[arg-type]
+                include_overdue=include_overdue,
                 page_size=page_size,
                 cursor=cursor,
             )

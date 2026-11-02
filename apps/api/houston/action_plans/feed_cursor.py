@@ -223,6 +223,7 @@ def action_plan_execution_feed_auth_context_hash(
     view_mode: ExecutionFeedViewMode,
     category: ExecutionFeedCategory,
     scope: ExecutionFeedScope,
+    include_overdue: bool = False,
 ) -> str:
     rows = []
     for membership in sorted(memberships, key=lambda item: str(item.id)):
@@ -238,13 +239,18 @@ def action_plan_execution_feed_auth_context_hash(
                 "scope_business_unit_ids": scope_ids,
             }
         )
+    payload = {
+        "category": category,
+        "memberships": rows,
+        "scope": scope,
+        "view_mode": view_mode,
+    }
+    # Absent by default so existing cursors stay valid. Present only for the
+    # in-progress page that also contains overdue plans.
+    if include_overdue:
+        payload["include_overdue"] = True
     raw = json.dumps(
-        {
-            "category": category,
-            "memberships": rows,
-            "scope": scope,
-            "view_mode": view_mode,
-        },
+        payload,
         sort_keys=True,
         separators=(",", ":"),
     )

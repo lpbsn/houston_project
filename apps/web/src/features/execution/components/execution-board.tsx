@@ -10,18 +10,25 @@ import {
   useActionPlanExecutionFeedQuery,
   useCrossActionPlanExecutionFeedPinsQuery,
 } from '@/features/action-plans/hooks'
+import type { ActionPlanExecutionFeedSectionCounts } from '@/features/action-plans/types'
 import type { ExecutionViewMode } from '../lib/types'
 import { ExecutionBoardTransitionDialog } from './execution-board-transition-dialog'
-import type { BoardTarget } from '../lib/execution-board-transition'
+import { resolveBoardCommand, type BoardTarget } from '../lib/execution-board-transition'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { ActionPlanExecutionFeedCard } from './action-plan-execution-feed-card'
+import { useDesktopCalendarSurface } from '../lib/execution-calendar-surface'
 
-const columns: Array<{ category: ActionPlanExecutionFeedCategory; title: string }> = [
-  { category: 'overdue', title: 'En retard' },
-  { category: 'in_progress', title: 'En cours' },
+const columns: Array<{
+  category: ActionPlanExecutionFeedCategory
+  title: string
+  includeOverdue?: boolean
+}> = [
+  { category: 'in_progress', title: 'En cours', includeOverdue: true },
   { category: 'pending_validation', title: 'À valider' },
   { category: 'done', title: 'Terminés' },
 ]
+const moveTargets: BoardTarget[] = ['in_progress', 'pending_validation', 'done', 'canceled']
+
 type BoardProps = {
   establishmentId: string | null
   viewMode: ExecutionViewMode
@@ -30,25 +37,60 @@ type BoardProps = {
 }
 type BoardInteractions = {
   draggedId: string | null
+  dragEnabled: boolean
   onDrag: (id: string | null) => void
   onMove: (id: string, target: BoardTarget) => void
+}
+
+function columnCount(
+  category: ActionPlanExecutionFeedCategory,
+  counts: ActionPlanExecutionFeedSectionCounts | null | undefined,
+  includeOverdue: boolean,
+): number | undefined {
+  if (!counts || category === 'all') return undefined
+  if (includeOverdue && category === 'in_progress') return counts.in_progress + counts.overdue
+  return counts[category]
+}
+
+function moveOptions(item: ActionPlanExecutionFeedItem) {
+  return moveTargets.flatMap((target) => {
+    const command = resolveBoardCommand(item, target)
+    if (!command) return []
+    const label =
+      command === 'markDone'
+        ? item.requires_validation
+          ? 'Envoyer en validation'
+          : 'Terminer'
+        : command === 'validate'
+          ? 'Valider'
+          : command === 'reopen'
+            ? 'Rouvrir'
+            : 'Annuler'
+    return [{ target, label }]
+  })
 }
 
 function BoardColumn({
   category,
   title,
+  includeOverdue = false,
   establishmentId,
   viewMode,
   source,
   onOpenExecution,
   draggedId,
+  dragEnabled,
   onDrag,
   onMove,
 }: BoardProps & BoardInteractions & (typeof columns)[number]) {
-  // Each column uses the existing bounded cursor feed; never fetch all plans.
-  const query = useActionPlanExecutionFeedQuery(establishmentId, viewMode, { category, source })
+  const query = useActionPlanExecutionFeedQuery(establishmentId, viewMode, {
+    category,
+    source,
+    includeOverdue,
+  })
   const crossPins = useCrossActionPlanExecutionFeedPinsQuery(viewMode, category, {
     enabled: source === 'cross',
+    includeOverdue,
   })
   const pinned =
     source === 'cross'
@@ -66,16 +108,16 @@ function BoardColumn({
       [...unwrapActionPlanExecutionFeedItems(pinned), ...ordinary].map((item) => [item.id, item]),
     ).values(),
   ]
-  const count = category === 'all' ? undefined : query.data?.sectionCounts?.[category]
+  const count = columnCount(category, query.data?.sectionCounts, includeOverdue)
+  const canDrop = dragEnabled && category !== 'all'
   return (
     <section
       onDragOver={(event) => {
-        if (draggedId && source !== 'cross' && category !== 'overdue') event.preventDefault()
+        if (draggedId && canDrop) event.preventDefault()
       }}
       onDrop={(event) => {
         event.preventDefault()
-        if (draggedId && source !== 'cross' && category !== 'overdue' && category !== 'all')
-          onMove(draggedId, category)
+        if (draggedId && canDrop) onMove(draggedId, category as BoardTarget)
         onDrag(null)
       }}
       aria-label={title}
@@ -126,38 +168,48 @@ function BoardColumn({
           Plans précédents
         </Button>
       )}
-      {items.map((item) => (
-        <div
-          key={item.id}
-          draggable={source !== 'cross' && canMoveItem(item)}
-          onDragStart={(event) => {
-            onDrag(item.id)
-            event.dataTransfer.setData('text/plain', item.id)
-            event.dataTransfer.effectAllowed = 'move'
-          }}
-          onDragEnd={() => onDrag(null)}
-        >
-          <ActionPlanExecutionFeedCard item={item} onSelect={onOpenExecution} />
-          {source !== 'cross' && canMoveItem(item) && (
-            <select
-              aria-label={`Changer l’état de ${item.title}`}
-              value=""
-              className="mt-1 min-h-10 w-full rounded-lg border bg-white px-2 text-sm text-[#1a1a1a]"
-              onChange={(event) => onMove(item.id, event.target.value as BoardTarget)}
-            >
-              <option value="">Changer l’état…</option>
-              {item.permission_hints.can_mark_done && (
-                <option value={item.requires_validation ? 'pending_validation' : 'done'}>
-                  {item.requires_validation ? 'Envoyer en validation' : 'Terminer'}
-                </option>
-              )}
-              {item.permission_hints.can_validate && <option value="done">Valider</option>}
-              {item.permission_hints.can_reopen && <option value="in_progress">Rouvrir</option>}
-              {item.permission_hints.can_cancel && <option value="canceled">Annuler</option>}
-            </select>
-          )}
-        </div>
-      ))}
+      {items.map((item) => {
+        const options = source === 'cross' ? [] : moveOptions(item)
+        const overdue = item.status === 'in_progress' && item.is_overdue
+        return (
+          <div
+            key={item.id}
+            draggable={dragEnabled && options.length > 0}
+            onDragStart={(event) => {
+              if (!dragEnabled || options.length === 0) {
+                event.preventDefault()
+                return
+              }
+              onDrag(item.id)
+              event.dataTransfer.setData('text/plain', item.id)
+              event.dataTransfer.effectAllowed = 'move'
+            }}
+            onDragEnd={() => onDrag(null)}
+          >
+            {overdue ? (
+              <span className="mb-1 inline-flex rounded-full bg-[#F8E6E4] px-2 py-0.5 text-xs font-semibold text-[#A32620]">
+                En retard
+              </span>
+            ) : null}
+            <ActionPlanExecutionFeedCard item={item} onSelect={onOpenExecution} />
+            {options.length > 0 && (
+              <select
+                aria-label={`Changer l’état de ${item.title}`}
+                value=""
+                className="mt-1 min-h-10 w-full rounded-lg border bg-white px-2 text-sm text-[#1a1a1a]"
+                onChange={(event) => onMove(item.id, event.target.value as BoardTarget)}
+              >
+                <option value="">Changer l’état…</option>
+                {options.map((option) => (
+                  <option key={option.target} value={option.target}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )
+      })}
       {source === 'cross' && crossPins.continuationError && (
         <TerrainErrorState
           message="La suite des épinglés n’a pas pu être chargée."
@@ -192,18 +244,14 @@ function BoardColumn({
   )
 }
 
-function canMoveItem(item: ActionPlanExecutionFeedItem) {
-  const hints = item.permission_hints
-  return Boolean(
-    hints?.can_mark_done || hints?.can_validate || hints?.can_reopen || hints?.can_cancel,
-  )
-}
-
 export function ExecutionBoard(props: BoardProps) {
+  const computer = useDesktopCalendarSurface()
+  const dragEnabled = computer && props.source !== 'cross'
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [move, setMove] = useState<{ id: string; target: BoardTarget } | null>(null)
   const interactions = {
     draggedId,
+    dragEnabled,
     onDrag: setDraggedId,
     onMove: (id: string, target: BoardTarget) => setMove({ id, target }),
   }
@@ -222,8 +270,9 @@ export function ExecutionBoard(props: BoardProps) {
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3">
         <p className="text-sm text-[#42433F]">
-          Ouvrez un plan pour ses tâches. Les changements d’état, par glisser-déposer ou menu,
-          demandent confirmation. Le retard dépend de l’échéance.
+          {dragEnabled
+            ? 'Ouvrez un plan pour ses tâches. Les changements d’état, par glisser-déposer ou menu, demandent confirmation. Le retard s’affiche sur la carte.'
+            : 'Ouvrez un plan pour ses tâches. Sur mobile et tablette tactile, changez l’état depuis le menu de la carte. Le retard s’affiche sur la carte.'}
         </p>
         <Button
           variant="outline"

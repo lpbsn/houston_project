@@ -19,6 +19,7 @@ import {
 import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
 import { ActionPlanTaskDraftEditor } from './action-plan-task-draft-editor'
 import { ActionPlanEventPlanningForm } from './action-plan-event-planning-form'
+import { ActionPlanFormFeedback } from './action-plan-form-feedback'
 
 export function ActionPlanQuickCreate({
   onClose,
@@ -179,18 +180,7 @@ export function ActionPlanQuickCreate({
                 : 'Vous êtes assigné à ce plan.'}{' '}
               Vous pourrez compléter le plan ensuite.
             </p>
-            {Object.keys(submit.fieldErrors).length > 0 && (
-              <ul role="alert" className="list-disc pl-5 text-sm text-destructive">
-                {[...new Set(Object.values(submit.fieldErrors))].map((message) => (
-                  <li key={message}>{message}</li>
-                ))}
-              </ul>
-            )}
-            {submit.submitError && (
-              <p role="alert" className="text-sm text-destructive">
-                {submit.submitError}
-              </p>
-            )}
+            <ActionPlanFormFeedback fieldErrors={submit.fieldErrors} submitError={submit.submitError} />
             <Button type="submit" disabled={!selectedPole || !title.trim()}>
               {submit.isSubmitting ? 'Création…' : 'Créer le plan'}
             </Button>

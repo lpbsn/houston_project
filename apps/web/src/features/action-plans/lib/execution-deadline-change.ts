@@ -5,11 +5,19 @@ import type { ActionPlanExecutionDetail, PatchedActionPlanExecutionUpdateRequest
 export function executionDeadlineChange(
   execution: Pick<
     ActionPlanExecutionDetail,
-    'permission_hints' | 'use_shared_chronology' | 'start_at' | 'end_at' | 'all_day' | 'updated_at'
+    | 'permission_hints'
+    | 'use_shared_chronology'
+    | 'start_at'
+    | 'end_at'
+    | 'all_day'
+    | 'updated_at'
+    | 'status'
   >,
   date: string,
   timeZone: string,
 ): PatchedActionPlanExecutionUpdateRequest {
+  if (execution.status === 'pending_validation')
+    throw new Error('Un plan à valider ne change pas d’échéance depuis le calendrier.')
   if (!execution.permission_hints?.can_update)
     throw new Error('Vous ne pouvez pas modifier ce plan.')
   if (!execution.use_shared_chronology)

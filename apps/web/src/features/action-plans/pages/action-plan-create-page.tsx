@@ -50,6 +50,11 @@ import { useActionPlanEditSubmit } from '../hooks/use-action-plan-edit-submit'
 import { useActionPlanDetailQuery, useActionPlanExecutionDetailQuery } from '../hooks'
 import { duplicateExecutionDraft } from '../lib/duplicate-execution-draft'
 import {
+  DUPLICATE_EXECUTION_LOAD_ERROR,
+  executionDetailLoadMessage,
+  reloadExecutionDetail,
+} from '../lib/execution-form-reload'
+import {
   ACTION_PLAN_DESKTOP_PILOT_LABEL,
   ACTION_PLAN_DESKTOP_SAVE_LABEL,
   actionPlanDesktopInputClassName,
@@ -524,7 +529,14 @@ export function ActionPlanCreatePage({
   }
 
   if (duplicateId && (duplicateQuery.isError || (!duplicateQuery.isLoading && !duplicateQuery.data))) {
-    return <TerrainErrorState message="Impossible de charger le plan à dupliquer." onRetry={() => void duplicateQuery.refetch()} />
+    return (
+      <TerrainErrorState
+        message={executionDetailLoadMessage(duplicateQuery.error, DUPLICATE_EXECUTION_LOAD_ERROR)}
+        onRetry={() => {
+          void reloadExecutionDetail(() => duplicateQuery.refetch(), DUPLICATE_EXECUTION_LOAD_ERROR)
+        }}
+      />
+    )
   }
   if (duplicateId && duplicateHydrated !== duplicateId) {
     return <p className="p-4" role="status">Préparation de la copie…</p>

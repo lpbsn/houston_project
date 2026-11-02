@@ -53,6 +53,23 @@ it('requires confirmation after a drop into validation', async () => {
   expect(state.done).toHaveBeenCalledOnce()
   expect(state.validate).not.toHaveBeenCalled()
 })
+it('does not mark done when a validator drops an in-progress plan on Terminés', () => {
+  state.data.permission_hints.can_validate = true
+  state.data.requires_validation = true
+  render(
+    <ExecutionBoardTransitionDialog
+      establishmentId="site"
+      executionId="plan"
+      target="done"
+      onClose={vi.fn()}
+      onOpenExecution={vi.fn()}
+    />,
+  )
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', true)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }))
+  expect(state.done).not.toHaveBeenCalled()
+  expect(state.validate).not.toHaveBeenCalled()
+})
 it('requires a rating before validating a plan', async () => {
   state.data.status = 'pending_validation'
   state.data.permission_hints.can_validate = true

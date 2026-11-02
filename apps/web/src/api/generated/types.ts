@@ -8723,6 +8723,8 @@ export interface operations {
                 category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
+                /** @description With category=in_progress, also return plans past their deadline. Ignored for every other category. Defaults to false. */
+                include_overdue?: boolean;
                 page_size?: number;
                 /** @description Defaults to general. */
                 view_mode?: "general" | "personal";
@@ -8774,6 +8776,8 @@ export interface operations {
                 category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
+                /** @description With category=in_progress, also return pinned plans past their deadline. Ignored for every other category. Defaults to false. */
+                include_overdue?: boolean;
                 page_size?: number;
                 /** @description Defaults to general. */
                 view_mode?: "general" | "personal";
@@ -9234,6 +9238,8 @@ export interface operations {
                 category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
+                /** @description With category=in_progress, also return plans past their deadline. Ignored for every other category. Defaults to false. */
+                include_overdue?: boolean;
                 page_size?: number;
                 view_mode: "general" | "personal";
             };

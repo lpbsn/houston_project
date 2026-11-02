@@ -268,8 +268,9 @@ describe('CommentSection', () => {
     expect(screen.queryByTestId('execution-plan-attachments')).toBeNull()
 
     fireEvent.click(screen.getByTestId('execution-plan-medias'))
-    expect(screen.getByRole('dialog', { name: 'Médias' })).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Médias' }).length).toBeGreaterThan(1)
+    expect(screen.getByRole('dialog', { name: 'Documents et médias' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Documents et médias' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Médias' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Documents' })).toBeTruthy()
   })
 

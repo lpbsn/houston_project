@@ -37,6 +37,10 @@ import { PlanningOptionRow } from '../components/planning/planning-option-row'
 import { useActionPlanExecutionDetailQuery } from '../hooks'
 import { useActionPlanExecutionEditSubmit } from '../hooks/use-action-plan-execution-edit-submit'
 import {
+  EDIT_EXECUTION_RELOAD_ERROR,
+  reloadExecutionDetail,
+} from '../lib/execution-form-reload'
+import {
   ACTION_PLAN_DESKTOP_PILOT_LABEL,
   ACTION_PLAN_DESKTOP_SAVE_LABEL,
   actionPlanDesktopInputClassName,
@@ -150,10 +154,13 @@ export function ActionPlanExecutionEditPage({
     onNavigate: navigate,
     returnPath: detailBackPath,
     onConflictReload: async () => {
-      const result = await detailQuery.refetch()
-      if (result.data) {
-        setForm(hydrateActionPlanExecutionEditForm(result.data))
-      }
+      const reloaded = await reloadExecutionDetail(
+        () => detailQuery.refetch(),
+        EDIT_EXECUTION_RELOAD_ERROR,
+      )
+      if (!reloaded.ok) return false
+      setForm(hydrateActionPlanExecutionEditForm(reloaded.execution))
+      return true
     },
   })
 

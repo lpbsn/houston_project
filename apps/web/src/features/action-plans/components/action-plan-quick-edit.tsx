@@ -8,6 +8,11 @@ import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { useActionPlanExecutionDetailQuery } from '../hooks'
 import { useActionPlanExecutionEditSubmit } from '../hooks/use-action-plan-execution-edit-submit'
 import { hydrateActionPlanExecutionEditForm } from '../lib/action-plan-execution-edit-form'
+import {
+  EDIT_EXECUTION_RELOAD_ERROR,
+  reloadExecutionDetail,
+} from '../lib/execution-form-reload'
+import { ActionPlanFormFeedback } from './action-plan-form-feedback'
 import { canDefineCrossPoleTasks } from '../lib/action-plan-management-access'
 import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
 import type { ActionPlanExecutionDetail } from '../types'
@@ -48,8 +53,10 @@ export function ActionPlanQuickEdit({
     membershipId: auth.activeMembership?.id,
     onNavigate: onClose,
     onConflictReload: async () => {
-      const fresh = await detail.refetch()
-      if (fresh.data) setForm(hydrateActionPlanExecutionEditForm(fresh.data))
+      const reloaded = await reloadExecutionDetail(() => detail.refetch(), EDIT_EXECUTION_RELOAD_ERROR)
+      if (!reloaded.ok) return false
+      setForm(hydrateActionPlanExecutionEditForm(reloaded.execution))
+      return true
     },
   })
   return (
@@ -152,18 +159,7 @@ export function ActionPlanQuickEdit({
               }
             />
           )}
-          {Object.keys(submit.fieldErrors).length > 0 && (
-            <ul role="alert" className="list-disc pl-5 text-sm text-destructive">
-              {[...new Set(Object.values(submit.fieldErrors))].map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          )}
-          {submit.submitError && (
-            <p role="alert" className="text-sm text-destructive">
-              {submit.submitError}
-            </p>
-          )}
+          <ActionPlanFormFeedback fieldErrors={submit.fieldErrors} submitError={submit.submitError} />
           <div className="flex gap-2">
             <Button type="submit">{submit.isSubmitting ? 'Enregistrement…' : 'Enregistrer'}</Button>
             <Button type="button" variant="outline" onClick={onClose}>

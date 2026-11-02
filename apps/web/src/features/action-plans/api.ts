@@ -57,15 +57,46 @@ export const actionPlansQueryKeys = {
     establishmentId: string,
     viewMode: ActionPlanExecutionFeedViewMode,
     category: ActionPlanExecutionFeedCategory = 'all',
-  ) => ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode, category] as const,
+    includeOverdue = false,
+  ) =>
+    includeOverdue
+      ? ([
+          'action-plans',
+          'action-plan-execution-feed',
+          establishmentId,
+          viewMode,
+          category,
+          'include-overdue',
+        ] as const)
+      : (['action-plans', 'action-plan-execution-feed', establishmentId, viewMode, category] as const),
   crossExecutionFeed: (
     viewMode: ActionPlanExecutionFeedViewMode,
     category: ActionPlanExecutionFeedCategory = 'all',
-  ) => ['action-plans', 'cross-action-plan-execution-feed', viewMode, category] as const,
+    includeOverdue = false,
+  ) =>
+    includeOverdue
+      ? ([
+          'action-plans',
+          'cross-action-plan-execution-feed',
+          viewMode,
+          category,
+          'include-overdue',
+        ] as const)
+      : (['action-plans', 'cross-action-plan-execution-feed', viewMode, category] as const),
   crossExecutionFeedPins: (
     viewMode: ActionPlanExecutionFeedViewMode,
     category: ActionPlanExecutionFeedCategory = 'all',
-  ) => ['action-plans', 'cross-action-plan-execution-feed-pins', viewMode, category] as const,
+    includeOverdue = false,
+  ) =>
+    includeOverdue
+      ? ([
+          'action-plans',
+          'cross-action-plan-execution-feed-pins',
+          viewMode,
+          category,
+          'include-overdue',
+        ] as const)
+      : (['action-plans', 'cross-action-plan-execution-feed-pins', viewMode, category] as const),
   executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
   crossExecutionUpcoming: (viewMode: ActionPlanExecutionFeedViewMode) =>
@@ -211,24 +242,34 @@ export function unwrapActionPlanExecutionFeedItems(
     .map((wrapper) => wrapper.action_plan_execution)
 }
 
+type ExecutionFeedQueryOptions = {
+  category?: ActionPlanExecutionFeedCategory
+  cursor?: string
+  pageSize?: number
+  includeOverdue?: boolean
+}
+
+function executionFeedQuery(viewMode: ActionPlanExecutionFeedViewMode, options: ExecutionFeedQueryOptions) {
+  return {
+    view_mode: viewMode,
+    ...(options.category && options.category !== 'all' ? { category: options.category } : {}),
+    ...(options.includeOverdue ? { include_overdue: true } : {}),
+    ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.pageSize ? { page_size: options.pageSize } : {}),
+  }
+}
+
 export async function fetchActionPlanExecutionFeed(
   establishmentId: string,
   viewMode: ActionPlanExecutionFeedViewMode,
-  options: { category?: ActionPlanExecutionFeedCategory; cursor?: string; pageSize?: number } = {},
+  options: ExecutionFeedQueryOptions = {},
 ): Promise<ActionPlanExecutionFeedResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/action-plan-execution-feed/', {
         params: {
           ...establishmentPath(establishmentId),
-          query: {
-            view_mode: viewMode,
-            ...(options.category && options.category !== 'all'
-              ? { category: options.category }
-              : {}),
-            ...(options.cursor ? { cursor: options.cursor } : {}),
-            ...(options.pageSize ? { page_size: options.pageSize } : {}),
-          },
+          query: executionFeedQuery(viewMode, options),
         },
         headers: getAuthHeaders(accessToken),
       }),
@@ -239,20 +280,13 @@ export async function fetchActionPlanExecutionFeed(
 
 export async function fetchCrossActionPlanExecutionFeed(
   viewMode: ActionPlanExecutionFeedViewMode,
-  options: { category?: ActionPlanExecutionFeedCategory; cursor?: string; pageSize?: number } = {},
+  options: ExecutionFeedQueryOptions = {},
 ): Promise<ActionPlanExecutionFeedResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/cross/action-plan-execution-feed/', {
         params: {
-          query: {
-            view_mode: viewMode,
-            ...(options.category && options.category !== 'all'
-              ? { category: options.category }
-              : {}),
-            ...(options.cursor ? { cursor: options.cursor } : {}),
-            ...(options.pageSize ? { page_size: options.pageSize } : {}),
-          },
+          query: executionFeedQuery(viewMode, options),
         },
         headers: getAuthHeaders(accessToken),
       }),
@@ -263,20 +297,13 @@ export async function fetchCrossActionPlanExecutionFeed(
 
 export async function fetchCrossActionPlanExecutionFeedPins(
   viewMode: ActionPlanExecutionFeedViewMode,
-  options: { category?: ActionPlanExecutionFeedCategory; cursor?: string; pageSize?: number } = {},
+  options: ExecutionFeedQueryOptions = {},
 ): Promise<ActionPlanExecutionFeedPinsResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/cross/action-plan-execution-feed-pins/', {
         params: {
-          query: {
-            view_mode: viewMode,
-            ...(options.category && options.category !== 'all'
-              ? { category: options.category }
-              : {}),
-            ...(options.cursor ? { cursor: options.cursor } : {}),
-            ...(options.pageSize ? { page_size: options.pageSize } : {}),
-          },
+          query: executionFeedQuery(viewMode, options),
         },
         headers: getAuthHeaders(accessToken),
       }),

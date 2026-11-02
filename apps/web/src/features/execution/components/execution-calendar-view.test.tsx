@@ -1706,3 +1706,33 @@ it('proposes a deadline change on desktop drop, without navigating or mutating a
   expect(drop).toHaveBeenCalledWith('drag-plan', '2026-09-10')
   expect(open).not.toHaveBeenCalled()
 })
+
+it('refuses to move a plan waiting for validation and links to its record', () => {
+  vi.stubEnv('VITE_APP_RUNTIME', 'web')
+  installTestMatchMedia(true, 'fine')
+  const drop = vi.fn()
+  const open = vi.fn()
+  const item = wrap({ id: 'pending-plan', title: 'À valider', status: 'pending_validation' })
+  item.action_plan_execution.permission_hints.can_update = true
+  render(
+    <ExecutionCalendarView
+      granularity="week"
+      days={[...MONDAY_WEEK]}
+      month="2026-09"
+      data={{ ...emptyCalendarData, items: [item] }}
+      isLoading={false}
+      isError={false}
+      error={null}
+      onRetry={vi.fn()}
+      onOpenExecution={open}
+      onDeadlineDrop={drop}
+    />,
+  )
+  const card = screen.getByTestId('calendar-event-pending-plan')
+  expect(card.getAttribute('draggable')).toBe('false')
+  fireEvent.dragStart(card, { dataTransfer: { setData: vi.fn(), effectAllowed: '' } })
+  fireEvent.drop(screen.getByTestId('calendar-weekday-2026-09-10'))
+  expect(drop).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByText('Ouvrir la fiche'))
+  expect(open).toHaveBeenCalledWith('pending-plan')
+})

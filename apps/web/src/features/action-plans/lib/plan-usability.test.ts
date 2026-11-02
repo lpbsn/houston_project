@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reorderDraftTasks } from './reorder-draft-tasks'
 import { duplicateExecutionDraft } from './duplicate-execution-draft'
+import { buildActionPlanTaskInputPayloads } from './action-plan-create-payload'
 import { executionDeadlineChange } from './execution-deadline-change'
 import {
   hydrateActionPlanExecutionEditForm,
@@ -19,6 +20,7 @@ const hints = {
   is_pilot_pole_assignee: true,
 }
 const dated = {
+  status: 'in_progress' as const,
   permission_hints: hints,
   use_shared_chronology: true,
   start_at: '2026-10-23T07:00:00Z',
@@ -72,6 +74,39 @@ describe('Plan manipulation safeguards', () => {
     expect(copy.tasks[0]).not.toHaveProperty('observation_id')
     expect(copy).not.toHaveProperty('planningDraft')
   })
+  it('copies every task, including completed ones, as new to-do tasks', () => {
+    const source = {
+      title: 'Podium',
+      description: '',
+      pilot_business_unit: { id: 'jardin' },
+      task_executions: [
+        {
+          id: 'done-task',
+          task: 'Installer',
+          description: 'Déjà fait',
+          position: 2,
+          status: 'done',
+          business_unit: { id: 'jardin' },
+        },
+        {
+          id: 'pending-task',
+          task: 'Décorer',
+          description: '',
+          position: 1,
+          status: 'pending',
+          business_unit: { id: 'jardin' },
+        },
+      ],
+    } as Parameters<typeof duplicateExecutionDraft>[0]
+    const copy = duplicateExecutionDraft(source)
+    expect(copy.tasks.map((task) => task.task)).toEqual(['Décorer', 'Installer'])
+    expect(copy.tasks.every((task) => task.id !== 'done-task' && task.id !== 'pending-task')).toBe(
+      true,
+    )
+    const payload = buildActionPlanTaskInputPayloads(copy.tasks, 'jardin')
+    expect(payload?.map((task) => task.task)).toEqual(['Décorer', 'Installer'])
+    expect(payload?.every((task) => !('status' in task))).toBe(true)
+  })
   it('keeps the civil deadline hour across the daylight-saving change and sends a minimal versioned patch', () => {
     expect(executionDeadlineChange(dated, '2026-10-26', 'Europe/Paris')).toEqual({
       expected_updated_at: 'version-before-edit',
@@ -100,10 +135,19 @@ describe('Plan manipulation safeguards', () => {
     ).toThrow('individuelles')
     expect(() => executionDeadlineChange(dated, '2026-02-30', 'Europe/Paris')).toThrow()
     expect(() => executionDeadlineChange(dated, '2026-10-01', 'Europe/Paris')).toThrow('début')
+    expect(() =>
+      executionDeadlineChange({ ...dated, status: 'pending_validation' }, '2026-10-26', 'Europe/Paris'),
+    ).toThrow('valider')
   })
   it('cannot bypass validation by dropping a plan directly into done', () => {
     const plan = { status: 'in_progress', requires_validation: true, permission_hints: hints }
     expect(resolveBoardCommand(plan, 'done')).toBeNull()
+    expect(
+      resolveBoardCommand(
+        { ...plan, permission_hints: { ...hints, can_validate: true } },
+        'done',
+      ),
+    ).toBeNull()
     expect(resolveBoardCommand(plan, 'pending_validation')).toBe('markDone')
     expect(resolveBoardCommand({ ...plan, requires_validation: false }, 'done')).toBe('markDone')
     expect(

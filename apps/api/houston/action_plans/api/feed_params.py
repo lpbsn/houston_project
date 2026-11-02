@@ -9,6 +9,11 @@ DEFAULT_FEED_PAGE_SIZE = 25
 MAX_FEED_PAGE_SIZE = 50
 
 
+def parse_include_overdue(raw: str | None) -> bool:
+    """Opt-in so an in-progress column can include overdue plans in the same page."""
+    return (raw or "").strip().lower() in {"1", "true"}
+
+
 def parse_feed_page_size(raw: str | None) -> int:
     if raw is None or raw == "":
         return DEFAULT_FEED_PAGE_SIZE
