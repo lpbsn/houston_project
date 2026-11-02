@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from django.test import override_settings
+
 from houston.ai.transcription import transcribe_audio_file
 from houston.establishments.models import Establishment
 from houston.organizations.models import Organization
