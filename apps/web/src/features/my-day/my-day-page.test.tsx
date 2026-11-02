@@ -115,7 +115,13 @@ describe('Ma journée', () => {
     expect(taskLink.getAttribute('href')).toBe('/e/site-1/execution/plan-1')
     fireEvent.click(taskLink)
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/execution/plan-1')
-    fireEvent.click(screen.getByRole('button', { name: 'Partager une observation' }))
+    const observationLink = screen.getByRole('link', { name: 'Partager une observation' })
+    expect(observationLink.getAttribute('href')).toBe('/e/site-1/reporting')
+    expect(observationLink.className).toContain('h-11')
+    expect(observationLink.className).toContain('rounded-full')
+    expect(observationLink.className).toContain('bg-primary')
+    expect(observationLink.className).toContain('hover:!bg-primary')
+    fireEvent.click(observationLink)
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/reporting')
     const plansLink = screen.getByRole('link', { name: 'Voir tous les plans d’exécution' })
     expect(plansLink.getAttribute('href')).toBe('/e/site-1/execution')
@@ -125,6 +131,35 @@ describe('Ma journée', () => {
     expect(notificationsLink.getAttribute('href')).toBe('/notifications-center')
     fireEvent.click(notificationsLink)
     expect(navigate).toHaveBeenLastCalledWith('/notifications-center')
+  })
+
+  it('leaves modified anchor clicks to the browser', async () => {
+    vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
+    const navigate = mount()
+    const links = [
+      await screen.findByRole('link', { name: /Tester le micro/ }),
+      screen.getByRole('link', { name: 'Partager une observation' }),
+      screen.getByRole('link', { name: 'Voir tous les plans d’exécution' }),
+      screen.getByRole('link', { name: 'Voir toutes les notifications' }),
+    ]
+    const modified = [
+      { metaKey: true },
+      { ctrlKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]
+
+    for (const link of links) {
+      for (const init of modified) {
+        expect(fireEvent.click(link, init)).toBe(true)
+      }
+    }
+    expect(navigate).not.toHaveBeenCalled()
+
+    expect(fireEvent.click(links[0])).toBe(false)
+    expect(navigate).toHaveBeenCalledTimes(1)
+    expect(navigate).toHaveBeenCalledWith('/e/site-1/execution/plan-1')
   })
 
   it('groups loaded tasks in product order and pages without dropping them', async () => {

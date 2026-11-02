@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { ArrowRight, ChevronRight, Plus, Sun } from 'lucide-react'
+import type { MouseEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
@@ -26,6 +27,28 @@ const textNavClassName = cn(
   'inline-flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium no-underline outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40',
   terrain.primary,
 )
+
+// The default button variant lightens anchors on hover. This keeps the solid primary already used here.
+const observationCtaClassName = 'h-11 self-start rounded-full px-4 hover:!bg-primary'
+
+function openInPage(
+  event: MouseEvent<HTMLAnchorElement>,
+  href: string,
+  onNavigate: (path: string) => void,
+) {
+  if (
+    event.defaultPrevented
+    || event.button !== 0
+    || event.metaKey
+    || event.ctrlKey
+    || event.shiftKey
+    || event.altKey
+  ) {
+    return
+  }
+  event.preventDefault()
+  onNavigate(href)
+}
 
 type CivilDay = {
   year: number
@@ -192,10 +215,7 @@ function WorkColumn({
                           <a
                             href={taskHref(task)}
                             className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left no-underline outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
-                            onClick={(event) => {
-                              event.preventDefault()
-                              onNavigate(taskHref(task))
-                            }}
+                            onClick={(event) => openInPage(event, taskHref(task), onNavigate)}
                           >
                             <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
                               <div className="min-w-0 flex-1">
@@ -250,10 +270,7 @@ function WorkColumn({
       <a
         href={plansHref}
         className={textNavClassName}
-        onClick={(event) => {
-          event.preventDefault()
-          onNavigate(plansHref)
-        }}
+        onClick={(event) => openInPage(event, plansHref, onNavigate)}
       >
         Voir tous les plans d’exécution
         <ArrowRight className="size-4" aria-hidden />
@@ -351,10 +368,7 @@ function NewsPanel({
           <a
             href={notificationsHref}
             className={textNavClassName}
-            onClick={(event) => {
-              event.preventDefault()
-              onNavigate(notificationsHref)
-            }}
+            onClick={(event) => openInPage(event, notificationsHref, onNavigate)}
           >
             Voir toutes les notifications
             <ArrowRight className="size-4" aria-hidden />
@@ -409,13 +423,14 @@ export function MyDayPage({ establishmentId, onNavigate }: {
               Votre travail, en un coup d’œil.
             </h2>
           </div>
-          <Button
-            type="button"
-            className="h-11 self-start rounded-full px-4"
-            onClick={() => onNavigate(`${base}/reporting`)}
-          >
-            <Plus />
-            Partager une observation
+          <Button asChild className={observationCtaClassName}>
+            <a
+              href={`${base}/reporting`}
+              onClick={(event) => openInPage(event, `${base}/reporting`, onNavigate)}
+            >
+              <Plus />
+              Partager une observation
+            </a>
           </Button>
         </header>
 
