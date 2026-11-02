@@ -1,15 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { CommunicationTabs, CommunicationWorkspace, type CommunicationTab } from '../components/communication-workspace'
+import {
+  CommunicationTabs,
+  CommunicationWorkspace,
+  type CommunicationTab,
+} from '../components/communication-workspace'
 import { LoaderCircle, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
-import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { Input } from '@/components/ui/input'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { useLgViewport } from '@/lib/lg-viewport'
-import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ChatApiError } from '../api'
@@ -27,7 +29,6 @@ import {
 } from '../components/conversation-row'
 import { useOptionalChatRealtime } from '../components/chat-realtime-provider'
 import { filterConversationsByQuery } from '../lib/chat-display'
-import { chatDesktopColumnHeaderClassName } from '../lib/chat-desktop-surface'
 import {
   useChatConversationsQuery,
   useChatStatusQuery,
@@ -58,17 +59,12 @@ function CreateConversationButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#114660]/30 focus-visible:ring-offset-2"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#245d4a]/30 focus-visible:ring-offset-2"
       aria-label="Nouvelle conversation"
       title="Nouvelle conversation"
       onClick={onClick}
     >
-      <span
-        className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-full text-white',
-          terrainBrandAction.bg,
-        )}
-      >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#245d4a] text-white">
         <Plus className="h-4 w-4" strokeWidth={2.5} />
       </span>
     </button>
@@ -92,6 +88,8 @@ export function ChatPage({
   const viewerMembershipId =
     fromList ?? (active?.establishment_id === establishmentId ? active.id : null) ?? null
   const [tab, setTab] = useState<CommunicationTab>('team')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [listFilter, setListFilter] = useState<'all' | 'unread'>('all')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [listCollapsed, setListCollapsed] = useState(false)
@@ -297,9 +295,17 @@ export function ChatPage({
     () => conversationsQuery.data?.items ?? [],
     [conversationsQuery.data?.items],
   )
-  const filteredConversations = useMemo(() => {
+  const namedConversations = useMemo(() => {
     return filterConversationsByQuery(allConversations, search, viewerMembershipId)
   }, [allConversations, search, viewerMembershipId])
+  const filteredConversations = useMemo(() => {
+    if (listFilter !== 'unread') {
+      return namedConversations
+    }
+    return namedConversations.filter(
+      (conversation) => conversation.unread || conversation.unread_count > 0,
+    )
+  }, [listFilter, namedConversations])
 
   const searchActive = search.trim().length > 0
   const showGlobalEmpty =
@@ -308,6 +314,12 @@ export function ChatPage({
     conversationsQuery.isSuccess &&
     allConversations.length > 0 &&
     searchActive &&
+    namedConversations.length === 0
+  const showUnreadEmpty =
+    conversationsQuery.isSuccess &&
+    allConversations.length > 0 &&
+    !showSearchEmpty &&
+    listFilter === 'unread' &&
     filteredConversations.length === 0
 
   if (!establishmentId) {
@@ -356,8 +368,51 @@ export function ChatPage({
     )
   }
 
-  const tabs = <CommunicationTabs tab={tab} onChange={setTab} />
-  if (tab !== 'team') return <ChatPageRoot>{tabs}<CommunicationWorkspace key={`${establishmentId}-${tab}`} establishmentId={establishmentId} tab={tab} onOpenItem={() => setTab('team')} /></ChatPageRoot>
+  function selectTab(next: CommunicationTab) {
+    setSearchOpen(false)
+    setTab(next)
+  }
+
+  const tabs = (
+    <CommunicationTabs
+      tab={tab}
+      onChange={selectTab}
+      searchOpen={searchOpen}
+      onSearch={() => setSearchOpen(true)}
+      compactSearch={!isDesktopWeb}
+    />
+  )
+  const banner = (
+    <div className="shrink-0">
+      <ChatReconnectBanner status={connectionStatus} />
+    </div>
+  )
+
+  const workspaceTab = searchOpen
+    ? 'search'
+    : tab === 'plans' || tab === 'mentions'
+      ? tab
+      : null
+
+  if (workspaceTab) {
+    return (
+      <ChatPageRoot>
+        {tabs}
+        {banner}
+        <CommunicationWorkspace
+          key={`${establishmentId}-${workspaceTab}`}
+          establishmentId={establishmentId}
+          tab={workspaceTab}
+          mode={!searchOpen && isDesktopWeb ? 'pane' : 'direct'}
+          onOpenItem={() => {
+            setSearchOpen(false)
+            setTab('team')
+          }}
+          onCloseSearch={() => setSearchOpen(false)}
+        />
+      </ChatPageRoot>
+    )
+  }
 
   const canCreate = statusQuery.data.can_create_dm || statusQuery.data.can_create_group
   const collapseLabel = listCollapsed
@@ -365,19 +420,43 @@ export function ChatPage({
     : 'Réduire les discussions'
   const CollapseIcon = listCollapsed ? PanelLeftOpen : PanelLeftClose
 
-  const searchHeader = (
-    <TerrainHubSubheader className="border-b border-[#E8E6DF]">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Rechercher une conversation"
-          className="h-8 rounded-full border-[#E8E6DF] bg-[#F5F4F0] px-3 text-sm"
-          data-testid="chat-list-search"
-        />
-        {canCreate ? <CreateConversationButton onClick={() => setCreateOpen(true)} /> : null}
-      </div>
-    </TerrainHubSubheader>
+  const conversationFilters = (
+    <div className="flex gap-1.5" role="group" aria-label="Filtrer les conversations">
+      {(
+        [
+          ['all', 'Toutes'],
+          ['unread', 'Non lues'],
+        ] as const
+      ).map(([value, label]) => {
+        const active = listFilter === value
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => setListFilter(value)}
+            className={cn(
+              'rounded-full px-3 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#265d4c]/40',
+              active
+                ? 'bg-[#e7f2ec] text-[#1d5949]'
+                : 'bg-white text-[#5c6b62] ring-1 ring-[#E8E6DF]',
+            )}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const conversationSearch = (
+    <Input
+      value={search}
+      onChange={(event) => setSearch(event.target.value)}
+      placeholder="Rechercher une conversation"
+      className="h-9 rounded-full border-[#E8E6DF] bg-[#F5F4F0] px-3 text-sm"
+      data-testid="chat-list-search"
+    />
   )
 
   const listBody = (
@@ -409,6 +488,14 @@ export function ChatPage({
           className="mx-3 mt-6"
           title="Aucun résultat"
           description="Aucune conversation ne correspond à cette recherche."
+        />
+      ) : null}
+
+      {showUnreadEmpty ? (
+        <TerrainEmptyState
+          className="mx-3 mt-6"
+          title="Aucune conversation non lue"
+          description="Toutes les conversations affichées sont à jour."
         />
       ) : null}
 
@@ -538,36 +625,56 @@ export function ChatPage({
           >
             <div
               className={cn(
-                chatDesktopColumnHeaderClassName,
-                listCollapsed ? 'relative justify-center px-0' : 'gap-2',
+                'relative shrink-0 border-b border-[#E8E6DF] bg-white',
+                listCollapsed ? 'flex h-14 items-center justify-center px-1' : 'px-3 py-3',
               )}
             >
-              {listCollapsed ? null : (
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Rechercher une conversation"
-                  className="h-8 min-w-0 flex-1 rounded-full border-[#E8E6DF] bg-[#F5F4F0] px-3 text-sm"
-                  data-testid="chat-list-search"
-                />
+              {listCollapsed ? (
+                <>
+                  {canCreate ? (
+                    <CreateConversationButton onClick={() => setCreateOpen(true)} />
+                  ) : null}
+                  <button
+                    type="button"
+                    className="absolute right-0 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#7D7B75] outline-none hover:bg-[#F5F4F0] hover:text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#265d4c]/30"
+                    aria-label={collapseLabel}
+                    title={collapseLabel}
+                    aria-pressed={listCollapsed}
+                    data-testid="chat-discussions-collapse"
+                    onClick={() => setListCollapsed((current) => !current)}
+                  >
+                    <CollapseIcon className="h-4 w-4" aria-hidden />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h2 className="min-w-0 text-base font-semibold tracking-tight text-[#1a1a1a]">
+                      Conversations
+                    </h2>
+                    <div className="flex shrink-0 items-center">
+                      {canCreate ? (
+                        <CreateConversationButton onClick={() => setCreateOpen(true)} />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-[#7D7B75] outline-none hover:bg-[#F5F4F0] hover:text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#265d4c]/30"
+                        aria-label={collapseLabel}
+                        title={collapseLabel}
+                        aria-pressed={listCollapsed}
+                        data-testid="chat-discussions-collapse"
+                        onClick={() => setListCollapsed((current) => !current)}
+                      >
+                        <CollapseIcon className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {conversationSearch}
+                    {conversationFilters}
+                  </div>
+                </>
               )}
-              {canCreate ? (
-                <CreateConversationButton onClick={() => setCreateOpen(true)} />
-              ) : null}
-              <button
-                type="button"
-                className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#7D7B75] outline-none hover:bg-[#F5F4F0] hover:text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#114660]/30',
-                  listCollapsed && 'absolute right-0 top-1/2 -translate-y-1/2',
-                )}
-                aria-label={collapseLabel}
-                title={collapseLabel}
-                aria-pressed={listCollapsed}
-                data-testid="chat-discussions-collapse"
-                onClick={() => setListCollapsed((current) => !current)}
-              >
-                <CollapseIcon className="h-4 w-4" aria-hidden />
-              </button>
             </div>
             <div
               className={cn(
@@ -588,11 +695,7 @@ export function ChatPage({
               />
             ) : (
               <>
-                <div
-                  className={chatDesktopColumnHeaderClassName}
-                  data-testid="chat-desktop-empty-header"
-                  aria-hidden="true"
-                />
+                <div className="sr-only" data-testid="chat-desktop-empty-header" aria-hidden="true" />
                 <div
                   className="flex flex-1 items-center justify-center px-6"
                   data-testid="chat-desktop-empty"
@@ -618,7 +721,18 @@ export function ChatPage({
         <ChatReconnectBanner status={connectionStatus} />
       </div>
 
-      {searchHeader}
+      <div className="shrink-0 border-b border-[#E8E6DF] bg-white px-3 py-3">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="min-w-0 text-base font-semibold tracking-tight text-[#1a1a1a]">
+            Conversations
+          </h2>
+          {canCreate ? <CreateConversationButton onClick={() => setCreateOpen(true)} /> : null}
+        </div>
+        <div className="space-y-2">
+          {conversationSearch}
+          {conversationFilters}
+        </div>
+      </div>
 
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3 pt-3"

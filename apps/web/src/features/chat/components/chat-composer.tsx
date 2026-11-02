@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ClipboardEve
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import {
@@ -286,8 +285,8 @@ export function ChatComposer({
   return (
     <footer
       className={cn(
-        'shrink-0 border-t border-[#E8E6DF] bg-[#F5F4F0]',
-        'px-3 pt-2 pb-[max(0.75rem,var(--app-safe-bottom))]',
+        'shrink-0 border-t border-[#e4eae4] bg-white',
+        'px-3 pt-3 pb-[max(0.75rem,var(--app-safe-bottom))]',
       )}
       onDragOver={(event) => event.preventDefault()}
       onDrop={handleDrop}
@@ -295,7 +294,7 @@ export function ChatComposer({
       {reply ? (
         <div className="mb-2 flex items-start justify-between gap-2 rounded-xl border border-[#E8E6DF] bg-white px-3 py-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-[#3A7A96]">
+            <p className="text-[11px] font-semibold text-[#1d5949]">
               Réponse à {reply.authorDisplayName}
             </p>
             <p className="truncate text-xs text-[#7D7B75]">
@@ -359,7 +358,7 @@ export function ChatComposer({
         </ul>
       ) : null}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-1.5 rounded-[13px] border border-[#dce6dd] bg-white p-1.5 shadow-[0_1px_2px_rgba(31,86,53,0.05)]">
         <input
           ref={fileInputRef}
           type="file"
@@ -394,8 +393,8 @@ export function ChatComposer({
           placeholder="Écrire un message…"
           rows={1}
           className={cn(
-            'min-h-11 max-h-32 flex-1 resize-none rounded-2xl border border-[#E8E6DF] bg-white px-3 py-2.5 text-base md:text-sm',
-            'text-[#1a1a1a] placeholder:text-[#a3a19a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
+            'min-h-11 max-h-32 flex-1 resize-none rounded-lg border-0 bg-transparent px-2 py-2.5 text-base md:text-sm',
+            'text-[#1a1a1a] placeholder:text-[#a3a19a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#245d4a]/30',
           )}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -406,17 +405,13 @@ export function ChatComposer({
         />
         <Button
           type="button"
-          size="icon"
-          className={cn(
-            'h-11 w-11 shrink-0 rounded-full text-white',
-            terrainBrandAction.bg,
-            terrainBrandAction.hover,
-          )}
+          className="h-10 shrink-0 rounded-lg bg-[#245d4a] px-3 text-white hover:bg-[#1e4e3e]"
           disabled={!canSend}
           onClick={handleSubmit}
           aria-label="Envoyer"
         >
-          <SendHorizonal className="h-5 w-5" />
+          Envoyer
+          <SendHorizonal className="h-4 w-4" />
         </Button>
       </div>
       <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">

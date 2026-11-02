@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { TerrainDialog } from '@/components/ui/terrain'
 import { fetchActionPlanExecutionDetail } from '@/features/action-plans/api'
 import { commentTool } from '@/features/chat/workspace-api'
+import { commentsQueryKeys } from '../api'
 import type { ExecutionCommentListItem } from '../types'
 
 export function CommentTools({
@@ -33,7 +34,7 @@ export function CommentTools({
     onSuccess: async (_, body) => {
       await Promise.all([
         client.invalidateQueries({
-          queryKey: ['comments', 'action-plan-execution', establishmentId, executionId],
+          queryKey: commentsQueryKeys.executionList(establishmentId, executionId),
         }),
         client.invalidateQueries({ queryKey: ['action-plans'] }),
         client.invalidateQueries({ queryKey: ['chat', 'workspace', establishmentId] }),

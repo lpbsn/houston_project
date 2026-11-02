@@ -33,18 +33,23 @@ export function MessageTools({
   })
   return (
     <>
-      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-1.5 text-xs">
         <button
           type="button"
           disabled={mutation.isPending}
           aria-pressed={message.acknowledged ?? false}
-          aria-label="Accuser réception"
+          aria-label={
+            message.acknowledgement_count
+              ? `Accuser réception, ${message.acknowledgement_count}`
+              : 'Accuser réception'
+          }
           onClick={() =>
             mutation.mutate({ operation: 'acknowledge', active: !message.acknowledged })
           }
-          className="rounded-full border bg-white px-3 py-1.5 text-[#114660]"
+          className="inline-flex min-h-8 items-center gap-1 rounded-full border border-[#E8E6DF] bg-white px-2.5 text-[#1d5949] outline-none focus-visible:ring-2 focus-visible:ring-[#265d4c]/40"
         >
-          👍 {message.acknowledgement_count || ''}
+          <span aria-hidden="true">👍</span>
+          {message.acknowledgement_count ? <span>{message.acknowledgement_count}</span> : null}
         </button>
         <button
           type="button"
@@ -56,7 +61,7 @@ export function MessageTools({
             )
             setOpen(true)
           }}
-          className="rounded-full border bg-white px-3 py-1.5 text-[#114660]"
+          className="inline-flex min-h-8 items-center rounded-full border border-[#E8E6DF] bg-white px-2.5 text-[#1d5949] outline-none focus-visible:ring-2 focus-visible:ring-[#265d4c]/40"
         >
           {message.observation_created ? 'Observation envoyée' : 'Créer une observation'}
         </button>

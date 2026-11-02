@@ -107,7 +107,12 @@ describe('Ma journée', () => {
     expect(screen.queryByText('Ouvrir')).toBeNull()
     expect(screen.queryByRole('button', { name: /Discuter/ })).toBeNull()
     expect(screen.queryByText(/actualités restent secondaires/)).toBeNull()
-    expect(screen.getByText('Aucune notification pour le moment.')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Partager une observation' })).toBeNull()
+    expect(screen.queryByText('Ce qui vous concerne')).toBeNull()
+    expect(screen.getByRole('heading', { level: 3, name: 'Dernières nouvelles' })).toBeTruthy()
+    expect(screen.getByText('Activité récente').className).toContain('text-[#676560]')
+    expect(screen.getByText('Aucune notification pour le moment.').className).toContain('text-[#676560]')
+    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.').className).toContain('text-[#7D7B75]')
 
     const taskLink = screen.getByRole('link', {
       name: /Contrôler la réparation du projecteur dans la salle de séminaire nord/,
@@ -115,14 +120,6 @@ describe('Ma journée', () => {
     expect(taskLink.getAttribute('href')).toBe('/e/site-1/execution/plan-1')
     fireEvent.click(taskLink)
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/execution/plan-1')
-    const observationLink = screen.getByRole('link', { name: 'Partager une observation' })
-    expect(observationLink.getAttribute('href')).toBe('/e/site-1/reporting')
-    expect(observationLink.className).toContain('h-11')
-    expect(observationLink.className).toContain('rounded-full')
-    expect(observationLink.className).toContain('bg-primary')
-    expect(observationLink.className).toContain('hover:!bg-primary')
-    fireEvent.click(observationLink)
-    expect(navigate).toHaveBeenLastCalledWith('/e/site-1/reporting')
     const plansLink = screen.getByRole('link', { name: 'Voir tous les plans d’exécution' })
     expect(plansLink.getAttribute('href')).toBe('/e/site-1/execution')
     fireEvent.click(plansLink)
@@ -138,7 +135,6 @@ describe('Ma journée', () => {
     const { navigate } = mount()
     const links = [
       await screen.findByRole('link', { name: /Tester le micro/ }),
-      screen.getByRole('link', { name: 'Partager une observation' }),
       screen.getByRole('link', { name: 'Voir tous les plans d’exécution' }),
       screen.getByRole('link', { name: 'Voir toutes les notifications' }),
     ]
@@ -277,6 +273,60 @@ describe('Ma journée', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Nouvelle 1/ }))
     expect(notifications.select).toHaveBeenCalledWith(expect.objectContaining({ id: 'note-1' }))
+  })
+
+  it('shows the activity feed as a secondary panel with type icons', async () => {
+    vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
+    notifications.items = [
+      notification({
+        id: 'plan',
+        title: 'Nouveau plan d’action',
+        body: 'Une exécution de plan d’action vous a été assignée.',
+        event_key: 'action_plan.execution.created',
+        subject_type: 'action_plan_execution',
+      }),
+      notification({
+        id: 'mention',
+        title: 'Mention',
+        body: 'Vous avez été mentionné dans un commentaire.',
+        event_key: 'comment.mention.created',
+        subject_type: 'comment',
+      }),
+      notification({
+        id: 'message',
+        title: 'Message reçu',
+        body: 'Ouvrez la conversation pour lire le message.',
+        event_key: 'chat.message.received',
+        subject_type: 'chat_conversation',
+      }),
+      notification({
+        id: 'reopened',
+        title: 'Plan repris',
+        event_key: 'action_plan.execution.reopened',
+        subject_type: 'action_plan_execution',
+      }),
+    ]
+    mount()
+
+    expect(await screen.findByText('Tester le micro')).toBeTruthy()
+    const panel = screen.getByRole('complementary', { name: 'Dernières nouvelles' })
+    expect(panel.innerHTML).toContain('bg-[#F1EDEA]')
+    expect(panel.innerHTML).not.toContain('bg-white')
+
+    const plan = screen.getByRole('button', { name: /Nouveau plan d’action/ })
+    const mention = screen.getByRole('button', { name: /Mention/ })
+    const message = screen.getByRole('button', { name: /Message reçu/ })
+    const reopened = screen.getByRole('button', { name: /Plan repris/ })
+    expect(plan.innerHTML).toContain('bg-[#D1E6F6]')
+    expect(plan.innerHTML).toContain('text-[#3A7A96]')
+    expect(mention.innerHTML).toContain('bg-[#E4D9F8]')
+    expect(mention.innerHTML).toContain('text-[#5137A1]')
+    expect(message.innerHTML).toContain('bg-[#CDE8DC]')
+    expect(message.innerHTML).toContain('text-[#3C7E63]')
+    expect(reopened.innerHTML).toContain('bg-[#EEF2FF]')
+    expect(screen.getByText('Une exécution de plan d’action vous a été assignée.').className).toContain('text-[#676560]')
+    expect(plan.querySelector('.text-xs')?.className).toContain('text-[#676560]')
+    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.').className).toContain('text-[#7D7B75]')
   })
 
   it('keeps the work queue usable when notifications fail', async () => {

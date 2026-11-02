@@ -1,11 +1,14 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { ArrowRight, ChevronRight, Plus, Sun } from 'lucide-react'
+import { ArrowRight, AtSign, Bell, ChevronRight, ClipboardList, Mail, Sun } from 'lucide-react'
 import type { MouseEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { useNotificationSelection, useNotificationsInfiniteQuery } from '@/features/notifications/hooks'
-import { formatNotificationRelativeTime } from '@/features/notifications/lib/notification-display'
+import {
+  formatNotificationRelativeTime,
+  getNotificationIconVariant,
+} from '@/features/notifications/lib/notification-display'
 import type { NotificationItem } from '@/features/notifications/types'
 import { terrain, terrainCardClassName, terrainSectionDotVariants } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -28,8 +31,8 @@ const textNavClassName = cn(
   terrain.primary,
 )
 
-// The default button variant lightens anchors on hover. This keeps the solid primary already used here.
-const observationCtaClassName = 'h-11 self-start rounded-full px-4 hover:!bg-primary'
+// 12–14px copy on the beige feed (#F1EDEA) and its row hover (#E9E4DE). terrain.muted is below 4.5:1 there.
+const activitySecondaryTextClassName = 'text-[#676560]'
 
 function openInPage(
   event: MouseEvent<HTMLAnchorElement>,
@@ -289,6 +292,37 @@ type NewsPanelProps = {
   onNavigate: (path: string) => void
 }
 
+function activityIcon(notification: NotificationItem) {
+  if (
+    notification.subject_type === 'chat_conversation'
+    || notification.event_key === 'chat.message.received'
+  ) {
+    return {
+      icon: Mail,
+      iconClassName: 'text-[#3C7E63]',
+      containerClassName: 'bg-[#CDE8DC]',
+    }
+  }
+  if (notification.event_key === 'comment.mention.created') {
+    return {
+      icon: AtSign,
+      iconClassName: 'text-[#5137A1]',
+      containerClassName: 'bg-[#E4D9F8]',
+    }
+  }
+  if (
+    notification.event_key === 'action_plan.execution.created'
+    || notification.event_key === 'action_plan.execution.created_from_signal'
+  ) {
+    return {
+      icon: ClipboardList,
+      iconClassName: 'text-[#3A7A96]',
+      containerClassName: 'bg-[#D1E6F6]',
+    }
+  }
+  return getNotificationIconVariant(notification.event_key, notification.subject_type)
+}
+
 function NewsPanel({
   items,
   isPending,
@@ -301,19 +335,22 @@ function NewsPanel({
   const hasItems = items.length > 0
 
   return (
-    <aside className="min-w-0 space-y-3">
-      <div>
-        <h3 className="text-lg font-semibold">Dernières nouvelles</h3>
-        <p className={cn('mt-1 text-sm', terrain.muted)}>Ce qui vous concerne</p>
-      </div>
-      <div className={terrainCardClassName()}>
+    <aside className="min-w-0" aria-labelledby="my-day-activity-heading">
+      <div className="rounded-[14px] border border-[#E8E6DF] bg-[#F1EDEA]">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
+          <h3 id="my-day-activity-heading" className="flex items-center gap-2 text-base font-semibold">
+            <Bell className={cn('size-4 shrink-0', terrain.muted)} aria-hidden />
+            Dernières nouvelles
+          </h3>
+          <p className={cn('text-xs', activitySecondaryTextClassName)}>Activité récente</p>
+        </div>
         {isPending && !hasItems ? (
-          <p role="status" className={cn('px-4 py-3 text-sm', terrain.muted)}>
+          <p role="status" className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', activitySecondaryTextClassName)}>
             Chargement des notifications…
           </p>
         ) : null}
         {isError && !hasItems ? (
-          <div className="px-4 py-3" role="alert">
+          <div className="border-t border-[#E4DFD8] px-4 py-3" role="alert">
             <p className="text-sm">Les notifications sont momentanément indisponibles.</p>
             <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>
               Réessayer
@@ -321,30 +358,45 @@ function NewsPanel({
           </div>
         ) : null}
         {!isPending && !isError && !hasItems ? (
-          <p className={cn('px-4 py-3 text-sm', terrain.muted)}>Aucune notification pour le moment.</p>
+          <p className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', activitySecondaryTextClassName)}>
+            Aucune notification pour le moment.
+          </p>
         ) : null}
         {hasItems ? (
-          <ul className="divide-y divide-[#E8E6DF]">
+          <ul className="divide-y divide-[#E4DFD8] border-t border-[#E4DFD8]">
             {items.map((notification) => {
               const isUnread = notification.status === 'unread'
+              const icon = activityIcon(notification)
+              const Icon = icon.icon
               return (
                 <li key={notification.id}>
                   <button
                     type="button"
-                    className="w-full px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                    className="group flex w-full items-start gap-3 px-4 py-3 text-left outline-none hover:bg-[#E9E4DE] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
                     onClick={() => onSelect(notification)}
                   >
-                    <span className="relative block pl-4">
+                    <span className="relative mt-0.5 shrink-0">
+                      <span
+                        className={cn(
+                          'flex size-8 items-center justify-center rounded-full',
+                          icon.containerClassName,
+                        )}
+                        aria-hidden
+                      >
+                        <Icon className={cn('size-4', icon.iconClassName)} />
+                      </span>
                       {isUnread ? (
-                        <span className="absolute top-1.5 left-0 size-2 rounded-full bg-[#1B4FD8]" aria-hidden />
+                        <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-[#1B4FD8] ring-2 ring-[#F1EDEA] group-hover:ring-[#E9E4DE]" aria-hidden />
                       ) : null}
-                      <span className="block font-semibold break-words">{notification.title}</span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold break-words">{notification.title}</span>
                       {notification.body ? (
-                        <span className={cn('mt-0.5 block line-clamp-2 text-sm', terrain.muted)}>
+                        <span className={cn('mt-0.5 block line-clamp-2 text-sm', activitySecondaryTextClassName)}>
                           {notification.body}
                         </span>
                       ) : null}
-                      <span className={cn('mt-1 block text-xs', terrain.muted)}>
+                      <span className={cn('mt-1 block text-xs', activitySecondaryTextClassName)}>
                         {formatNotificationRelativeTime(notification.created_at)}
                         {notification.priority === 'urgent' ? ' · Urgent' : null}
                         {isUnread ? <span className="sr-only"> Non lu</span> : null}
@@ -357,14 +409,14 @@ function NewsPanel({
           </ul>
         ) : null}
         {isError && hasItems ? (
-          <div className="border-t border-[#E8E6DF] px-4 py-3" role="alert">
+          <div className="border-t border-[#E4DFD8] px-4 py-3" role="alert">
             <p className="text-sm">Les notifications sont momentanément indisponibles.</p>
             <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>
               Réessayer
             </Button>
           </div>
         ) : null}
-        <div className="border-t border-[#E8E6DF] px-4">
+        <div className="border-t border-[#E4DFD8] px-4">
           <a
             href={notificationsHref}
             className={textNavClassName}
@@ -407,31 +459,20 @@ export function MyDayPage({ establishmentId, onNavigate }: {
   return (
     <div className="@container/day mx-auto w-full min-w-0 max-w-6xl">
       <div className={cn('space-y-6 p-4 @min-[960px]/day:p-6', terrain.foreground)}>
-        <header className="flex flex-col gap-4 @min-[40rem]/day:flex-row @min-[40rem]/day:items-start @min-[40rem]/day:justify-between">
-          <div>
-            {timeZone ? (
-              <p className={cn(
-                'mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em]',
-                terrain.muted,
-              )}
-              >
-                <Sun className={cn('size-3.5', terrain.amber)} aria-hidden />
-                {formatMyDayHeadingDate(timeZone)}
-              </p>
-            ) : null}
-            <h2 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
-              Votre travail, en un coup d’œil.
-            </h2>
-          </div>
-          <Button asChild className={observationCtaClassName}>
-            <a
-              href={`${base}/reporting`}
-              onClick={(event) => openInPage(event, `${base}/reporting`, onNavigate)}
+        <header>
+          {timeZone ? (
+            <p className={cn(
+              'mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em]',
+              terrain.muted,
+            )}
             >
-              <Plus />
-              Partager une observation
-            </a>
-          </Button>
+              <Sun className={cn('size-3.5', terrain.amber)} aria-hidden />
+              {formatMyDayHeadingDate(timeZone)}
+            </p>
+          ) : null}
+          <h2 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
+            Votre travail, en un coup d’œil.
+          </h2>
         </header>
 
         {/* Container query, not a viewport breakpoint: native keeps a max-w-md shell on large screens. */}

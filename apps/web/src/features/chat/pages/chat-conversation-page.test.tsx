@@ -212,6 +212,21 @@ describe('ChatConversationPage', () => {
     expect(screen.getByRole('button', { name: 'Gérer les membres' })).toBeTruthy()
   })
 
+  it('keeps the three notification modes in a compact header control', () => {
+    detailQueryMock.mockReturnValue(buildDetailQueryState())
+    messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+
+    renderConversationPage()
+
+    const select = screen.getByLabelText('Notifications de cette discussion') as HTMLSelectElement
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
+      'Tous les messages',
+      'Mentions uniquement',
+      'Silencieux',
+    ])
+    expect(select.value).toBe('all')
+  })
+
   it('keeps the composer usable while the websocket is disconnected', () => {
     detailQueryMock.mockReturnValue(buildDetailQueryState())
     messagesQueryMock.mockReturnValue(buildMessagesQueryState())

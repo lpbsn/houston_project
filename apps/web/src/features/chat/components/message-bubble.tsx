@@ -171,7 +171,7 @@ export function MessageBubble({
   return (
     <div
       id={`chat-msg-${parsed.id}`}
-      className={cn('flex items-end gap-1', isOwn ? 'justify-end' : 'justify-start')}
+      className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}
       onTouchStart={(event) => {
         touchStartX.current = event.changedTouches[0]?.clientX ?? null
       }}
@@ -186,17 +186,18 @@ export function MessageBubble({
         }
       }}
     >
+      <div className={cn('flex w-fit max-w-[80%] flex-col gap-1', isOwn ? 'items-end' : 'items-start')}>
       <div
         className={cn(
-          'max-w-[80%] rounded-[18px] px-3.5 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.08)]',
+          'max-w-full rounded-[18px] px-3.5 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
           isOwn
-            ? 'bg-[#3A7A96] text-white shadow-[0_1px_3px_rgba(58,122,150,0.2)]'
-            : 'border border-[#E0E0E0] bg-white text-[#1a1a1a]',
+            ? 'bg-[#265d4c] text-white'
+            : 'border border-[#e5eae5] bg-white text-[#1a1a1a]',
           isFailed && 'border border-[#E24B4A]/40',
         )}
       >
         {!isOwn ? (
-          <p className="mb-1 text-[13px] font-semibold text-[#3A7A96]">
+          <p className="mb-1 text-[13px] font-semibold text-[#1d5949]">
             {parsed.authorDisplayName}
           </p>
         ) : null}
@@ -325,22 +326,12 @@ export function MessageBubble({
             })}
           </ul>
         ) : null}
-        {establishmentId && conversationId && !isLocalMessage(message) && <MessageTools establishmentId={establishmentId} conversationId={conversationId} message={message} />}
         <div
           className={cn(
             'mt-1 flex items-center justify-end gap-2 text-[10px]',
             isOwn ? 'text-white/80' : 'text-[#888]',
           )}
         >
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 font-semibold"
-            onClick={handleReply}
-            aria-label="Répondre"
-          >
-            <Reply className="h-3 w-3" aria-hidden="true" />
-            Répondre
-          </button>
           <span>{formatChatRelativeTime(parsed.createdAt)}</span>
           {isPending ? <span>Envoi…</span> : null}
           {isPending && onCancel ? (
@@ -358,6 +349,25 @@ export function MessageBubble({
             </button>
           ) : null}
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          className="inline-flex min-h-8 items-center gap-1 rounded-full border border-[#E8E6DF] bg-white px-2.5 text-xs font-semibold text-[#1d5949] outline-none focus-visible:ring-2 focus-visible:ring-[#265d4c]/40"
+          onClick={handleReply}
+          aria-label="Répondre"
+        >
+          <Reply className="h-3 w-3" aria-hidden="true" />
+          Répondre
+        </button>
+        {establishmentId && conversationId && !isLocalMessage(message) ? (
+          <MessageTools
+            establishmentId={establishmentId}
+            conversationId={conversationId}
+            message={message}
+          />
+        ) : null}
+      </div>
       </div>
     </div>
   )
