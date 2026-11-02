@@ -332,14 +332,14 @@ function NewsPanel({
   const hasItems = items.length > 0
 
   return (
-    <aside className="min-w-0">
+    <aside className="min-w-0" aria-labelledby="my-day-activity-heading">
       <div className="rounded-[14px] border border-[#E8E6DF] bg-[#F1EDEA]">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
+          <h3 id="my-day-activity-heading" className="flex items-center gap-2 text-base font-semibold">
             <Bell className={cn('size-4 shrink-0', terrain.muted)} aria-hidden />
-            <span className="truncate">Dernières nouvelles</span>
+            Dernières nouvelles
           </h3>
-          <p className={cn('shrink-0 text-xs', terrain.muted)}>Activité récente</p>
+          <p className={cn('text-xs', terrain.muted)}>Activité récente</p>
         </div>
         {isPending && !hasItems ? (
           <p role="status" className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', terrain.muted)}>
@@ -369,7 +369,7 @@ function NewsPanel({
                 <li key={notification.id}>
                   <button
                     type="button"
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left outline-none hover:bg-[#E9E4DE] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                    className="group flex w-full items-start gap-3 px-4 py-3 text-left outline-none hover:bg-[#E9E4DE] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
                     onClick={() => onSelect(notification)}
                   >
                     <span className="relative mt-0.5 shrink-0">
@@ -383,7 +383,7 @@ function NewsPanel({
                         <Icon className={cn('size-4', icon.iconClassName)} />
                       </span>
                       {isUnread ? (
-                        <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-[#1B4FD8] ring-2 ring-[#F1EDEA]" aria-hidden />
+                        <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-[#1B4FD8] ring-2 ring-[#F1EDEA] group-hover:ring-[#E9E4DE]" aria-hidden />
                       ) : null}
                     </span>
                     <span className="min-w-0 flex-1">
