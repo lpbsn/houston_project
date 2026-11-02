@@ -1,26 +1,382 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { ArrowRight, Bell, Clock, MessageCircle, Plus, RefreshCw, Sun } from 'lucide-react'
+import { ArrowRight, ChevronRight, Plus, Sun } from 'lucide-react'
+import type { MouseEvent } from 'react'
 
-import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { NotificationRow } from '@/features/notifications/components/notification-row'
+import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { useNotificationSelection, useNotificationsInfiniteQuery } from '@/features/notifications/hooks'
+import { formatNotificationRelativeTime } from '@/features/notifications/lib/notification-display'
+import type { NotificationItem } from '@/features/notifications/types'
+import { terrain, terrainCardClassName, terrainSectionDotVariants } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import { fetchMyDay, myDayQueryKey, type MyDayTask } from './api'
 
-const sections: { key: MyDayTask['bucket']; title: string; description: string }[] = [
-  { key: 'overdue', title: 'En retard', description: 'À reprendre en priorité.' },
-  { key: 'today', title: 'Aujourd’hui', description: 'Les échéances de votre journée.' },
-  { key: 'upcoming', title: 'À venir', description: 'Pour anticiper la suite.' },
-  { key: 'undated', title: 'Sans échéance', description: 'Du travail à planifier avec votre équipe.' },
+const sections: {
+  key: MyDayTask['bucket']
+  title: string
+  dot?: keyof typeof terrainSectionDotVariants
+}[] = [
+  { key: 'overdue', title: 'En retard', dot: 'danger' },
+  { key: 'today', title: 'Aujourd’hui', dot: 'success' },
+  { key: 'upcoming', title: 'À venir' },
+  { key: 'undated', title: 'Sans échéance' },
 ]
 
-export function formatTaskDeadline(task: MyDayTask, timeZone: string) {
-  if (!task.due_at) return 'Sans échéance'
+const textNavClassName = cn(
+  'inline-flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium no-underline outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40',
+  terrain.primary,
+)
+
+// The default button variant lightens anchors on hover. This keeps the solid primary already used here.
+const observationCtaClassName = 'h-11 self-start rounded-full px-4 hover:!bg-primary'
+
+function openInPage(
+  event: MouseEvent<HTMLAnchorElement>,
+  href: string,
+  onNavigate: (path: string) => void,
+) {
+  if (
+    event.defaultPrevented
+    || event.button !== 0
+    || event.metaKey
+    || event.ctrlKey
+    || event.shiftKey
+    || event.altKey
+  ) {
+    return
+  }
+  event.preventDefault()
+  onNavigate(href)
+}
+
+type CivilDay = {
+  year: number
+  month: number
+  day: number
+}
+
+function civilDay(date: Date, timeZone: string): CivilDay | null {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value)
+  const year = read('year')
+  const month = read('month')
+  const day = read('day')
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
+  return { year, month, day }
+}
+
+function sameCivilDay(left: CivilDay, right: CivilDay): boolean {
+  return left.year === right.year && left.month === right.month && left.day === right.day
+}
+
+function shiftCivilDay(day: CivilDay, days: number): CivilDay {
+  const shifted = new Date(Date.UTC(day.year, day.month - 1, day.day + days))
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  }
+}
+
+function formatClock(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric', month: 'short', timeZone,
-    ...(!task.all_day ? { hour: '2-digit', minute: '2-digit' } as const : {}),
-  }).format(new Date(task.due_at))
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone,
+  }).format(date)
+}
+
+function formatDayMonth(date: Date, timeZone: string, day: CivilDay, today: CivilDay): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone,
+    ...(day.year === today.year ? {} : { year: 'numeric' }),
+  }).format(date)
+}
+
+export function formatMyDayHeadingDate(timeZone: string, now = new Date()): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone,
+  }).format(now)
+}
+
+export function formatTaskDeadline(
+  task: MyDayTask,
+  timeZone: string,
+  now = new Date(),
+): string | null {
+  if (!task.due_at) return null
+  const due = new Date(task.due_at)
+  if (Number.isNaN(due.getTime())) return null
+
+  const dueDay = civilDay(due, timeZone)
+  const today = civilDay(now, timeZone)
+  if (!dueDay || !today) return null
+  if (sameCivilDay(dueDay, today)) {
+    return task.all_day ? null : formatClock(due, timeZone)
+  }
+  if (sameCivilDay(dueDay, shiftCivilDay(today, -1))) {
+    return task.all_day ? 'Hier' : `Hier, ${formatClock(due, timeZone)}`
+  }
+
+  const day = formatDayMonth(due, timeZone, dueDay, today)
+  return task.all_day ? day : `${day}, ${formatClock(due, timeZone)}`
+}
+
+function attributionLabel(shared: boolean): 'Pour moi' | 'Équipe' {
+  // `shared` is unassigned work in the member's poles, not an assignment to everyone.
+  return shared ? 'Équipe' : 'Pour moi'
+}
+
+type WorkColumnProps = {
+  tasks: MyDayTask[]
+  timeZone: string | undefined
+  isPending: boolean
+  isLoadingError: boolean
+  isRefetchError: boolean
+  isFetchNextPageError: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  onRetry: () => void
+  onLoadMore: () => void
+  taskHref: (task: MyDayTask) => string
+  plansHref: string
+  onNavigate: (path: string) => void
+}
+
+function WorkColumn({
+  tasks,
+  timeZone,
+  isPending,
+  isLoadingError,
+  isRefetchError,
+  isFetchNextPageError,
+  isFetchingNextPage,
+  hasNextPage,
+  onRetry,
+  onLoadMore,
+  taskHref,
+  plansHref,
+  onNavigate,
+}: WorkColumnProps) {
+  const showGroups = tasks.length > 0
+
+  return (
+    <section className="min-w-0 space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold">À traiter</h3>
+        <p className={cn('mt-1 text-sm', terrain.muted)}>
+          Vos tâches personnelles et le travail de vos pôles.
+        </p>
+      </div>
+
+      {isPending ? <p role="status">Chargement de votre journée…</p> : null}
+      {isLoadingError ? (
+        <TerrainErrorState message="Impossible de charger votre travail." onRetry={onRetry} />
+      ) : null}
+      {!isPending && !isLoadingError && !showGroups ? (
+        <TerrainEmptyState title="Aucune tâche à traiter pour le moment." />
+      ) : null}
+
+      {showGroups ? (
+        <div className="space-y-5">
+          {sections.map((section) => {
+            const rows = tasks.filter((task) => task.bucket === section.key)
+            if (rows.length === 0) return null
+            return (
+              <section key={section.key}>
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  {section.dot ? (
+                    <span
+                      className={cn('size-2 shrink-0 rounded-full', terrainSectionDotVariants[section.dot])}
+                      aria-hidden
+                    />
+                  ) : null}
+                  {section.title}
+                </h4>
+                <div className={terrainCardClassName()}>
+                  <ul className="divide-y divide-[#E8E6DF]">
+                    {rows.map((task) => {
+                      const deadline = timeZone ? formatTaskDeadline(task, timeZone) : null
+                      return (
+                        <li key={task.id} className="@container/task">
+                          <a
+                            href={taskHref(task)}
+                            className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left no-underline outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                            onClick={(event) => openInPage(event, taskHref(task), onNavigate)}
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold break-words">{task.title}</p>
+                                <p className={cn('mt-0.5 text-sm break-words', terrain.muted)}>
+                                  {task.pole} · {task.execution_title}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-start gap-1 @min-[32rem]/task:items-end">
+                                {deadline ? (
+                                  <p className={cn(
+                                    'text-sm',
+                                    task.bucket === 'overdue' ? cn('font-medium', terrain.danger) : terrain.muted,
+                                  )}
+                                  >
+                                    {deadline}
+                                  </p>
+                                ) : null}
+                                <span className={cn(
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                  task.shared ? 'bg-[#E8E6DF] text-[#555]' : terrain.transcript,
+                                )}
+                                >
+                                  {attributionLabel(task.shared)}
+                                </span>
+                              </div>
+                            </div>
+                            <ChevronRight className="size-4 shrink-0 text-[#a3a19a]" aria-hidden />
+                          </a>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {isFetchNextPageError ? (
+        <p role="alert" className={cn('text-sm', terrain.danger)}>Impossible de charger la suite.</p>
+      ) : null}
+      {isRefetchError ? (
+        <TerrainErrorState message="Impossible d’actualiser votre travail." onRetry={onRetry} />
+      ) : null}
+      {hasNextPage || isFetchNextPageError ? (
+        <Button type="button" variant="outline" disabled={isFetchingNextPage} onClick={onLoadMore}>
+          {isFetchingNextPage ? 'Chargement…' : 'Afficher la suite'}
+        </Button>
+      ) : null}
+      <a
+        href={plansHref}
+        className={textNavClassName}
+        onClick={(event) => openInPage(event, plansHref, onNavigate)}
+      >
+        Voir tous les plans d’exécution
+        <ArrowRight className="size-4" aria-hidden />
+      </a>
+    </section>
+  )
+}
+
+type NewsPanelProps = {
+  items: NotificationItem[]
+  isPending: boolean
+  isError: boolean
+  onRetry: () => void
+  onSelect: (notification: NotificationItem) => void
+  notificationsHref: string
+  onNavigate: (path: string) => void
+}
+
+function NewsPanel({
+  items,
+  isPending,
+  isError,
+  onRetry,
+  onSelect,
+  notificationsHref,
+  onNavigate,
+}: NewsPanelProps) {
+  const hasItems = items.length > 0
+
+  return (
+    <aside className="min-w-0 space-y-3">
+      <div>
+        <h3 className="text-lg font-semibold">Dernières nouvelles</h3>
+        <p className={cn('mt-1 text-sm', terrain.muted)}>Ce qui vous concerne</p>
+      </div>
+      <div className={terrainCardClassName()}>
+        {isPending && !hasItems ? (
+          <p role="status" className={cn('px-4 py-3 text-sm', terrain.muted)}>
+            Chargement des notifications…
+          </p>
+        ) : null}
+        {isError && !hasItems ? (
+          <div className="px-4 py-3" role="alert">
+            <p className="text-sm">Les notifications sont momentanément indisponibles.</p>
+            <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>
+              Réessayer
+            </Button>
+          </div>
+        ) : null}
+        {!isPending && !isError && !hasItems ? (
+          <p className={cn('px-4 py-3 text-sm', terrain.muted)}>Aucune notification pour le moment.</p>
+        ) : null}
+        {hasItems ? (
+          <ul className="divide-y divide-[#E8E6DF]">
+            {items.map((notification) => {
+              const isUnread = notification.status === 'unread'
+              return (
+                <li key={notification.id}>
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                    onClick={() => onSelect(notification)}
+                  >
+                    <span className="relative block pl-4">
+                      {isUnread ? (
+                        <span className="absolute top-1.5 left-0 size-2 rounded-full bg-[#1B4FD8]" aria-hidden />
+                      ) : null}
+                      <span className="block font-semibold break-words">{notification.title}</span>
+                      {notification.body ? (
+                        <span className={cn('mt-0.5 block line-clamp-2 text-sm', terrain.muted)}>
+                          {notification.body}
+                        </span>
+                      ) : null}
+                      <span className={cn('mt-1 block text-xs', terrain.muted)}>
+                        {formatNotificationRelativeTime(notification.created_at)}
+                        {notification.priority === 'urgent' ? ' · Urgent' : null}
+                        {isUnread ? <span className="sr-only"> Non lu</span> : null}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+        {isError && hasItems ? (
+          <div className="border-t border-[#E8E6DF] px-4 py-3" role="alert">
+            <p className="text-sm">Les notifications sont momentanément indisponibles.</p>
+            <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>
+              Réessayer
+            </Button>
+          </div>
+        ) : null}
+        <div className="border-t border-[#E8E6DF] px-4">
+          <a
+            href={notificationsHref}
+            className={textNavClassName}
+            onClick={(event) => openInPage(event, notificationsHref, onNavigate)}
+          >
+            Voir toutes les notifications
+            <ArrowRight className="size-4" aria-hidden />
+          </a>
+        </div>
+      </div>
+    </aside>
+  )
 }
 
 export function MyDayPage({ establishmentId, onNavigate }: {
@@ -38,73 +394,73 @@ export function MyDayPage({ establishmentId, onNavigate }: {
   })
   const notifications = useNotificationsInfiniteQuery(establishmentId)
   const { handleSelectNotification } = useNotificationSelection(establishmentId, { onNavigate })
-  if (!establishmentId) return <p className="p-4">Sélectionnez un établissement.</p>
 
-  const tasks = query.data?.pages.flatMap(page => page.items) ?? []
-  const timeZone = query.data?.pages[0]?.timezone ?? 'Europe/Paris'
-  const latest = notifications.data?.pages.flatMap(page => page.items).slice(0, 5) ?? []
+  if (!establishmentId) {
+    return <p className="p-4 text-sm text-[#1a1a1a]">Sélectionnez un établissement.</p>
+  }
+
+  const tasks = query.data?.pages.flatMap((page) => page.items) ?? []
+  const timeZone = query.data?.pages[0]?.timezone
+  const latest = notifications.data?.pages.flatMap((page) => page.items).slice(0, 5) ?? []
   const base = `/e/${establishmentId}`
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 text-[#1A1A1A] sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#114660]">
-            <Sun className="h-4 w-4" />
-            {new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone }).format(new Date())}
+    <div className="@container/day mx-auto w-full min-w-0 max-w-6xl">
+      <div className={cn('space-y-6 p-4 @min-[960px]/day:p-6', terrain.foreground)}>
+        <header className="flex flex-col gap-4 @min-[40rem]/day:flex-row @min-[40rem]/day:items-start @min-[40rem]/day:justify-between">
+          <div>
+            {timeZone ? (
+              <p className={cn(
+                'mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em]',
+                terrain.muted,
+              )}
+              >
+                <Sun className={cn('size-3.5', terrain.amber)} aria-hidden />
+                {formatMyDayHeadingDate(timeZone)}
+              </p>
+            ) : null}
+            <h2 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
+              Votre travail, en un coup d’œil.
+            </h2>
           </div>
-          <h1 className="text-2xl font-semibold">Ma journée</h1>
-          <p className="mt-1 text-sm text-[#4A4A45]">Votre travail, vos priorités et les dernières nouvelles.</p>
-        </div>
-        <Button onClick={() => onNavigate(`${base}/reporting`)}><Plus className="h-4 w-4" />Partager une observation</Button>
-      </header>
+          <Button asChild className={observationCtaClassName}>
+            <a
+              href={`${base}/reporting`}
+              onClick={(event) => openInPage(event, `${base}/reporting`, onNavigate)}
+            >
+              <Plus />
+              Partager une observation
+            </a>
+          </Button>
+        </header>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Mon travail</h2>
-            <Button variant="outline" onClick={() => onNavigate(`${base}/execution`)}>Tous mes plans<ArrowRight className="h-4 w-4" /></Button>
-          </div>
-          <p className="text-sm text-[#4A4A45]">Vos tâches attribuées et le travail partagé de votre pôle. Ouvrez le plan pour agir ou échanger.</p>
-          {query.isPending && <p role="status">Chargement de votre journée…</p>}
-          {query.isError && <TerrainCard><p role="alert">Impossible de charger votre travail.</p><Button variant="outline" className="mt-3" onClick={() => void query.refetch()}><RefreshCw className="h-4 w-4" />Réessayer</Button></TerrainCard>}
-          {!query.isPending && !query.isError && tasks.length === 0 && (
-            <TerrainCard><h3 className="font-semibold">Aucune tâche à traiter.</h3><p className="mt-2 text-sm text-[#4A4A45]">Consultez vos plans pour retrouver ceux sans tâches ou en attente de validation.</p></TerrainCard>
-          )}
-          {!query.isError && sections.map(section => {
-            const rows = tasks.filter(task => task.bucket === section.key)
-            if (!rows.length) return null
-            return <section key={section.key} className="space-y-3">
-              <h3 className={`font-semibold ${section.key === 'overdue' ? 'text-[#A32620]' : 'text-[#1A1A1A]'}`}>{section.title}</h3>
-              <p className="text-sm text-[#4A4A45]">{section.description}</p>
-              {rows.map(task => <TerrainCard key={task.id} className={section.key === 'overdue' ? 'border-l-4 border-l-[#A32620]' : ''}>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="rounded-md bg-[#E8E6DF] px-2 py-1 font-semibold">{task.pole}</span>
-                  <span className={section.key === 'overdue' ? 'font-semibold text-[#A32620]' : 'text-[#4A4A45]'}><Clock className="mr-1 inline h-3 w-3" />{formatTaskDeadline(task, timeZone)}</span>
-                </div>
-                <h4 className="mt-3 font-semibold">{task.title}</h4>
-                <p className="mt-1 text-sm text-[#4A4A45]">{task.execution_title}</p>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#E8E6DF] pt-3">
-                  <span className="text-xs font-medium text-[#114660]">{task.shared ? 'À partager avec mon pôle' : 'Attribuée à moi'}</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" aria-label={`Discuter : ${task.title}`} onClick={() => onNavigate(`${base}/execution/${task.execution_id}?tab=comments`)}><MessageCircle className="h-4 w-4" />Discuter</Button>
-                    <Button size="sm" onClick={() => onNavigate(`${base}/execution/${task.execution_id}`)}>Ouvrir le plan<ArrowRight className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              </TerrainCard>)}
-            </section>
-          })}
-          {query.hasNextPage && !query.isError && <Button variant="outline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? 'Chargement…' : 'Afficher la suite'}</Button>}
+        {/* Container query, not a viewport breakpoint: native keeps a max-w-md shell on large screens. */}
+        <div className="grid items-start gap-6 @min-[960px]/day:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <WorkColumn
+            tasks={tasks}
+            timeZone={timeZone}
+            isPending={query.isPending}
+            isLoadingError={query.isLoadingError}
+            isRefetchError={query.isRefetchError}
+            isFetchNextPageError={query.isFetchNextPageError}
+            isFetchingNextPage={query.isFetchingNextPage}
+            hasNextPage={Boolean(query.hasNextPage)}
+            onRetry={() => void query.refetch()}
+            onLoadMore={() => void query.fetchNextPage()}
+            taskHref={(task) => `${base}/execution/${task.execution_id}`}
+            plansHref={`${base}/execution`}
+            onNavigate={onNavigate}
+          />
+          <NewsPanel
+            items={latest}
+            isPending={notifications.isPending}
+            isError={notifications.isError}
+            onRetry={() => void notifications.refetch()}
+            onSelect={handleSelectNotification}
+            notificationsHref="/notifications-center"
+            onNavigate={onNavigate}
+          />
         </div>
-        <aside className="space-y-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold"><Bell className="h-5 w-5 text-[#114660]" />Les dernières nouvelles</h2>
-          <p className="text-sm text-[#4A4A45]">Actions, résolutions et échanges : retrouvez les suites qui vous concernent.</p>
-          {notifications.isPending && <p role="status">Chargement des notifications…</p>}
-          {notifications.isError && <p role="alert">Les notifications sont momentanément indisponibles.</p>}
-          {!notifications.isPending && !notifications.isError && latest.length === 0 && <TerrainCard>Aucune notification pour le moment.</TerrainCard>}
-          {latest.map(notification => <NotificationRow key={notification.id} notification={notification} onSelect={handleSelectNotification} />)}
-          <Button variant="outline" onClick={() => onNavigate('/notifications-center')}>Toutes les notifications<ArrowRight className="h-4 w-4" /></Button>
-        </aside>
       </div>
     </div>
   )
