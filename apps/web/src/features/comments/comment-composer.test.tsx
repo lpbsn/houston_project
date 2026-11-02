@@ -162,6 +162,45 @@ describe('CommentComposer', () => {
     revokeObjectURL.mockRestore()
   })
 
+  it('renders the plan composer as a pill and keeps send disabled until there is text', () => {
+    const onSubmit = vi.fn()
+    render(
+      <CommentComposer
+        appearance="plan"
+        establishmentId="est-1"
+        executionId="exec-1"
+        attachEnabled
+        attachTrigger="icon"
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const textarea = screen.getByLabelText('Ajouter un commentaire')
+    const send = screen.getByLabelText('Publier le commentaire')
+    expect(textarea.parentElement?.className).toContain('rounded-full')
+    expect(textarea.parentElement?.contains(screen.getByRole('button', { name: 'Joindre un fichier' }))).toBe(
+      true,
+    )
+    expect(textarea.parentElement?.contains(screen.getByRole('button', { name: 'Dicter un message' }))).toBe(
+      true,
+    )
+    expect(send).toHaveProperty('disabled', true)
+    expect(screen.getByText('0/2000')).toBeTruthy()
+
+    fireEvent.change(textarea, { target: { value: '   ' } })
+    expect(send).toHaveProperty('disabled', true)
+
+    fireEvent.change(textarea, { target: { value: 'Bonjour' } })
+    expect(send).toHaveProperty('disabled', false)
+    expect(screen.getByText('7/2000')).toBeTruthy()
+    fireEvent.click(send)
+    expect(onSubmit).toHaveBeenCalledWith({
+      body: 'Bonjour',
+      mentionedMembershipIds: [],
+      attachmentIds: [],
+    })
+  })
+
   it('uses a paperclip control when attachTrigger is icon', () => {
     render(
       <CommentComposer

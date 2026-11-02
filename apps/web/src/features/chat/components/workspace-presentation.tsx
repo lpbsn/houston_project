@@ -12,8 +12,8 @@ export function workspaceItemKey(item: WorkspaceItem): string {
   return `${item.kind}-${item.id}`
 }
 
-function kindLabel(kind: WorkspaceItem['kind']): 'Équipe' | 'Plan' {
-  return kind === 'plan' ? 'Plan' : 'Équipe'
+function kindLabel(kind: WorkspaceItem['kind']): 'Discussion' | 'Plan' {
+  return kind === 'plan' ? 'Plan' : 'Discussion'
 }
 
 function itemExcerpt(item: WorkspaceItem): string {
@@ -309,7 +309,7 @@ export function WorkspacePreview({
           Aperçu
         </p>
         <span className="inline-flex items-center gap-1 rounded-full bg-[#f4f7f3] px-2 py-0.5 text-[11px] font-medium text-[#3d5348]">
-          {isPlan ? 'Plan d’action' : 'Équipe'}
+          {isPlan ? 'Plan d’action' : 'Discussion'}
         </span>
       </div>
       <h3 className="mt-3 text-lg font-semibold tracking-tight text-[#1a1a1a]">{item.title}</h3>
