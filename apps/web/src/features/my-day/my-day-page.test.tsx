@@ -110,8 +110,9 @@ describe('Ma journée', () => {
     expect(screen.queryByRole('link', { name: 'Partager une observation' })).toBeNull()
     expect(screen.queryByText('Ce qui vous concerne')).toBeNull()
     expect(screen.getByRole('heading', { level: 3, name: 'Dernières nouvelles' })).toBeTruthy()
-    expect(screen.getByText('Activité récente')).toBeTruthy()
-    expect(screen.getByText('Aucune notification pour le moment.')).toBeTruthy()
+    expect(screen.getByText('Activité récente').className).toContain('text-[#676560]')
+    expect(screen.getByText('Aucune notification pour le moment.').className).toContain('text-[#676560]')
+    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.').className).toContain('text-[#7D7B75]')
 
     const taskLink = screen.getByRole('link', {
       name: /Contrôler la réparation du projecteur dans la salle de séminaire nord/,
@@ -323,6 +324,9 @@ describe('Ma journée', () => {
     expect(message.innerHTML).toContain('bg-[#CDE8DC]')
     expect(message.innerHTML).toContain('text-[#3C7E63]')
     expect(reopened.innerHTML).toContain('bg-[#EEF2FF]')
+    expect(screen.getByText('Une exécution de plan d’action vous a été assignée.').className).toContain('text-[#676560]')
+    expect(plan.querySelector('.text-xs')?.className).toContain('text-[#676560]')
+    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.').className).toContain('text-[#7D7B75]')
   })
 
   it('keeps the work queue usable when notifications fail', async () => {
