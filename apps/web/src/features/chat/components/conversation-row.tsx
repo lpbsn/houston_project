@@ -88,8 +88,8 @@ export function ConversationAvatarButton({
     <button
       type="button"
       className={cn(
-        'relative flex h-10 w-10 items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-[#114660]/30 focus-visible:ring-offset-2',
-        selected && 'ring-2 ring-[#114660]/25 ring-offset-2',
+        'relative flex h-10 w-10 items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-[#265d4c]/40 focus-visible:ring-offset-2',
+        selected && 'bg-[#e7f2ec] ring-2 ring-[#245d4a]/25 ring-offset-2',
       )}
       aria-label={title}
       title={title}
@@ -141,9 +141,8 @@ export function ConversationRow({
   return (
     <article
       className={cn(
-        'cursor-pointer rounded-[22px] border bg-white py-2 px-3 transition',
-        isUnread ? 'border-[#4c8543]/35' : 'border-[#E8E6DF]',
-        selected && 'ring-2 ring-[#114660]/25',
+        'cursor-pointer rounded-xl px-2.5 py-2 outline-none transition focus-visible:ring-2 focus-visible:ring-[#265d4c]/40',
+        selected ? 'bg-[#e7f2ec]' : 'hover:bg-[#F5F4F0]',
       )}
       onClick={() => onSelect(conversation.id)}
       onKeyDown={(event) => handleRowKeyDown(event, onSelect, conversation.id)}
@@ -201,7 +200,7 @@ export function ConversationRow({
             ) : (
               <button
                 type="button"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[#7D7B75] outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#114660]/30"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-[#7D7B75] outline-none hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#265d4c]/40"
                 aria-label={`Actions pour ${title}`}
                 onClick={handleActionsClick}
               >
