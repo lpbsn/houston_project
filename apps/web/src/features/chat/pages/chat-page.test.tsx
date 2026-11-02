@@ -1064,7 +1064,11 @@ describe('ChatPage flat conversation list', () => {
     renderChatPage()
     fireEvent.click(screen.getByRole('button', { name: 'Rechercher dans les échanges' }))
 
-    expect(await screen.findByLabelText('Rechercher dans les messages')).toBeTruthy()
+    expect(
+      await screen.findByLabelText('Rechercher dans les messages et commentaires'),
+    ).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: 'Auteur' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Filtres' }))
     expect(screen.getByLabelText('Auteur')).toBeTruthy()
     expect(screen.getByLabelText('Depuis')).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: 'Avec pièce jointe' })).toBeTruthy()
@@ -1073,7 +1077,7 @@ describe('ChatPage flat conversation list', () => {
     )
     expect(screen.queryByPlaceholderText('Rechercher une conversation')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer la recherche' }))
     expect(screen.getByPlaceholderText('Rechercher une conversation')).toBeTruthy()
   })
 

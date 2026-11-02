@@ -63,9 +63,34 @@ it('quitte les résultats pour ouvrir le message dans sa conversation', async ()
     cursor: null,
   })
   const { onOpen } = renderWorkspace()
-  fireEvent.click(await screen.findByText('Le transporteur arrive'))
+  expect(await screen.findByText('Discussion')).toBeTruthy()
+  expect(screen.queryByText('Équipe')).toBeNull()
+  fireEvent.click(screen.getByText('Le transporteur arrive'))
   expect(onOpen).toHaveBeenCalledOnce()
-  expect(navigate).toHaveBeenCalledWith('/e/e1/chat/c1?messageId=m1')
+  expect(navigate).toHaveBeenCalledWith('/chat/c1?messageId=m1')
+})
+
+it('ouvre un commentaire de plan depuis la recherche', async () => {
+  vi.mocked(fetchWorkspace).mockResolvedValue({
+    items: [
+      item({
+        id: 'comment-1',
+        kind: 'plan',
+        parent_id: 'exec-1',
+        title: 'Stocks',
+        body: 'Vérifier les quantités',
+      }),
+    ],
+    cursor: null,
+  })
+  const { onOpen } = renderWorkspace()
+  expect(await screen.findByText('Plan')).toBeTruthy()
+  expect(screen.queryByText('Discussion')).toBeNull()
+  fireEvent.click(screen.getByText('Vérifier les quantités'))
+  expect(onOpen).toHaveBeenCalledOnce()
+  expect(navigate).toHaveBeenCalledWith(
+    '/e/e1/execution/exec-1?tab=comments&commentId=comment-1',
+  )
 })
 
 it('ouvre un aperçu desktop sans naviguer, puis le bouton vers le plan', async () => {
@@ -182,16 +207,26 @@ it('n’affiche pas de pastille non lu sur les mentions', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Restaurant & Bars/ }))
   expect(navigate).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Ouvrir la conversation' }))
-  expect(navigate).toHaveBeenCalledWith('/e/e1/chat/c1?messageId=m1')
+  expect(navigate).toHaveBeenCalledWith('/chat/c1?messageId=m1')
 })
 
 it('conserve auteur, date et pièces jointes dans la recherche', async () => {
   vi.mocked(fetchWorkspace).mockResolvedValue({ items: [], cursor: null })
   renderWorkspace({ tab: 'search', mode: 'pane' })
-  fireEvent.change(await screen.findByLabelText('Auteur'), { target: { value: 'author-1' } })
+  expect(await screen.findByRole('heading', { name: 'Retrouver un échange' })).toBeTruthy()
+  expect(await screen.findByText('Aucun échange trouvé')).toBeTruthy()
+  expect(screen.getByText("Essayez d'autres mots-clés ou ajustez vos filtres.")).toBeTruthy()
+  expect(screen.queryByRole('combobox', { name: 'Auteur' })).toBeNull()
+  expect(screen.queryByRole('checkbox', { name: 'Avec pièce jointe' })).toBeNull()
+  expect(screen.getByText('Auteur · Depuis · Pièces jointes')).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filtres' }))
+  expect(screen.getByRole('button', { name: 'Filtres' }).getAttribute('aria-expanded')).toBe('true')
+  fireEvent.change(screen.getByLabelText('Auteur'), { target: { value: 'author-1' } })
   fireEvent.change(screen.getByLabelText('Depuis'), { target: { value: '2026-03-01' } })
   fireEvent.click(screen.getByRole('checkbox', { name: 'Avec pièce jointe' }))
-  fireEvent.change(screen.getByLabelText('Rechercher dans les messages'), {
+  expect(screen.getByText('3 filtres actifs')).toBeTruthy()
+  fireEvent.change(screen.getByLabelText('Rechercher dans les messages et commentaires'), {
     target: { value: 'livraison' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Rechercher' }))
@@ -208,4 +243,20 @@ it('conserve auteur, date et pièces jointes dans la recherche', async () => {
       }),
     )
   })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Effacer les filtres' }))
+  await waitFor(() => {
+    const last = vi.mocked(fetchWorkspace).mock.calls.at(-1)?.[1]
+    expect(last).toEqual(
+      expect.objectContaining({
+        tab: 'search',
+        q: 'livraison',
+        files_only: false,
+        unresolved: false,
+      }),
+    )
+    expect(last).not.toHaveProperty('author_id')
+    expect(last).not.toHaveProperty('after')
+  })
+  expect(screen.getByText('Auteur · Depuis · Pièces jointes')).toBeTruthy()
 })
