@@ -239,9 +239,11 @@ export function ChatComposer({
     setFiles((current) => [...current, ...accepted].slice(0, CHAT_ATTACHMENTS_MAX_PER_MESSAGE))
   }
 
+  const dictationBusy = dictation.phase === 'recording' || dictation.phase === 'transcribing'
+
   function handleSubmit() {
     const trimmed = trimBodyAndMentions(draft, mentions)
-    if (disabled || dictation.phase === 'transcribing') {
+    if (disabled || dictationBusy) {
       return
     }
     if (!trimmed.body && files.length === 0) {
@@ -306,8 +308,7 @@ export function ChatComposer({
     })
   }
 
-  const transcribing = dictation.phase === 'transcribing'
-  const canSend = !disabled && !transcribing && Boolean(draft.trim() || files.length > 0)
+  const canSend = !disabled && !dictationBusy && Boolean(draft.trim() || files.length > 0)
 
   return (
     <footer
