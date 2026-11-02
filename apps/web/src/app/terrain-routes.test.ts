@@ -521,6 +521,7 @@ describe('resolveTerrainTopbarShowBottomBorder', () => {
 
 describe('getTerrainContentKey', () => {
   it('maps terrain hub routes to stable keys', () => {
+    expect(getTerrainContentKey({ kind: 'static', path: '/my-day' })).toBe('my-day')
     expect(getTerrainContentKey({ kind: 'static', path: '/reporting' })).toBe('reporting')
     expect(getTerrainContentKey({ kind: 'static', path: '/signals' })).toBe('signals')
     expect(getTerrainContentKey({ kind: 'static', path: '/execution' })).toBe('execution')
