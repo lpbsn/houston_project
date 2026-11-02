@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { transcribeAudio } from '@/features/observations/api'
 
 import { CommentComposer, type CommentComposerHandle } from './components/comment-composer'
 import { stripFirstMentionText } from './components/selected-mention-chips'
+
+vi.mock('@/features/observations/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/observations/api')>()
+  return { ...actual, transcribeAudio: vi.fn() }
+})
 
 vi.mock('./hooks', () => ({
   useMentionUserSearchQuery: () => ({
@@ -216,5 +223,59 @@ describe('CommentComposer', () => {
     expect(textarea.parentElement?.contains(attach)).toBe(true)
     expect(screen.queryByText('Joindre un fichier')).toBeNull()
     expect(screen.queryByText(/10 Mo max/)).toBeNull()
+  })
+
+  it('appends dictation without a dialog and blocks publishing while transcribing', async () => {
+    let finish!: (value: { text: string }) => void
+    vi.mocked(transcribeAudio).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    class Recorder {
+      state = 'inactive'
+      mimeType = 'audio/webm'
+      ondataavailable?: (event: { data: Blob }) => void
+      onstop?: (() => void) | null
+      start() {
+        this.state = 'recording'
+      }
+      stop() {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['audio']) })
+        this.onstop?.()
+      }
+    }
+    vi.stubGlobal('MediaRecorder', Recorder)
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      },
+    })
+    const onSubmit = vi.fn()
+    render(<CommentComposer establishmentId="est-1" onSubmit={onSubmit} />)
+    const textarea = screen.getByLabelText('Ajouter un commentaire') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'Déjà écrit.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Dicter un message' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Arrêter l’enregistrement' }))
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Transcription en cours…')
+    expect(screen.queryByText('Insérer dans mon message')).toBeNull()
+    expect(textarea.disabled).toBe(false)
+    const publish = screen.getByRole('button', { name: 'Publier le commentaire' })
+    expect((publish as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(publish)
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    fireEvent.change(textarea, { target: { value: 'Déjà écrit, précisé.' } })
+    await act(async () => finish({ text: 'Et dicté.' }))
+    await waitFor(() => {
+      expect(textarea.value).toBe('Déjà écrit, précisé. Et dicté.')
+    })
+    expect((screen.getByRole('button', { name: 'Publier le commentaire' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+    vi.unstubAllGlobals()
   })
 })
