@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-import { MessageCircle, MessageCircleMore } from 'lucide-react'
+import { MessageCircle } from 'lucide-react'
 
 import { TerrainEmptyState } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/lib/display-names'
@@ -186,26 +186,16 @@ function PlanCommentEmptyState({
   fill?: boolean
 }) {
   return (
-    <div
-      role="status"
-      className={cn(
-        'flex flex-col items-center justify-center px-2 text-center',
-        fill ? 'min-h-0 flex-1 py-10' : 'min-h-[16rem] py-12 sm:min-h-[18rem] sm:py-14',
-      )}
-    >
-      <div
-        className="relative mb-3.5 flex h-[75px] w-[90px] items-center justify-center sm:mb-5 sm:h-[100px] sm:w-[116px]"
-        aria-hidden="true"
-      >
-        <span className="absolute size-[70px] -translate-x-3 rounded-full bg-[radial-gradient(circle_at_28%_30%,#f2f8f0,#e7f0e5)] sm:size-[83px]" />
-        <MessageCircleMore className="relative size-16 text-[#496c4b] sm:size-[77px]" strokeWidth={1.6} />
-      </div>
-      <p className="text-[17px] font-bold tracking-[-0.02em] text-balance text-[#222522] sm:text-[23px]">{title}</p>
-      {description ? (
-        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-balance text-[#898d8b] sm:mt-3 sm:text-lg">
-          {description}
-        </p>
-      ) : null}
+    <div role="status" className={cn('flex min-h-0 flex-col', fill && 'flex-1')}>
+      <TerrainEmptyState
+        className={cn(
+          'flex flex-col items-center justify-center border-0 bg-transparent p-6',
+          fill ? 'flex-1' : 'py-10',
+        )}
+        icon={<MessageCircle className="h-10 w-10" strokeWidth={1.5} />}
+        title={title}
+        description={description}
+      />
     </div>
   )
 }

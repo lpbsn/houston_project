@@ -258,6 +258,37 @@ describe('CommentSection', () => {
     expect(createRootMutate).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    'uses the compact, centered signal empty state for execution comments (documentFlow=%s)',
+    (documentFlow) => {
+      executionCommentsQueryData.current = []
+
+      render(
+        <CommentSection
+          establishmentId="est-1"
+          targetType="action-plan-execution"
+          targetId="exec-1"
+          documentFlow={documentFlow}
+        />,
+      )
+
+      const empty = screen.getByRole('status')
+      const title = screen.getByText("Aucun commentaire pour l'instant.")
+      const description = screen.getByText(
+        "Soyez le premier à laisser un commentaire sur ce plan d'action.",
+      )
+      const inner = empty.firstElementChild as HTMLElement
+
+      expect(empty.contains(title)).toBe(true)
+      expect(empty.contains(description)).toBe(true)
+      expect(title.className).toContain('text-sm')
+      expect(description.className).toContain('text-xs')
+      expect(inner.className).toContain('items-center justify-center')
+      expect(inner.className).toContain(documentFlow ? 'py-10' : 'flex-1')
+      expect(empty.querySelector('svg')?.getAttribute('class')).toContain('h-10 w-10')
+    },
+  )
+
   it('renders execution threads without reply/resolve on inherited signal comments', () => {
     render(
       <CommentSection
