@@ -74,6 +74,7 @@ from houston.chat.services import (
     update_establishment_chat_enabled,
 )
 from houston.chat.ws_ticket import issue_ws_ticket
+from houston.core.api.realtime_unavailable import WsTicketRedisFailureMixin
 from houston.establishments.permissions import HasActiveMembership
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -252,7 +253,12 @@ def _serialize_conversation_list_item(
     }
 
 
-class ChatWsTicketView(ChatRateLimitedMixin, EstablishmentScopedChatMixin, APIView):
+class ChatWsTicketView(
+    WsTicketRedisFailureMixin,
+    ChatRateLimitedMixin,
+    EstablishmentScopedChatMixin,
+    APIView,
+):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,
@@ -269,6 +275,7 @@ class ChatWsTicketView(ChatRateLimitedMixin, EstablishmentScopedChatMixin, APIVi
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            503: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
     )
     def post(self, request, establishment_id):

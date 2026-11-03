@@ -12768,6 +12768,14 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
         };
     };
     v1_establishments_content_reports_create: {
@@ -13949,6 +13957,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

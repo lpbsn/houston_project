@@ -256,6 +256,115 @@ def _collect_route_patterns(urlpatterns, prefix: str = "") -> list[str]:
     return routes
 
 
+_REDIS_TIMEOUT_ENV = (
+    "HOUSTON_REDIS_SOCKET_CONNECT_TIMEOUT",
+    "HOUSTON_REDIS_SOCKET_TIMEOUT",
+    "HOUSTON_REDIS_HEALTH_CHECK_INTERVAL",
+    "HOUSTON_REDIS_RETRY_ON_TIMEOUT",
+    "HOUSTON_REDIS_SOCKET_KEEPALIVE",
+    "HOUSTON_CHANNELS_REDIS_SOCKET_CONNECT_TIMEOUT",
+    "HOUSTON_CHANNELS_REDIS_SOCKET_TIMEOUT",
+    "HOUSTON_CHANNELS_REDIS_HEALTH_CHECK_INTERVAL",
+)
+
+# channels_redis 4.3 RedisChannelLayer.brpop_timeout class default.
+_CHANNELS_BRPOP_TIMEOUT_SECONDS = 5
+
+
+def _clear_redis_timeout_env(monkeypatch) -> None:
+    monkeypatch.delenv("HOUSTON_CACHE_REDIS_URL", raising=False)
+    monkeypatch.delenv("HOUSTON_CHANNELS_USE_IN_MEMORY", raising=False)
+    for name in _REDIS_TIMEOUT_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_production_redis_clients_set_timeouts(monkeypatch):
+    import config.settings as settings_module
+
+    _clear_redis_timeout_env(monkeypatch)
+    monkeypatch.setattr(settings_module, "DEBUG", False)
+
+    derived = settings_module._build_default_caches()
+    expected_cache_options = {
+        "socket_connect_timeout": 2.0,
+        "socket_timeout": 3.0,
+        "health_check_interval": 15,
+        "retry_on_timeout": False,
+        "socket_keepalive": True,
+    }
+    assert derived["default"]["BACKEND"] == "django.core.cache.backends.redis.RedisCache"
+    assert derived["default"]["OPTIONS"] == expected_cache_options
+
+    monkeypatch.setenv("HOUSTON_CACHE_REDIS_URL", "redis://cache.internal:6379/3")
+    explicit = settings_module._build_default_caches()
+    assert explicit["default"]["BACKEND"] == "django.core.cache.backends.redis.RedisCache"
+    assert explicit["default"]["LOCATION"] == "redis://cache.internal:6379/3"
+    assert explicit["default"]["OPTIONS"] == expected_cache_options
+
+    layers = settings_module._build_channel_layers()
+    host = layers["default"]["CONFIG"]["hosts"][0]
+    assert layers["default"]["BACKEND"] == "channels_redis.core.RedisChannelLayer"
+    assert host == {
+        "address": settings_module.REDIS_URL,
+        "socket_connect_timeout": 2.0,
+        "socket_timeout": 10.0,
+        "health_check_interval": 15,
+    }
+    assert host["socket_timeout"] > _CHANNELS_BRPOP_TIMEOUT_SECONDS
+
+
+def test_redis_client_timeouts_follow_environment(monkeypatch):
+    import config.settings as settings_module
+
+    _clear_redis_timeout_env(monkeypatch)
+    monkeypatch.setenv("HOUSTON_CACHE_REDIS_URL", "redis://cache.internal:6379/3")
+    monkeypatch.setenv("HOUSTON_REDIS_SOCKET_CONNECT_TIMEOUT", "1.5")
+    monkeypatch.setenv("HOUSTON_REDIS_SOCKET_TIMEOUT", "4")
+    monkeypatch.setenv("HOUSTON_REDIS_HEALTH_CHECK_INTERVAL", "30")
+    monkeypatch.setenv("HOUSTON_REDIS_RETRY_ON_TIMEOUT", "true")
+    monkeypatch.setenv("HOUSTON_REDIS_SOCKET_KEEPALIVE", "false")
+    monkeypatch.setenv("HOUSTON_CHANNELS_REDIS_SOCKET_CONNECT_TIMEOUT", "1")
+    monkeypatch.setenv("HOUSTON_CHANNELS_REDIS_SOCKET_TIMEOUT", "8")
+    monkeypatch.setenv("HOUSTON_CHANNELS_REDIS_HEALTH_CHECK_INTERVAL", "20")
+
+    options = settings_module._build_default_caches()["default"]["OPTIONS"]
+    assert options == {
+        "socket_connect_timeout": 1.5,
+        "socket_timeout": 4.0,
+        "health_check_interval": 30,
+        "retry_on_timeout": True,
+        "socket_keepalive": False,
+    }
+
+    host = settings_module._build_channel_layers()["default"]["CONFIG"]["hosts"][0]
+    assert host["socket_connect_timeout"] == 1.0
+    assert host["socket_timeout"] == 8.0
+    assert host["health_check_interval"] == 20
+    assert host["socket_timeout"] > _CHANNELS_BRPOP_TIMEOUT_SECONDS
+
+
+def test_memory_cache_and_channel_layer_stay_without_redis_options(monkeypatch):
+    import config.settings as settings_module
+
+    _clear_redis_timeout_env(monkeypatch)
+    monkeypatch.setattr(settings_module, "DEBUG", True)
+    monkeypatch.setenv("HOUSTON_CHANNELS_USE_IN_MEMORY", "1")
+
+    caches = settings_module._build_default_caches()
+    assert caches == {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+
+    layers = settings_module._build_channel_layers()
+    assert layers == {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        }
+    }
+
+
 def test_api_docs_routes_disabled_by_default_in_production(valid_production_overrides):
     from config import urls as urls_module
 
