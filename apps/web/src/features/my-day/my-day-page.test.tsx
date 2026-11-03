@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NotificationItem } from '@/features/notifications/types'
@@ -33,6 +33,7 @@ vi.mock('@/features/notifications/hooks', () => ({
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.useRealTimers()
   notifications.isPending = false
   notifications.isError = false
   notifications.items = []
@@ -177,7 +178,17 @@ describe('Ma journée', () => {
     mount()
 
     expect(await screen.findByRole('heading', { name: 'En retard' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Afficher la suite' }))
+    const loadMore = screen.getByRole('button', { name: 'Afficher plus de tâches' })
+    expect(loadMore.className).toContain('text-[#676560]')
+    expect(loadMore.className).not.toContain('border')
+    expect(loadMore.parentElement?.className).toContain('justify-center')
+    expect(loadMore.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+    const plansLink = screen.getByRole('link', { name: 'Voir tous les plans d’exécution' })
+    expect(plansLink.className).toContain('text-[#1B4FD8]')
+    expect(plansLink.className).not.toContain('justify-center')
+    expect(plansLink.parentElement).toBe(loadMore.parentElement?.parentElement)
+    expect(plansLink.parentElement?.className).toContain('space-y-8')
+    fireEvent.click(loadMore)
     expect(await screen.findByText('Ranger les accessoires')).toBeTruthy()
     expect(screen.getByText('Équipe')).toBeTruthy()
     expect(screen.getAllByText('Pour moi').length).toBeGreaterThan(0)
@@ -190,13 +201,76 @@ describe('Ma journée', () => {
     expect(screen.queryByRole('heading', { name: 'Sans échéance' })).toBeNull()
   })
 
+  it('aligns today attribution with the chevron and stacks upcoming attribution above the deadline', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-02T12:00:00Z'))
+    const todayTask: MyDayTask = {
+      ...task,
+      id: 'today',
+      title: 'Brief du matin',
+      bucket: 'today',
+      due_at: '2026-11-02T08:00:00Z',
+      shared: false,
+    }
+    const datedTodayTask: MyDayTask = {
+      ...task,
+      id: 'today-dated',
+      title: 'Contrôle déjà daté',
+      bucket: 'today',
+      due_at: '2020-01-15T10:00:00Z',
+      shared: true,
+    }
+    const upcomingTask: MyDayTask = {
+      ...task,
+      id: 'upcoming',
+      title: 'Ranger les accessoires',
+      bucket: 'upcoming',
+      due_at: '2026-11-04T14:00:00Z',
+      shared: true,
+    }
+    vi.mocked(fetchMyDay).mockResolvedValue({
+      items: [todayTask, datedTodayTask, upcomingTask],
+      next_offset: null,
+      timezone: 'Europe/Paris',
+    })
+    mount()
+
+    const todayLink = await screen.findByRole('link', { name: /Brief du matin/ })
+    const todayBadge = within(todayLink).getByText('Pour moi')
+    expect(formatTaskDeadline(todayTask, 'Europe/Paris', new Date())).toBe('09:00')
+    expect(todayLink.className).toContain('items-center')
+    expect(todayBadge.parentElement).toBe(todayLink)
+    expect(todayBadge.previousElementSibling?.textContent).toBe('09:00')
+    expect(todayBadge.nextElementSibling?.tagName).toBe('svg')
+
+    const datedLink = screen.getByRole('link', { name: /Contrôle déjà daté/ })
+    const datedBadge = within(datedLink).getByText('Équipe')
+    expect(datedBadge.parentElement).toBe(datedLink)
+    expect(datedBadge.previousElementSibling?.textContent).not.toContain('2020')
+    expect(datedLink.textContent).not.toContain('2020')
+    expect(datedBadge.nextElementSibling?.tagName).toBe('svg')
+
+    const upcomingLink = screen.getByRole('link', { name: /Ranger les accessoires/ })
+    const upcomingBadge = within(upcomingLink).getByText('Équipe')
+    const upcomingMeta = upcomingBadge.parentElement
+    expect(upcomingLink.className).toContain('items-center')
+    expect(upcomingMeta?.className).toContain('flex-col')
+    expect(upcomingMeta?.className).toContain('@min-[32rem]/task:items-end')
+    const upcomingDeadline = formatTaskDeadline(upcomingTask, 'Europe/Paris', new Date())
+    expect(upcomingDeadline).toBeTruthy()
+    expect(upcomingMeta?.textContent?.indexOf('Équipe')).toBeLessThan(
+      upcomingMeta?.textContent?.indexOf(upcomingDeadline ?? '') ?? -1,
+    )
+    expect(upcomingMeta?.contains(upcomingLink.querySelector('svg'))).toBe(false)
+  })
+
   it('keeps the loaded tasks when the next page fails', async () => {
     vi.mocked(fetchMyDay)
       .mockResolvedValueOnce({ items: [task], next_offset: 30, timezone: 'Europe/Paris' })
       .mockRejectedValueOnce(new Error('offline'))
     mount()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Afficher la suite' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Afficher plus de tâches' }))
     expect(await screen.findByText('Impossible de charger la suite.')).toBeTruthy()
     expect(screen.getByText('Tester le micro')).toBeTruthy()
     expect(screen.queryByText('Aucune tâche à traiter pour le moment.')).toBeNull()

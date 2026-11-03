@@ -1,10 +1,14 @@
-import { DictationButton } from './dictation-button'
+import { DictationButton, DictationNotice, IDLE_DICTATION, type DictationActivity } from './dictation-button'
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ClipboardEvent } from 'react'
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+import {
+  appendDictationText,
+  DICTATION_TOO_LONG_MESSAGE,
+} from '../lib/append-dictation-text'
 import {
   CHAT_ATTACHMENT_MAX_BYTES,
   CHAT_ATTACHMENTS_MAX_PER_MESSAGE,
@@ -86,7 +90,10 @@ export function ChatComposer({
   const [mentions, setMentions] = useState<ChatMentionDraft[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [cursor, setCursor] = useState(0)
+  const [dictation, setDictation] = useState<DictationActivity>(IDLE_DICTATION)
   const hydratedRef = useRef<string | null>(null)
+  const draftRef = useRef(draft)
+  const mentionsRef = useRef(mentions)
   const latestScopeRef = useRef<string | null>(null)
   const fileRecordsRef = useRef<ChatOutboxAttachmentRecord[]>([])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -114,9 +121,20 @@ export function ChatComposer({
     : []
 
   function applyBody(next: string, nextCursor = next.length) {
-    setDraft(next.slice(0, CHAT_MESSAGE_BODY_MAX_LENGTH))
-    setMentions(reconcileMentions(next, mentions, mentionLookup))
+    const bounded = next.slice(0, CHAT_MESSAGE_BODY_MAX_LENGTH)
+    const nextMentions = reconcileMentions(bounded, mentionsRef.current, mentionLookup)
+    draftRef.current = bounded
+    mentionsRef.current = nextMentions
+    setDraft(bounded)
+    setMentions(nextMentions)
     setCursor(nextCursor)
+  }
+
+  function insertDictation(text: string) {
+    const result = appendDictationText(draftRef.current, text, CHAT_MESSAGE_BODY_MAX_LENGTH)
+    if (result.status === 'too_long') return DICTATION_TOO_LONG_MESSAGE
+    if (result.status === 'appended') applyBody(result.value)
+    return null
   }
 
   useEffect(() => {
@@ -129,6 +147,8 @@ export function ChatComposer({
     }
     latestScopeRef.current = scopeKey
     hydratedRef.current = null
+    draftRef.current = ''
+    mentionsRef.current = []
     setDraft('')
     setMentions([])
     setFiles([])
@@ -154,6 +174,8 @@ export function ChatComposer({
       if (latestScopeRef.current !== scopeKey) {
         return
       }
+      draftRef.current = saved.body
+      mentionsRef.current = saved.mentions
       setDraft(saved.body)
       setMentions(saved.mentions)
       fileRecordsRef.current = saved.attachments
@@ -217,9 +239,11 @@ export function ChatComposer({
     setFiles((current) => [...current, ...accepted].slice(0, CHAT_ATTACHMENTS_MAX_PER_MESSAGE))
   }
 
+  const dictationBusy = dictation.phase === 'recording' || dictation.phase === 'transcribing'
+
   function handleSubmit() {
     const trimmed = trimBodyAndMentions(draft, mentions)
-    if (disabled) {
+    if (disabled || dictationBusy) {
       return
     }
     if (!trimmed.body && files.length === 0) {
@@ -231,6 +255,8 @@ export function ChatComposer({
       replyToId: reply && !reply.unavailable ? reply.id : null,
       files,
     })
+    draftRef.current = ''
+    mentionsRef.current = []
     setDraft('')
     setMentions([])
     setFiles([])
@@ -271,6 +297,8 @@ export function ChatComposer({
       membershipId: participant.membership_id,
       existing: mentions,
     })
+    draftRef.current = inserted.body
+    mentionsRef.current = inserted.mentions
     setDraft(inserted.body)
     setMentions(inserted.mentions)
     setCursor(inserted.cursor)
@@ -280,7 +308,7 @@ export function ChatComposer({
     })
   }
 
-  const canSend = !disabled && Boolean(draft.trim() || files.length > 0)
+  const canSend = !disabled && !dictationBusy && Boolean(draft.trim() || files.length > 0)
 
   return (
     <footer
@@ -381,7 +409,15 @@ export function ChatComposer({
         >
           <Paperclip className="h-5 w-5" />
         </Button>
-        {establishmentId && <DictationButton key={`${establishmentId}-${conversationId}`} establishmentId={establishmentId} disabled={disabled} remaining={CHAT_MESSAGE_BODY_MAX_LENGTH - draft.length - (draft ? 1 : 0)} onAppend={text => applyBody(draft ? `${draft} ${text}` : text)} />}
+        {establishmentId ? (
+          <DictationButton
+            key={`${establishmentId}-${conversationId}`}
+            establishmentId={establishmentId}
+            disabled={disabled}
+            onAppend={insertDictation}
+            onActivityChange={setDictation}
+          />
+        ) : null}
         <textarea
           ref={textareaRef}
           value={draft}
@@ -414,8 +450,11 @@ export function ChatComposer({
           <SendHorizonal className="h-4 w-4" />
         </Button>
       </div>
-      <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">
-        {draft.length}/{CHAT_MESSAGE_BODY_MAX_LENGTH}
+      <p className="mt-1 flex flex-wrap items-baseline gap-2 px-1 text-[10px] text-[#a3a19a]">
+        <DictationNotice activity={dictation} />
+        <span className="ms-auto tabular-nums">
+          {draft.length}/{CHAT_MESSAGE_BODY_MAX_LENGTH}
+        </span>
       </p>
     </footer>
   )

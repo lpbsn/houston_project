@@ -132,4 +132,43 @@ describe('TerrainDialog', () => {
     )
     expect(document.activeElement).toBe(before)
   })
+
+  it('keeps the compact dialog and can present a wide description', () => {
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <TerrainDialog title="Créer" open onClose={onClose}>
+        <p>Choix</p>
+      </TerrainDialog>,
+    )
+    const compact = screen.getByRole('dialog', { name: 'Créer' })
+    expect(compact.className).toContain('max-w-md')
+    expect(compact.className).toContain('max-h-[90vh]')
+    expect(compact.className).not.toContain('max-w-[860px]')
+    expect(screen.getByRole('heading', { name: 'Créer' }).className).toContain('text-sm')
+
+    rerender(
+      <TerrainDialog
+        title="Créer une observation"
+        description="Le message d’origine reste visible."
+        size="wide"
+        open
+        onClose={onClose}
+      >
+        <p>Choix</p>
+      </TerrainDialog>,
+    )
+    const wide = screen.getByRole('dialog', { name: 'Créer une observation' })
+    expect(wide.className).toContain('max-w-[860px]')
+    expect(wide.className).toContain('max-h-[calc(100dvh-2rem)]')
+    expect(wide.className).toContain('rounded-[22px]')
+    expect(wide.className).toContain('min-[741px]:px-7')
+    expect(wide.className).toContain('min-[741px]:rounded-[28px]')
+    expect(screen.getByText('Le message d’origine reste visible.')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Créer une observation' }).className).toContain(
+      'min-[741px]:text-[34px]',
+    )
+    expect(screen.getByRole('heading', { name: 'Créer une observation' }).className).toContain(
+      'text-[25px]',
+    )
+  })
 })

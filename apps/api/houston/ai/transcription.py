@@ -104,9 +104,6 @@ def transcribe_audio_file(
         if not text.strip():
             raise TranscriptionServiceError("Empty transcription result.")
 
-        if len(text) > 1000:
-            text = text[:1000]
-
         latency_ms = _elapsed_ms(started_at)
         _write_transcription_usage_log(
             establishment=establishment,
