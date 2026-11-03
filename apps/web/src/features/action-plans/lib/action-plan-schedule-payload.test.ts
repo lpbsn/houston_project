@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createActionPlanAssigneeDraft } from './action-plan-form-validation'
 import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
 import { createActionPlanScheduleDraft } from './action-plan-schedule-form'
 
@@ -68,6 +69,35 @@ describe('buildActionPlanScheduleCreateRequest', () => {
         start_at: expect.stringMatching(/^\d{2}:\d{2}:\d{2}$/),
         end_at: expect.stringMatching(/^\d{2}:\d{2}:\d{2}$/),
       },
+    ])
+  })
+
+  it('uses the pilot pole for a recurrence assignee without a draft pole', () => {
+    const payload = buildActionPlanScheduleCreateRequest({
+      schedule: {
+        enabled: true,
+        recurrenceDays: ['monday'],
+        startDate: '2026-07-01',
+        endDate: '2026-12-31',
+        startAt: '09:00',
+        endAt: '10:00',
+      },
+      pilotBusinessUnitId: 'bu-pilot',
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'member-owner',
+          businessUnitId: '',
+        }),
+        createActionPlanAssigneeDraft({
+          membershipId: 'member-manager',
+          businessUnitId: 'bu-kept',
+        }),
+      ],
+    })
+
+    expect(payload?.assignees).toEqual([
+      { membership_id: 'member-owner', business_unit_id: 'bu-pilot' },
+      { membership_id: 'member-manager', business_unit_id: 'bu-kept' },
     ])
   })
 })

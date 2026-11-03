@@ -30,10 +30,14 @@ function buildAssigneePayloads(
     sharedStartAt: string
     sharedEndAt: string
     sharedVisibleFrom: string
+    pilotBusinessUnitId?: string
   },
 ): ActionPlanCreateRequest['assignees'] {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
   return assignees
-    .filter((assignee) => assignee.membershipId && assignee.businessUnitId)
+    .filter(
+      (assignee) => assignee.membershipId && (assignee.businessUnitId || pilotBusinessUnitId),
+    )
     .map((assignee) => {
       const startAt = options.useSharedChronology
         ? toIsoDateTime(options.sharedStartAt)
@@ -47,7 +51,7 @@ function buildAssigneePayloads(
 
       return {
         membership_id: assignee.membershipId,
-        business_unit_id: assignee.businessUnitId,
+        business_unit_id: assignee.businessUnitId || pilotBusinessUnitId,
         start_at: startAt ?? null,
         end_at: endAt ?? null,
         visible_from: visibleFrom ?? null,
@@ -146,6 +150,7 @@ export function buildActionPlanCreateRequest(
     sharedStartAt: values.sharedStartAt,
     sharedEndAt: values.sharedEndAt,
     sharedVisibleFrom: values.sharedVisibleFrom,
+    pilotBusinessUnitId: values.pilotBusinessUnitId,
   })
 
   const schedule = values.useSharedChronology
@@ -153,6 +158,7 @@ export function buildActionPlanCreateRequest(
         schedule: values.schedule,
         assignees: values.assignees,
         useSharedChronology: true,
+        pilotBusinessUnitId: values.pilotBusinessUnitId,
       })
     : undefined
 
@@ -186,6 +192,7 @@ export function buildActionPlanUseRequest(options: {
   sharedEndAt: string
   sharedVisibleFrom: string
   allDay?: boolean
+  pilotBusinessUnitId?: string
 }): ActionPlanUseRequest {
   return {
     assignees: buildAssigneePayloads(options.assignees, {
@@ -193,6 +200,7 @@ export function buildActionPlanUseRequest(options: {
       sharedStartAt: options.sharedStartAt,
       sharedEndAt: options.sharedEndAt,
       sharedVisibleFrom: options.sharedVisibleFrom,
+      pilotBusinessUnitId: options.pilotBusinessUnitId,
     }),
     use_shared_chronology: options.useSharedChronology,
     start_at: options.useSharedChronology ? toIsoDateTime(options.sharedStartAt) ?? null : null,

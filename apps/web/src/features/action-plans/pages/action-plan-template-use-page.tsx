@@ -94,13 +94,14 @@ export function ActionPlanTemplateUsePage({ actionPlanId }: ActionPlanTemplateUs
 
   const plan = detailQuery.data
   const canSchedule = plan ? canShowActionPlanSchedule(plan.permission_hints) : false
-  const planningOptions = { canSchedule, staffMode: staffUseMode }
+  const planningOptions = {
+    canSchedule,
+    staffMode: staffUseMode,
+    pilotBusinessUnitId: plan?.pilot_business_unit.id ?? '',
+  }
   const launchDraft = draftForLaunch(draft, timing)
   const fieldErrors = hasAttemptedSubmit
-    ? validateCatalogPlanningDraft(launchDraft, {
-        canSchedule,
-        staffMode: staffUseMode,
-      })
+    ? validateCatalogPlanningDraft(launchDraft, planningOptions)
     : {}
 
   useEffect(() => {

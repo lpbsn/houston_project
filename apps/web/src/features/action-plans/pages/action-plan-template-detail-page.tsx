@@ -106,6 +106,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         ? validateCatalogPlanningDraft(planningDraft, {
             canSchedule: canShowActionPlanSchedule(detailQuery.data.permission_hints),
             staffMode: staffUseMode,
+            pilotBusinessUnitId: detailQuery.data.pilot_business_unit.id,
           })
         : {},
     [detailQuery.data, hasAttemptedPlanningSubmit, planningDraft, staffUseMode],
@@ -166,7 +167,11 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const hints = plan.permission_hints
   const canUse = canShowActionPlanUse(hints)
   const canSchedule = canShowActionPlanSchedule(hints)
-  const planningOptions = { canSchedule, staffMode: staffUseMode }
+  const planningOptions = {
+    canSchedule,
+    staffMode: staffUseMode,
+    pilotBusinessUnitId: plan.pilot_business_unit.id,
+  }
   const isPrimaryPending = planningMutation.isPending
   const primaryActionDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
     ...planningOptions,

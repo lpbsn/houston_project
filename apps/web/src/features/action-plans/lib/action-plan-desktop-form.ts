@@ -109,14 +109,22 @@ function summarizePlanningItems(
 /** Same branches as the direct-create submit: library, per-assignee planning, or one shared resource. */
 export function summarizeDirectCreateLaunch(
   draft: ActionPlanEventPlanningDraft,
-  options: { saveToLibrary: boolean; staffMode: boolean },
+  options: { saveToLibrary: boolean; staffMode: boolean; pilotBusinessUnitId?: string },
   now: Date = new Date(),
 ): DesktopLaunchOutcome {
   if (options.saveToLibrary) {
     return EMPTY_LAUNCH_OUTCOME
   }
   if (draft.usePerAssigneeChronology && !options.staffMode) {
-    return summarizePlanningItems(draft, { canSchedule: true, staffMode: false }, now)
+    return summarizePlanningItems(
+      draft,
+      {
+        canSchedule: true,
+        staffMode: false,
+        pilotBusinessUnitId: options.pilotBusinessUnitId,
+      },
+      now,
+    )
   }
   if (hasGlobalRepeat(draft)) {
     return { executions: 0, schedules: 1, hasFutureStart: false }

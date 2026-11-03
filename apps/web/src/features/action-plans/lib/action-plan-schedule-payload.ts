@@ -39,13 +39,16 @@ function toScheduleAssigneeTime(value: string): string | undefined {
 function buildScheduleAssigneePayloads(
   assignees: ActionPlanAssigneeDraft[],
   useSharedChronology: boolean,
+  pilotBusinessUnitId = '',
 ): ActionPlanScheduleCreateRequest['assignees'] {
   return assignees
-    .filter((assignee) => assignee.membershipId && assignee.businessUnitId)
+    .filter(
+      (assignee) => assignee.membershipId && (assignee.businessUnitId || pilotBusinessUnitId),
+    )
     .map((assignee) => {
       const payload = {
         membership_id: assignee.membershipId,
-        business_unit_id: assignee.businessUnitId,
+        business_unit_id: assignee.businessUnitId || pilotBusinessUnitId,
       }
       if (useSharedChronology) {
         return payload
@@ -63,8 +66,15 @@ export function buildActionPlanScheduleCreateRequest(options: {
   assignees?: ActionPlanAssigneeDraft[]
   useSharedChronology?: boolean
   allDay?: boolean
+  pilotBusinessUnitId?: string
 }): ActionPlanScheduleCreateRequest | undefined {
-  const { schedule, assignees = [], useSharedChronology = true, allDay = false } = options
+  const {
+    schedule,
+    assignees = [],
+    useSharedChronology = true,
+    allDay = false,
+    pilotBusinessUnitId = '',
+  } = options
   if (!isActionPlanScheduleConfigured(schedule)) {
     return undefined
   }
@@ -82,7 +92,11 @@ export function buildActionPlanScheduleCreateRequest(options: {
     end_at: endAt,
     all_day: allDay,
     recurrence_days: [...schedule.recurrenceDays],
-    assignees: buildScheduleAssigneePayloads(assignees, useSharedChronology),
+    assignees: buildScheduleAssigneePayloads(
+      assignees,
+      useSharedChronology,
+      pilotBusinessUnitId,
+    ),
     use_shared_chronology: useSharedChronology,
   }
 }

@@ -254,6 +254,56 @@ describe('action-plan-execution-edit-form', () => {
     ])
   })
 
+  it('keeps an assignee on the pilot pole when the draft pole is empty', () => {
+    const form = hydrateActionPlanExecutionEditForm(buildExecution())
+    form.planningDraft.assignees = [
+      { ...form.planningDraft.assignees[0], businessUnitId: '' },
+      {
+        ...form.planningDraft.assignees[0],
+        id: 'assignee-2',
+        membershipId: 'mem-2',
+        displayName: 'Bob',
+        businessUnitId: 'bu-kept',
+      },
+    ]
+
+    const errors = validateActionPlanExecutionEditForm(form, {
+      canDefineCrossPoleTasks: true,
+      staffMode: false,
+    })
+    expect(errors.assignees).toBeUndefined()
+
+    const body = buildActionPlanExecutionUpdateRequest(form)
+    expect(body.assignees).toEqual([
+      expect.objectContaining({ membership_id: 'mem-1', business_unit_id: 'bu-1' }),
+      expect.objectContaining({ membership_id: 'mem-2', business_unit_id: 'bu-kept' }),
+    ])
+    expect(body.pending_tasks).toEqual([
+      expect.objectContaining({ assigned_membership_id: 'mem-1' }),
+    ])
+  })
+
+  it('blocks an execution edit when an assignee has neither a draft pole nor a pilot', () => {
+    const form = hydrateActionPlanExecutionEditForm(buildExecution())
+    form.pilotBusinessUnitId = ''
+    form.planningDraft.assignees = [
+      { ...form.planningDraft.assignees[0], businessUnitId: '' },
+      {
+        ...form.planningDraft.assignees[0],
+        id: 'assignee-2',
+        membershipId: 'mem-2',
+        displayName: 'Bob',
+        businessUnitId: 'bu-kept',
+      },
+    ]
+
+    const errors = validateActionPlanExecutionEditForm(form, {
+      canDefineCrossPoleTasks: true,
+      staffMode: false,
+    })
+    expect(errors.assignees).toBe('Chaque assigné doit être rattaché à un pôle.')
+  })
+
   it('requires at least one assignee', () => {
     const form = hydrateActionPlanExecutionEditForm(buildExecution())
     form.planningDraft.assignees = []
