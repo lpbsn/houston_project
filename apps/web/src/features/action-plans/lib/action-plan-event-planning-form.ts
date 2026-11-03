@@ -348,11 +348,27 @@ function resolveAssigneeSlotTimes(assignee: ActionPlanAssigneeDraft): {
   return { startTime: startParts.time, endTime: endParts.time }
 }
 
+function hasUnresolvedAssigneePole(
+  assignees: Array<{ membershipId: string; businessUnitId: string }>,
+  pilotBusinessUnitId: string,
+): boolean {
+  return assignees.some(
+    (assignee) => assignee.membershipId && !(assignee.businessUnitId || pilotBusinessUnitId),
+  )
+}
+
 export function buildScheduleRequestForAssignee(
   _draft: ActionPlanEventPlanningDraft,
   assignee: ActionPlanAssigneeDraft,
   options: { staffMode?: boolean; pilotBusinessUnitId?: string } = {},
 ): ActionPlanScheduleCreateRequest | undefined {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (
+    !options.staffMode &&
+    hasUnresolvedAssigneePole([assignee], pilotBusinessUnitId)
+  ) {
+    return undefined
+  }
   const startParts = splitIsoToDateAndTime(assignee.startAt)
   const { endTime } = resolveAssigneeSlotTimes(assignee)
   const schedule: ActionPlanScheduleDraft = {
@@ -376,6 +392,10 @@ export function buildScheduleRequestsFromDraft(
   draft: ActionPlanEventPlanningDraft,
   options: { staffMode?: boolean; pilotBusinessUnitId?: string } = {},
 ): ActionPlanScheduleCreateRequest[] {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (!options.staffMode && hasUnresolvedAssigneePole(draft.assignees, pilotBusinessUnitId)) {
+    return []
+  }
   if (hasGlobalRepeat(draft)) {
     const body = buildActionPlanScheduleCreateRequest({
       schedule: toScheduleDraft(draft),
@@ -391,7 +411,6 @@ export function buildScheduleRequestsFromDraft(
     return []
   }
 
-  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
   return draft.assignees
     .filter(
       (assignee) =>
@@ -415,13 +434,22 @@ export function buildOneShotAssigneesFromDraft(
 export function buildUseRequestFromDraft(
   draft: ActionPlanEventPlanningDraft,
   options: { staffMode?: boolean; pilotBusinessUnitId?: string } = {},
-): ActionPlanUseRequest {
+): ActionPlanUseRequest | undefined {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
   const oneShotAssignees = options.staffMode
     ? draft.assignees.filter((assignee) => assignee.membershipId)
     : buildOneShotAssigneesFromDraft(draft)
+  const assignees = options.staffMode
+    ? oneShotAssignees.filter(
+        (assignee) => assignee.businessUnitId || pilotBusinessUnitId,
+      )
+    : oneShotAssignees
+  if (!options.staffMode && hasUnresolvedAssigneePole(assignees, pilotBusinessUnitId)) {
+    return undefined
+  }
   const { sharedStartAt, sharedEndAt } = toSharedChronologyFields(draft)
   return buildActionPlanUseRequest({
-    assignees: oneShotAssignees,
+    assignees,
     useSharedChronology: !draft.usePerAssigneeChronology,
     sharedStartAt,
     sharedEndAt,

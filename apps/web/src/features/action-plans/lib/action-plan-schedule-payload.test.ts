@@ -72,6 +72,31 @@ describe('buildActionPlanScheduleCreateRequest', () => {
     ])
   })
 
+  it('refuses a recurrence payload that would omit an assignee without a pilot pole', () => {
+    expect(() =>
+      buildActionPlanScheduleCreateRequest({
+        schedule: {
+          enabled: true,
+          recurrenceDays: ['monday'],
+          startDate: '2026-07-01',
+          endDate: '2026-12-31',
+          startAt: '09:00',
+          endAt: '10:00',
+        },
+        assignees: [
+          createActionPlanAssigneeDraft({
+            membershipId: 'member-kept',
+            businessUnitId: 'bu-kept',
+          }),
+          createActionPlanAssigneeDraft({
+            membershipId: 'member-open',
+            businessUnitId: '',
+          }),
+        ],
+      }),
+    ).toThrow('Chaque assigné doit être rattaché à un pôle.')
+  })
+
   it('uses the pilot pole for a recurrence assignee without a draft pole', () => {
     const payload = buildActionPlanScheduleCreateRequest({
       schedule: {

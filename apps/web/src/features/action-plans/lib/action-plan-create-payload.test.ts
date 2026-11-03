@@ -168,6 +168,34 @@ describe('buildActionPlanCreateRequest', () => {
     expect(request.assignees).toHaveLength(1)
   })
 
+  it('refuses to omit an assignee when the pilot pole is missing', () => {
+    expect(() =>
+      buildActionPlanCreateRequest({
+        title: 'Plan',
+        description: '',
+        pilotBusinessUnitId: '',
+        requiresValidation: false,
+        saveToLibrary: false,
+        useSharedChronology: false,
+        sharedStartAt: '',
+        sharedEndAt: '',
+        sharedVisibleFrom: '',
+        tasks: [],
+        assignees: [
+          createActionPlanAssigneeDraft({
+            membershipId: 'member-kept',
+            businessUnitId: 'bu-kept',
+          }),
+          createActionPlanAssigneeDraft({
+            membershipId: 'member-open',
+            businessUnitId: '',
+          }),
+        ],
+        schedule: createActionPlanScheduleDraft(),
+      }),
+    ).toThrow('Chaque assigné doit être rattaché à un pôle.')
+  })
+
   it('keeps an explicit assignee pole and falls back to the pilot otherwise', () => {
     const request = buildActionPlanCreateRequest({
       title: 'Plan mixed poles',

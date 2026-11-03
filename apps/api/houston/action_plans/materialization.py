@@ -436,6 +436,9 @@ def materialize_execution_from_schedule(
         )
         source_membership = schedule_assignee.membership
 
+    if not assignees:
+        raise ActionPlanValidationError("At least one assignee is required.")
+
     chronology = _resolve_merge_chronology(
         use_shared_chronology=schedule.use_shared_chronology,
         start_at=occurrence_start,

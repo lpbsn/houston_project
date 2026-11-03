@@ -320,6 +320,15 @@ function resolvePendingTaskPositions(treatedTasks: ActionPlanTaskExecution[]): n
 export function buildActionPlanExecutionUpdateRequest(
   values: ActionPlanExecutionEditFormValues,
 ): PatchedActionPlanExecutionUpdateRequest {
+  if (
+    values.planningDraft.assignees.some(
+      (assignee) =>
+        assignee.membershipId && !(assignee.businessUnitId || values.pilotBusinessUnitId),
+    )
+  ) {
+    throw new Error('Chaque assigné doit être rattaché à un pôle.')
+  }
+
   const knownPendingIds = new Set(values.knownPendingTaskIds)
   const freePositions = resolvePendingTaskPositions(values.treatedTasks)
   const pendingTasks = values.pendingTasks

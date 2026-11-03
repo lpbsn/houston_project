@@ -5,7 +5,13 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecutionTask, ActionPlanTask
+from houston.action_plans.exceptions import ActionPlanValidationError
+from houston.action_plans.models import (
+    ActionPlanAssignee,
+    ActionPlanExecution,
+    ActionPlanExecutionTask,
+    ActionPlanTask,
+)
 from houston.action_plans.services import (
     create_action_plan_with_execution,
     create_execution_from_action_plan,
@@ -57,6 +63,30 @@ def test_execution_task_snapshot_enriched_fields(
     assert task_execution.assigned_display_name == "Staff User"
 
 
+def test_create_execution_rejects_task_assignee_without_plan_assignee(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Task assignee only",
+            tasks=[
+                build_task_payload(
+                    task="Task with assignee",
+                    business_unit=business_unit,
+                    assigned_membership=staff_membership,
+                )
+            ],
+            assignees=[],
+        )
+
+    assert ActionPlanExecution.objects.count() == 0
+
+
 def test_create_execution_merges_task_assignee_into_plan_assignees(
     owner_membership,
     business_unit,
@@ -78,16 +108,22 @@ def test_create_execution_merges_task_assignee_into_plan_assignees(
                 deadline_at=deadline,
             )
         ],
-        assignees=[],
+        assignees=[
+            build_assignee_payload(membership=manager_membership, business_unit=business_unit)
+        ],
         use_shared_chronology=True,
         start_at=timezone.now(),
         end_at=timezone.now() + timedelta(hours=2),
         visible_from=timezone.now() - timedelta(hours=1),
     )
 
-    assignees = ActionPlanAssignee.objects.filter(action_plan_execution=execution)
-    assert assignees.count() == 1
-    assert assignees.get().membership_id == staff_membership.id
+    assignee_ids = set(
+        ActionPlanAssignee.objects.filter(action_plan_execution=execution).values_list(
+            "membership_id",
+            flat=True,
+        )
+    )
+    assert assignee_ids == {manager_membership.id, staff_membership.id}
 
     task_execution = ActionPlanExecutionTask.objects.get(action_plan_execution=execution)
     assert task_execution.description == "Do it"

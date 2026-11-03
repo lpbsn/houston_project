@@ -1540,6 +1540,8 @@ def create_action_plan_with_execution(
         use_shared_chronology = True
 
     requested_assignees = assignees or []
+    if created_by.role != EstablishmentMembership.Role.STAFF and not requested_assignees:
+        raise ActionPlanValidationError("At least one assignee is required.")
     if not requested_assignees:
         use_shared_chronology = True
     elif not use_shared_chronology and len(requested_assignees) > 1:

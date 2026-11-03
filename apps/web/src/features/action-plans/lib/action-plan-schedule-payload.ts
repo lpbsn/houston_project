@@ -41,6 +41,13 @@ function buildScheduleAssigneePayloads(
   useSharedChronology: boolean,
   pilotBusinessUnitId = '',
 ): ActionPlanScheduleCreateRequest['assignees'] {
+  if (
+    assignees.some(
+      (assignee) => assignee.membershipId && !(assignee.businessUnitId || pilotBusinessUnitId),
+    )
+  ) {
+    throw new Error('Chaque assigné doit être rattaché à un pôle.')
+  }
   return assignees
     .filter(
       (assignee) => assignee.membershipId && (assignee.businessUnitId || pilotBusinessUnitId),
