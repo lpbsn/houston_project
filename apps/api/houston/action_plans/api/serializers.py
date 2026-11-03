@@ -298,7 +298,7 @@ class ActionPlanCreateRequestSerializer(serializers.Serializer):
         default=list,
         help_text=(
             "Optional for reusable catalog plans. Direct execution or schedule create "
-            "still requires at least one task or assignee."
+            "still requires at least one assignee, with or without tasks."
         ),
     )
     assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)

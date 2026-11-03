@@ -261,21 +261,24 @@ def test_unlinked_creator_task_assignee_awards_zero():
     assert _gam04_txs(execution=execution) == []
 
 
-def test_unassigned_tasks_only_awards_zero():
+def test_unassigned_tasks_only_is_refused():
+    from houston.action_plans.exceptions import ActionPlanValidationError
+
     _establishment, business_unit, creator, _assignee = _setup()
 
-    _, execution = create_action_plan_with_execution(
-        establishment_id=creator.establishment_id,
-        created_by=creator,
-        pilot_business_unit_id=business_unit.id,
-        title="Unassigned task only",
-        requires_validation=True,
-        tasks=[build_task_payload(task="Unassigned", business_unit=business_unit)],
-        assignees=[],
-        use_shared_chronology=True,
-    )
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
+        create_action_plan_with_execution(
+            establishment_id=creator.establishment_id,
+            created_by=creator,
+            pilot_business_unit_id=business_unit.id,
+            title="Unassigned task only",
+            requires_validation=True,
+            tasks=[build_task_payload(task="Unassigned", business_unit=business_unit)],
+            assignees=[],
+            use_shared_chronology=True,
+        )
 
-    assert _gam04_txs(execution=execution) == []
+    assert PointTransaction.objects.count() == 0
 
 
 def test_catalog_execution_awards_execution_creator_not_plan_creator():

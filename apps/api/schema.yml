@@ -3935,9 +3935,10 @@ paths:
           description: ''
     post:
       operationId: v1_establishments_action_plans_create
-      description: Creates an action plan. Reusable catalog entries may omit tasks;
-        execution or schedule flows require at least one task or assignee. With submission_id
-        + items, creates a non-reusable plan and planning resources atomically.
+      description: Creates an action plan. Reusable catalog entries may omit tasks
+        and assignees; execution and schedule flows require at least one assignee,
+        with or without tasks. With submission_id + items, creates a non-reusable
+        plan and planning resources atomically.
       parameters:
       - in: path
         name: establishment_id
@@ -11349,7 +11350,7 @@ components:
           items:
             $ref: '#/components/schemas/ActionPlanTaskInput'
           description: Optional for reusable catalog plans. Direct execution or schedule
-            create still requires at least one task or assignee.
+            create still requires at least one assignee, with or without tasks.
         assignees:
           type: array
           items:

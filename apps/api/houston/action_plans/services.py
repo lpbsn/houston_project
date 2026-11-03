@@ -949,13 +949,9 @@ def _resolve_staff_catalog_self_assignees(
     )
 
 
-def _validate_execution_has_content(
-    *,
-    task_count: int,
-    assignee_count: int,
-) -> None:
-    if task_count == 0 and assignee_count == 0:
-        raise ActionPlanValidationError("At least one task or assignee is required.")
+def _validate_execution_has_content(*, assignee_count: int) -> None:
+    if assignee_count == 0:
+        raise ActionPlanValidationError("At least one assignee is required.")
 
 
 def _validate_cross_pole_tasks_allowed(
@@ -1544,6 +1540,8 @@ def create_action_plan_with_execution(
         use_shared_chronology = True
 
     requested_assignees = assignees or []
+    if created_by.role != EstablishmentMembership.Role.STAFF and not requested_assignees:
+        raise ActionPlanValidationError("At least one assignee is required.")
     if not requested_assignees:
         use_shared_chronology = True
     elif not use_shared_chronology and len(requested_assignees) > 1:
@@ -1598,10 +1596,7 @@ def create_action_plan_with_execution(
             establishment_id=establishment_id,
             assignees=merged_assignee_payloads,
         )
-    _validate_execution_has_content(
-        task_count=len(validated_tasks),
-        assignee_count=len(validated_assignees),
-    )
+    _validate_execution_has_content(assignee_count=len(validated_assignees))
 
     signal = None
     if created_by.role == EstablishmentMembership.Role.STAFF:
@@ -1872,10 +1867,7 @@ def create_execution_from_action_plan(
             pilot_business_unit=action_plan.pilot_business_unit,
             validated_assignees=validated_assignees,
         )
-    _validate_execution_has_content(
-        task_count=len(plan_tasks),
-        assignee_count=len(validated_assignees),
-    )
+    _validate_execution_has_content(assignee_count=len(validated_assignees))
 
     execution = _create_execution_record(
         action_plan=action_plan,

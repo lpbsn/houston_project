@@ -2,7 +2,6 @@ import type { ActionPlanRecurrenceDay } from './action-plan-schedule-constants'
 import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
 import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
 import {
-  hasGlobalRepeat,
   validateActionPlanEventPlanningDraft,
   validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -212,7 +211,7 @@ export function validateActionPlanCreateForm(
     !hasPerAssigneeRepeatAssignees
   ) {
     for (const assignee of values.assignees.filter((item) => item.membershipId)) {
-      if (!assignee.businessUnitId) {
+      if (!(assignee.businessUnitId || values.pilotBusinessUnitId)) {
         errors.assignees = 'Chaque assigné doit être rattaché à un pôle.'
         break
       }
@@ -240,7 +239,8 @@ export function validateActionPlanCreateForm(
       if (assignee.membershipId !== membershipId) {
         errors.assignees = 'Le staff ne peut s’assigner qu’à lui-même.'
       }
-      if (assignee.businessUnitId !== pilotBusinessUnitId) {
+      const assigneeBusinessUnitId = assignee.businessUnitId || values.pilotBusinessUnitId
+      if (assigneeBusinessUnitId !== pilotBusinessUnitId) {
         errors.assignees = 'L’assigné staff doit être sur le pôle pilote.'
       }
     }
@@ -254,6 +254,7 @@ export function validateActionPlanCreatePlanningErrors(
   options: {
     saveToLibrary: boolean
     staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
+    pilotBusinessUnitId?: string
   },
 ): Record<string, string> {
   if (options.saveToLibrary) {
@@ -264,13 +265,12 @@ export function validateActionPlanCreatePlanningErrors(
     return validatePerAssigneePlanningDraft(planningDraft, {
       allowRepeat: !options.staffExecutionMode,
       requireCompatibleRepeats: false,
+      pilotBusinessUnitId: options.pilotBusinessUnitId,
     })
   }
 
   return validateActionPlanEventPlanningDraft(planningDraft, {
-    requireAssignees:
-      !options.saveToLibrary &&
-      (hasGlobalRepeat(planningDraft) || planningDraft.repeatEnabled),
+    requireAssignees: true,
     allowRepeat: !options.staffExecutionMode,
   })
 }

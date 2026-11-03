@@ -59,17 +59,19 @@ function ActionPlanUseSheetBody({
   const formRootRef = useRef<HTMLDivElement>(null)
   const lastGuidanceNonceRef = useRef(0)
 
+  const planningOptions = useMemo(
+    () => ({
+      canSchedule,
+      staffMode: staffUseMode,
+      pilotBusinessUnitId,
+    }),
+    [canSchedule, pilotBusinessUnitId, staffUseMode],
+  )
   const frontendFieldErrors = useMemo(
     () =>
-      hasAttemptedSubmit
-        ? validateCatalogPlanningDraft(planningDraft, {
-            canSchedule,
-            staffMode: staffUseMode,
-          })
-        : {},
-    [hasAttemptedSubmit, planningDraft, canSchedule, staffUseMode],
+      hasAttemptedSubmit ? validateCatalogPlanningDraft(planningDraft, planningOptions) : {},
+    [hasAttemptedSubmit, planningDraft, planningOptions],
   )
-  const planningOptions = { canSchedule, staffMode: staffUseMode }
   const primaryDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
     ...planningOptions,
     isPending,

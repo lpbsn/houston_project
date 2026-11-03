@@ -154,6 +154,134 @@ describe('action-plan-catalog-planning-submit', () => {
     expect(submit?.body.items.every((item) => item.kind === 'schedule')).toBe(true)
   })
 
+  it('refuses a template payload that would omit an assignee without a pilot pole', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-kept',
+          businessUnitId: 'bu-kept',
+        }),
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-open',
+          businessUnitId: '',
+        }),
+      ],
+    }
+
+    expect(
+      resolveCatalogPlanningSubmit(draft, {
+        canSchedule: false,
+      }),
+    ).toBeUndefined()
+  })
+
+  it('includes a template assignee on the pilot pole when the draft pole is empty', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-owner',
+          businessUnitId: '',
+        }),
+      ],
+    }
+
+    const submit = resolveCatalogPlanningSubmit(draft, {
+      canSchedule: false,
+      pilotBusinessUnitId: 'bu-pilot',
+    })
+
+    expect(submit?.body.items[0]).toEqual(
+      expect.objectContaining({
+        kind: 'execution',
+        assignees: [
+          expect.objectContaining({
+            membership_id: 'm-owner',
+            business_unit_id: 'bu-pilot',
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('includes a repeating template assignee on the pilot pole', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      repeatEnabled: true,
+      startDate: '2026-07-01',
+      startTime: '09:00',
+      endTime: '10:00',
+      recurrenceEndDate: '2026-12-31',
+      recurrenceDays: ['monday' as const],
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-owner',
+          businessUnitId: '',
+        }),
+      ],
+    }
+
+    const submit = resolveCatalogPlanningSubmit(draft, {
+      canSchedule: true,
+      pilotBusinessUnitId: 'bu-pilot',
+    })
+
+    expect(submit?.body.items[0]?.assignees).toEqual([
+      expect.objectContaining({
+        membership_id: 'm-owner',
+        business_unit_id: 'bu-pilot',
+      }),
+    ])
+  })
+
+  it('keeps per-assignee items when the draft pole falls back to the pilot', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-director',
+          businessUnitId: '',
+          repeatEnabled: true,
+          startAt: combineDateAndTimeToIso('2026-07-01', '09:00', 'start'),
+          endAt: combineDateAndTimeToIso('2026-07-01', '10:00', 'end'),
+          recurrenceDays: ['monday'],
+          recurrenceEndDate: '2026-12-31',
+        }),
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-manager',
+          businessUnitId: 'bu-kept',
+          repeatEnabled: false,
+          startAt: combineDateAndTimeToIso('2026-07-11', '05:00', 'start'),
+          endAt: combineDateAndTimeToIso('2026-07-11', '08:00', 'end'),
+        }),
+      ],
+    }
+
+    const errors = validateCatalogPlanningDraft(draft, {
+      canSchedule: true,
+      pilotBusinessUnitId: 'bu-pilot',
+    })
+    expect(errors.assignees).toBeUndefined()
+    const submit = resolveCatalogPlanningSubmit(draft, {
+      canSchedule: true,
+      pilotBusinessUnitId: 'bu-pilot',
+    })
+    expect(submit?.body.items).toEqual([
+      expect.objectContaining({
+        kind: 'schedule',
+        primary_membership_id: 'm-director',
+        business_unit_id: 'bu-pilot',
+      }),
+      expect.objectContaining({
+        kind: 'execution',
+        primary_membership_id: 'm-manager',
+        business_unit_id: 'bu-kept',
+      }),
+    ])
+  })
+
   it('keeps launch disabled without an assignee and sends an explicit validation override', () => {
     const empty = createActionPlanEventPlanningDraft()
     expect(
