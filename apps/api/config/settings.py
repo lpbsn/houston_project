@@ -449,27 +449,39 @@ def _redis_throttle_cache_url() -> str:
     return f"{REDIS_URL.rstrip('/')}/3"
 
 
+def _redis_cache_options() -> dict[str, float | int | bool]:
+    """redis-py connection kwargs shared by both Redis cache branches.
+
+    Django 5.2 ``RedisCache`` forwards ``OPTIONS`` to ``ConnectionPool.from_url``.
+    """
+    return {
+        "socket_connect_timeout": env_float("HOUSTON_REDIS_SOCKET_CONNECT_TIMEOUT", 2),
+        "socket_timeout": env_float("HOUSTON_REDIS_SOCKET_TIMEOUT", 3),
+        "health_check_interval": env_int("HOUSTON_REDIS_HEALTH_CHECK_INTERVAL", 15),
+        "retry_on_timeout": env_bool("HOUSTON_REDIS_RETRY_ON_TIMEOUT", default=False),
+        "socket_keepalive": env_bool("HOUSTON_REDIS_SOCKET_KEEPALIVE", default=True),
+    }
+
+
+def _redis_cache_config(location: str) -> dict:
+    return {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": location,
+        "OPTIONS": _redis_cache_options(),
+    }
+
+
 def _build_default_caches() -> dict:
     cache_redis_url = os.getenv("HOUSTON_CACHE_REDIS_URL")
     if cache_redis_url:
-        return {
-            "default": {
-                "BACKEND": "django.core.cache.backends.redis.RedisCache",
-                "LOCATION": cache_redis_url,
-            }
-        }
+        return {"default": _redis_cache_config(cache_redis_url)}
     if DEBUG:
         return {
             "default": {
                 "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             }
         }
-    return {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": _redis_throttle_cache_url(),
-        }
-    }
+    return {"default": _redis_cache_config(_redis_throttle_cache_url())}
 
 
 def _auth_throttle_rates() -> dict[str, str]:
@@ -521,20 +533,37 @@ def _auth_throttle_rates() -> dict[str, str]:
 
 CACHES = _build_default_caches()
 
-# InMemory is single-process only; Docker api (Daphne) + celery need a shared layer.
-if env_bool("HOUSTON_CHANNELS_USE_IN_MEMORY", default=False):
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels.layers.InMemoryChannelLayer",
-        }
+
+def _channels_redis_host() -> dict[str, str | float | int]:
+    # channels_redis 4.3 RedisChannelLayer.brpop_timeout is 5s (class default, not a
+    # host key). receive_single blocks in BZPOPMIN for that long. redis-py closes the
+    # socket when a command exceeds socket_timeout, so this value must stay strictly
+    # above brpop_timeout. The default of 10s keeps that margin.
+    return {
+        "address": REDIS_URL,
+        "socket_connect_timeout": env_float("HOUSTON_CHANNELS_REDIS_SOCKET_CONNECT_TIMEOUT", 2),
+        "socket_timeout": env_float("HOUSTON_CHANNELS_REDIS_SOCKET_TIMEOUT", 10),
+        "health_check_interval": env_int("HOUSTON_CHANNELS_REDIS_HEALTH_CHECK_INTERVAL", 15),
     }
-else:
-    CHANNEL_LAYERS = {
+
+
+def _build_channel_layers() -> dict:
+    # InMemory is single-process only; Docker api (Daphne) + celery need a shared layer.
+    if env_bool("HOUSTON_CHANNELS_USE_IN_MEMORY", default=False):
+        return {
+            "default": {
+                "BACKEND": "channels.layers.InMemoryChannelLayer",
+            }
+        }
+    return {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [REDIS_URL]},
+            "CONFIG": {"hosts": [_channels_redis_host()]},
         }
     }
+
+
+CHANNEL_LAYERS = _build_channel_layers()
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

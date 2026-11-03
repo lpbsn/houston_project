@@ -7674,6 +7674,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/content-reports/:
     post:
       operationId: v1_establishments_content_reports_create
@@ -8904,6 +8910,12 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
