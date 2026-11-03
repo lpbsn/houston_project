@@ -247,10 +247,19 @@ export function validateActionPlanExecutionEditForm(
     errors[actionPlanTaskFieldKey(task.id, 'task')] = 'Chaque tâche doit avoir un titre.'
   }
 
-  const validAssignees = values.planningDraft.assignees.filter(
-    (assignee) => assignee.membershipId && assignee.businessUnitId,
+  const membershipAssignees = values.planningDraft.assignees.filter(
+    (assignee) => assignee.membershipId,
   )
-  if (validAssignees.length === 0) {
+  const validAssignees = membershipAssignees.filter(
+    (assignee) => assignee.businessUnitId || values.pilotBusinessUnitId,
+  )
+  if (
+    membershipAssignees.some(
+      (assignee) => !(assignee.businessUnitId || values.pilotBusinessUnitId),
+    )
+  ) {
+    errors.assignees = 'Chaque assigné doit être rattaché à un pôle.'
+  } else if (validAssignees.length === 0) {
     errors.assignees = 'Au moins un assigné est requis.'
   }
 
@@ -260,7 +269,8 @@ export function validateActionPlanExecutionEditForm(
     } else if (
       validAssignees.length !== 1 ||
       validAssignees[0]?.membershipId !== options.membershipId ||
-      validAssignees[0]?.businessUnitId !== values.pilotBusinessUnitId
+      (validAssignees[0]?.businessUnitId || values.pilotBusinessUnitId) !==
+        values.pilotBusinessUnitId
     ) {
       errors.assignees = 'Le staff ne peut s’assigner qu’à lui-même.'
     }
@@ -310,6 +320,15 @@ function resolvePendingTaskPositions(treatedTasks: ActionPlanTaskExecution[]): n
 export function buildActionPlanExecutionUpdateRequest(
   values: ActionPlanExecutionEditFormValues,
 ): PatchedActionPlanExecutionUpdateRequest {
+  if (
+    values.planningDraft.assignees.some(
+      (assignee) =>
+        assignee.membershipId && !(assignee.businessUnitId || values.pilotBusinessUnitId),
+    )
+  ) {
+    throw new Error('Chaque assigné doit être rattaché à un pôle.')
+  }
+
   const knownPendingIds = new Set(values.knownPendingTaskIds)
   const freePositions = resolvePendingTaskPositions(values.treatedTasks)
   const pendingTasks = values.pendingTasks
@@ -325,14 +344,16 @@ export function buildActionPlanExecutionUpdateRequest(
     }))
 
   const assignees = values.planningDraft.assignees
-    .filter((assignee) => assignee.membershipId && assignee.businessUnitId)
+    .filter(
+      (assignee) => assignee.membershipId && (assignee.businessUnitId || values.pilotBusinessUnitId),
+    )
     .map((assignee) => {
       const endAt = values.useSharedChronology
         ? toSharedChronologyFields(values.planningDraft).sharedEndAt
         : assignee.endAt
       return {
         membership_id: assignee.membershipId,
-        business_unit_id: assignee.businessUnitId,
+        business_unit_id: assignee.businessUnitId || values.pilotBusinessUnitId,
         end_at: endAt ? toIsoDateTime(endAt) : null,
       }
     })
@@ -352,7 +373,8 @@ export function buildActionPlanExecutionUpdateRequest(
     body.all_day = isAllDayPlanningDraft(values.planningDraft)
   } else {
     const validAssignees = values.planningDraft.assignees.filter(
-      (assignee) => assignee.membershipId && assignee.businessUnitId,
+      (assignee) =>
+        assignee.membershipId && (assignee.businessUnitId || values.pilotBusinessUnitId),
     )
     body.all_day = validAssignees.length > 0 && validAssignees.every((assignee) => assignee.allDay)
   }

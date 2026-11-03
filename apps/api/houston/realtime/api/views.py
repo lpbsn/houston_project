@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import AccessTokenAuthContext, BearerAccessTokenAuthentication
+from houston.core.api.realtime_unavailable import WsTicketRedisFailureMixin
 from houston.establishments.permissions import HasActiveMembership
 from houston.realtime.access import resolve_operational_realtime_actor_membership
 from houston.realtime.api.serializers import RealtimeWsTicketResponseSerializer
@@ -45,7 +46,7 @@ def _resolve_membership(request, establishment_id: uuid.UUID):
     return membership
 
 
-class RealtimeWsTicketView(EstablishmentScopedRealtimeMixin, APIView):
+class RealtimeWsTicketView(WsTicketRedisFailureMixin, EstablishmentScopedRealtimeMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,
@@ -61,6 +62,7 @@ class RealtimeWsTicketView(EstablishmentScopedRealtimeMixin, APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            503: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
     )
     def post(self, request, establishment_id):

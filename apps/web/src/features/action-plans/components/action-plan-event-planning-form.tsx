@@ -214,6 +214,7 @@ export function ActionPlanEventPlanningForm({
     const errors = validateAssigneePlanningAction(draft, assignee.id, {
       allowRepeat: config.canSchedule,
       action: 'schedule',
+      pilotBusinessUnitId,
     })
     setAssigneeActionErrors(errors)
     if (Object.keys(errors).length > 0) {
@@ -221,6 +222,7 @@ export function ActionPlanEventPlanningForm({
     }
     const body = buildScheduleRequestForAssignee(draft, assignee, {
       staffMode: config.staffMode,
+      pilotBusinessUnitId,
     })
     if (!body || !onAssigneeSchedule) {
       return
@@ -229,12 +231,15 @@ export function ActionPlanEventPlanningForm({
   }
 
   function handleAssigneeLaunch(assignee: ActionPlanAssigneeDraft) {
-    const errors = validateAssigneePlanningAction(draft, assignee.id, { action: 'launch' })
+    const errors = validateAssigneePlanningAction(draft, assignee.id, {
+      action: 'launch',
+      pilotBusinessUnitId,
+    })
     setAssigneeActionErrors(errors)
     if (Object.keys(errors).length > 0) {
       return
     }
-    const body = buildUseRequestForAssignee(draft, assignee)
+    const body = buildUseRequestForAssignee(draft, assignee, { pilotBusinessUnitId })
     if (!body || !onAssigneeLaunch) {
       return
     }

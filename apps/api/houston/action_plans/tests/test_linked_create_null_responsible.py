@@ -227,7 +227,12 @@ def test_manager_out_of_scope_pilot_denied_on_null_responsible(
             tasks=[
                 build_task_payload(task="Inspect", business_unit=maintenance_business_unit)
             ],
-            assignees=[],
+            assignees=[
+                build_assignee_payload(
+                    membership=owner_membership,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
         )
 
 
@@ -353,5 +358,10 @@ def test_zero_authorized_poles_manager_without_scope(owner_membership, maintenan
             tasks=[
                 build_task_payload(task="Inspect", business_unit=maintenance_business_unit)
             ],
-            assignees=[],
+            assignees=[
+                build_assignee_payload(
+                    membership=owner_membership,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
         )

@@ -78,6 +78,7 @@ export function useActionPlanCreateSubmit({
       const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
         saveToLibrary: values.saveToLibrary,
         staffExecutionMode,
+        pilotBusinessUnitId: values.pilotBusinessUnitId,
       })
       const merged = { ...errors, ...planningErrors }
       setFrontendFieldErrors(merged)
@@ -121,6 +122,7 @@ export function useActionPlanCreateSubmit({
         const catalogSubmit = resolveCatalogPlanningSubmit(planningDraft, {
           canSchedule: true,
           staffMode: false,
+          pilotBusinessUnitId: values.pilotBusinessUnitId,
         })
         if (!catalogSubmit || catalogSubmit.body.items.length === 0) {
           setGlobalError('Le plan d’action n’a pas pu être créé.')

@@ -37,8 +37,11 @@ from houston.action_plans.tests.helpers import build_assignee_payload, build_tas
 from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
-from houston.testing.factories import create_establishment
-from houston.testing.taxonomy import create_minimal_v3_signal
+from houston.testing.factories import create_establishment, create_membership
+from houston.testing.taxonomy import (
+    create_membership_with_business_unit_scope,
+    create_minimal_v3_signal,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -70,19 +73,18 @@ def test_create_ponctuel_with_tasks_and_assignees(
     assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 1
 
 
-def test_create_ponctuel_with_tasks_only(owner_membership, business_unit):
-    _, execution = create_action_plan_with_execution(
-        establishment_id=owner_membership.establishment_id,
-        created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
-        title="Task-only plan",
-        tasks=[build_task_payload(task="Sanitize tables", business_unit=business_unit)],
-        assignees=[],
-    )
+def test_create_ponctuel_rejects_tasks_without_assignee(owner_membership, business_unit):
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Task-only plan",
+            tasks=[build_task_payload(task="Sanitize tables", business_unit=business_unit)],
+            assignees=[],
+        )
 
-    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
-    assert ActionPlanAssignee.objects.filter(action_plan_execution=execution).count() == 0
-    assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 1
+    assert ActionPlanExecution.objects.count() == 0
 
 
 def test_create_task_without_business_unit_defaults_to_pilot(owner_membership, business_unit):
@@ -92,7 +94,9 @@ def test_create_task_without_business_unit_defaults_to_pilot(owner_membership, b
         pilot_business_unit_id=business_unit.id,
         title="Pilot default task plan",
         tasks=[{"task": "Implicit pilot task", "position": 1}],
-        assignees=[],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
     )
 
     task = ActionPlanTask.objects.get(action_plan=plan)
@@ -120,7 +124,7 @@ def test_create_ponctuel_with_assignees_only(
 
 
 def test_create_ponctuel_rejects_empty_execution(owner_membership, business_unit):
-    with pytest.raises(ActionPlanValidationError, match="At least one task or assignee"):
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
         create_action_plan_with_execution(
             establishment_id=owner_membership.establishment_id,
             created_by=owner_membership,
@@ -500,6 +504,96 @@ def test_create_rejects_assignee_out_of_establishment(
             pilot_business_unit_id=business_unit.id,
             title="Bad assignee",
             assignees=[build_assignee_payload(membership=outsider, business_unit=business_unit)],
+        )
+
+
+def test_create_assigns_director_without_membership_scope_on_pilot(
+    owner_membership,
+    establishment,
+    business_unit,
+):
+    director = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Director assignment",
+        assignees=[build_assignee_payload(membership=director, business_unit=business_unit)],
+    )
+
+    assignee = ActionPlanAssignee.objects.select_related("execution_team").get(
+        action_plan_execution=execution,
+    )
+    assert assignee.membership_id == director.id
+    assert assignee.execution_team.business_unit_id == business_unit.id
+    assert assignee.execution_team.is_pilot is True
+
+
+def test_create_assigns_manager_on_each_covered_scope(
+    owner_membership,
+    establishment,
+    business_unit,
+    maintenance_business_unit,
+):
+    manager = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(membership=manager, business_unit=business_unit)
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=maintenance_business_unit,
+    )
+
+    _, on_pilot = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Manager on pilot scope",
+        assignees=[build_assignee_payload(membership=manager, business_unit=business_unit)],
+    )
+    _, on_other_scope = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Manager on second scope",
+        assignees=[
+            build_assignee_payload(membership=manager, business_unit=maintenance_business_unit)
+        ],
+    )
+
+    pilot_assignee = ActionPlanAssignee.objects.select_related("execution_team").get(
+        action_plan_execution=on_pilot,
+    )
+    other_assignee = ActionPlanAssignee.objects.select_related("execution_team").get(
+        action_plan_execution=on_other_scope,
+    )
+    assert pilot_assignee.execution_team.business_unit_id == business_unit.id
+    assert other_assignee.execution_team.business_unit_id == maintenance_business_unit.id
+    assert other_assignee.execution_team.is_pilot is False
+
+
+def test_create_rejects_manager_assignee_outside_scopes(
+    owner_membership,
+    business_unit,
+    out_of_scope_manager,
+):
+    with pytest.raises(ActionPlanValidationError, match="out of scope"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Manager outside scope",
+            assignees=[
+                build_assignee_payload(
+                    membership=out_of_scope_manager,
+                    business_unit=business_unit,
+                )
+            ],
         )
 
 
