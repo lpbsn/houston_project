@@ -141,7 +141,7 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
     expect(within(sidebar).getByText('Spore Paris')).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
-    expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Fiches terrain' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
     const brand = sidebar.querySelector('img')
     expect(brand?.getAttribute('src')).toBe(sporeIconSrc)
@@ -162,7 +162,7 @@ describe('DesktopTerrainSidebar', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Fiches terrain' }))
     expect(navigate).toHaveBeenCalledWith('/e/est-1/signals', { intent: 'primary' })
   })
 
@@ -218,8 +218,8 @@ describe('DesktopTerrainSidebar', () => {
       'Dashboard',
       'Spore Brain',
       'Nouvelle observation',
-      'Observations',
-      'Exécution',
+      'Fiches terrain',
+
       'Chat',
       'Historique',
       'Général',
@@ -285,7 +285,7 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
     expect(within(sidebar).queryByRole('link', { name: 'Dashboard' })).toBeNull()
     expect(within(sidebar).queryByRole('button', { name: /Spore Brain/ })).toBeNull()
-    expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Fiches terrain' })).toBeTruthy()
   })
 
   it('shows French role labels in the footer context line', () => {
@@ -432,7 +432,7 @@ describe('DesktopTerrainSidebar', () => {
 
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(sidebar.getAttribute('data-collapsed')).toBe('true')
-    expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Fiches terrain' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Spore Brain' })).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Scope : Spore Paris' })).toBeTruthy()
     expect(within(sidebar).getByLabelText('Marie Renaud')).toBeTruthy()

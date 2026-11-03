@@ -139,7 +139,9 @@ class FieldRecordListView(RecordView):
                 calendar_filter(start_on=start, end_on=end, zone=actor.establishment.timezone)
             )
         offset = self.offset(request)
-        page = list(rows.order_by("-created_at", "-id")[offset : offset + 31])
+        page = list(
+            rows.order_by("-is_pinned", "due_on", "-created_at", "-id")[offset : offset + 31]
+        )
         return Response(
             FieldRecordPageSerializer(
                 {

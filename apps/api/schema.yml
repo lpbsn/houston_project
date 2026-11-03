@@ -16944,6 +16944,8 @@ components:
         color_index:
           type: integer
           nullable: true
+        is_pinned:
+          type: boolean
         owner:
           allOf:
           - $ref: '#/components/schemas/RecordPerson'
@@ -16991,6 +16993,7 @@ components:
       - created_at
       - due_on
       - id
+      - is_pinned
       - kind
       - observation_count
       - owner

@@ -98,7 +98,9 @@ def test_concurrent_auto_resolve_and_manual_cancel_created_from_siblings_preserv
 
     def run_auto_resolve_a() -> None:
         close_old_connections()
-        resolve_signal_from_execution_sync(signal=Signal.objects.get(id=sibling_a_id))
+        from houston.signals.exceptions import SignalStateError
+        with pytest.raises(SignalStateError):
+            resolve_signal_from_execution_sync(signal=Signal.objects.get(id=sibling_a_id))
 
     def run_cancel_b() -> None:
         close_old_connections()
@@ -128,5 +130,6 @@ def test_concurrent_auto_resolve_and_manual_cancel_created_from_siblings_preserv
             status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
         ).exists()
 
-    assert blocking_execution_a.status == ActionPlanExecution.Status.CANCELED
+    assert blocking_execution_a.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert sibling_a.resolved_at is None
     assert sibling_b.status == Signal.Status.CANCELED

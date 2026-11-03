@@ -132,7 +132,7 @@ def history_page(record, offset):
     )
     old = (
         SignalLifecycleEvent.objects.filter(signal_id__in=ids)
-        .exclude(metadata_safe__origin="record")
+        .filter(Q(metadata_safe__origin__isnull=True) | ~Q(metadata_safe__origin="record"))
         .annotate(
             kind=F("event_type"),
             date=F("occurred_at"),

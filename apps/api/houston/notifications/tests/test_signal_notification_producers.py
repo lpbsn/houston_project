@@ -584,7 +584,7 @@ def test_aggregate_emits_zero_notifications():
     assert _notifications_for_signal(signal_id=signal.id) == []
 
 
-def test_mark_done_validate_emits_signal_resolved_notification():
+def test_mark_done_validate_requests_review_without_false_resolution_notification():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(
         owner,
@@ -643,7 +643,11 @@ def test_mark_done_validate_emits_signal_resolved_notification():
         if item.event_key == Notification.EventKey.SIGNAL_RESOLVED
     ]
 
-    assert len(notifications) == 1
+    assert notifications == []
+    signal.refresh_from_db()
+    assert signal.review_requested_at is not None
+    assert signal.record_events.filter(kind="review_requested").exists()
+    assert signal.resolved_at is None
 
 
 def test_signal_notification_rollback_creates_zero_notifications():

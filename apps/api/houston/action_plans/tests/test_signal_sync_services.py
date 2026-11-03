@@ -139,7 +139,7 @@ def test_cancel_single_linked_execution_reopens_signal_to_open(
     assert signal.status == Signal.Status.OPEN
 
 
-def test_sync_resolves_when_one_done_one_canceled(
+def test_sync_requests_review_when_one_done_one_canceled(
     owner_membership,
     business_unit,
     staff_membership,
@@ -171,7 +171,9 @@ def test_sync_resolves_when_one_done_one_canceled(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
 
 
 def test_sync_reopens_to_open_when_all_canceled_without_done(
@@ -226,6 +228,9 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
         title="Canceled execution",
     )
 
+    cancel_action_plan_execution(
+        execution_id=signal.action_plan_executions.get().id, actor=owner_membership
+    )
     resolve_signal_from_execution_sync(signal=signal)
     sync_signal_after_execution_change(signal=signal)
 
@@ -233,7 +238,7 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_mark_done_without_validation_resolves_linked_signal(
+def test_mark_done_without_validation_requests_review_for_linked_signal(
     owner_membership,
     business_unit,
     staff_membership,
@@ -252,10 +257,12 @@ def test_mark_done_without_validation_resolves_linked_signal(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
 
 
-def test_validate_execution_resolves_linked_signal(
+def test_validate_execution_requests_review_for_linked_signal(
     owner_membership,
     business_unit,
     staff_membership,
@@ -278,7 +285,9 @@ def test_validate_execution_resolves_linked_signal(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
 
 
 def test_pending_validation_does_not_resolve_linked_signal(
@@ -304,7 +313,7 @@ def test_pending_validation_does_not_resolve_linked_signal(
     assert signal.status == Signal.Status.IN_PROGRESS
 
 
-def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
+def test_validated_execution_cannot_reopen_and_keeps_signal_under_review(
     owner_membership,
     business_unit,
     staff_membership,
@@ -332,7 +341,9 @@ def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
         stars=4,
     )
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
 
     with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
         reopen_action_plan_execution(
@@ -344,7 +355,9 @@ def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
     signal.refresh_from_db()
     assert validated.status == ActionPlanExecution.Status.DONE
     assert validated.validated_at is not None
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
 
 
 def test_reopen_from_pending_validation_with_linked_signal_keeps_signal_unchanged(
@@ -480,7 +493,7 @@ def test_manual_resolve_refuses_in_progress_with_active_executions(
     assert execution_b.status == ActionPlanExecution.Status.IN_PROGRESS
 
 
-def test_auto_resolve_cancels_active_executions_and_resolves(
+def test_historical_resolution_cannot_silently_cancel_active_work(
     owner_membership,
     business_unit,
     staff_membership,
@@ -513,21 +526,19 @@ def test_auto_resolve_cancels_active_executions_and_resolves(
         action_plan_execution=execution_b,
     )
 
-    resolve_signal_from_execution_sync(signal=signal)
-
+    from houston.signals.exceptions import SignalStateError
+    with pytest.raises(SignalStateError):
+        resolve_signal_from_execution_sync(signal=signal)
     signal.refresh_from_db()
     execution_a.refresh_from_db()
     execution_b.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
-    assert execution_a.status == ActionPlanExecution.Status.CANCELED
-    assert execution_b.status == ActionPlanExecution.Status.CANCELED
-    assert not ActionPlanExecutionFeedPin.objects.filter(
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.resolved_at is None
+    assert execution_a.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert execution_b.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert ActionPlanExecutionFeedPin.objects.filter(
         action_plan_execution_id__in=[execution_a.id, execution_b.id],
-    ).exists()
-
-    sync_signal_after_execution_change(signal=signal)
-    signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    ).count() == 3
 
 
 def test_sync_does_not_resolve_when_signal_auto_resolved_with_done_execution(
@@ -556,12 +567,15 @@ def test_sync_does_not_resolve_when_signal_auto_resolved_with_done_execution(
         actor_membership=owner_membership,
     )
 
-    resolve_signal_from_execution_sync(signal=signal)
+    from houston.signals.exceptions import SignalStateError
+    with pytest.raises(SignalStateError):
+        resolve_signal_from_execution_sync(signal=signal)
     sync_signal_after_execution_change(signal=signal)
 
     signal.refresh_from_db()
     done_execution.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.resolved_at is None
     assert done_execution.status == ActionPlanExecution.Status.DONE
 
 
@@ -606,7 +620,7 @@ def test_cancel_after_manual_resolve_does_not_rollback(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_sync_noop_when_interesting_with_done_execution(
+def test_sync_requests_review_when_interesting_with_done_execution(
     owner_membership,
     business_unit,
     staff_membership,
@@ -635,7 +649,9 @@ def test_sync_noop_when_interesting_with_done_execution(
     sync_signal_after_execution_change(signal=signal)
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.INTERESTING
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
 
 
 def test_sync_noop_when_interesting_with_all_canceled_executions(
@@ -736,7 +752,9 @@ def test_concurrent_resolve_vs_done_reopen_reject_on_created_from_siblings(
 
     def run_resolve_a() -> None:
         close_old_connections()
-        resolve_signal_from_execution_sync(signal=sibling_a)
+        from houston.signals.exceptions import SignalStateError
+        with pytest.raises(SignalStateError):
+            resolve_signal_from_execution_sync(signal=sibling_a)
 
     def run_reopen_b() -> None:
         close_old_connections()

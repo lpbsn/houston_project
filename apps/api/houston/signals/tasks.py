@@ -118,6 +118,7 @@ def record_followup_task():
                 "review_requested",
                 "linked",
                 "taken_in_charge",
+                "work_added",
             ],
         )
         .order_by("created_at")

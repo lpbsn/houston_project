@@ -40,9 +40,18 @@ def _assert_execution_invalidation(
     *,
     execution: ActionPlanExecution,
     reason: str,
-    call_index: int = -1,
+    call_index: int | None = None,
 ) -> None:
-    call = mock_notify.call_args_list[call_index]
+    calls = mock_notify.call_args_list
+    call = (
+        calls[call_index]
+        if call_index is not None
+        else next(
+            item
+            for item in calls
+            if item.kwargs.get("entity_id") == execution.id and item.kwargs.get("reason") == reason
+        )
+    )
     assert call.kwargs == {
         "establishment_id": execution.establishment_id,
         "subject_type": "action_plan_execution",
@@ -392,22 +401,14 @@ def test_signal_auto_resolve_cancels_linked_executions_with_canceled_invalidatio
         ],
     )
 
+    from houston.signals.exceptions import SignalStateError
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        resolve_signal_from_execution_sync(signal=signal)
+        with pytest.raises(SignalStateError):
+            resolve_signal_from_execution_sync(signal=signal)
         transaction.on_commit(lambda: None)
-
     execution.refresh_from_db()
-    assert execution.status == ActionPlanExecution.Status.CANCELED
-    assert any(
-        call.kwargs
-        == {
-            "establishment_id": execution.establishment_id,
-            "subject_type": "action_plan_execution",
-            "reason": "action_plan_execution.canceled",
-            "entity_id": execution.id,
-        }
-        for call in mock_notify.call_args_list
-    )
+    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
+    mock_notify.assert_not_called()
 
 
 def test_invalidation_payload_has_no_sensitive_fields(

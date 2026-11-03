@@ -208,4 +208,4 @@ def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_su
 
     source_id = source.id
     publish.assert_not_called()
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into__isnull=False).exists()

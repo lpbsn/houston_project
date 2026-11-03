@@ -205,7 +205,7 @@ class Signal(BaseModel):
     )
     content_edited_by_user = models.BooleanField(default=False)
     merged_into = models.ForeignKey(
-        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="merged_records"
+        "self", on_delete=models.RESTRICT, null=True, blank=True, related_name="merged_records"
     )
 
     class Meta:

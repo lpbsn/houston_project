@@ -34,6 +34,7 @@ import {
 } from './shared'
 import { RecordWorkPanel } from './work-panel'
 import { RecordForm } from './forms'
+import { RecordPinning } from './pinning'
 
 function RecordSection({
   site,
@@ -287,6 +288,9 @@ export function RecordDetailPage({
           </p>
         )}
         <div className="flex flex-wrap gap-2">
+          {original.data && (
+            <RecordPinning site={site} signal={original.data} />
+          )}
           {record.can_manage && (
             <>
               <Button variant="outline" onClick={() => setForm('details')}>

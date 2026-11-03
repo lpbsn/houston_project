@@ -1591,14 +1591,16 @@ def _resolve_signal_after_lock(
     actor_membership: EstablishmentMembership | None,
     resolution_origin: str,
 ) -> Signal:
-    from houston.action_plans.services import (
-        _cancel_linked_active_executions_for_signal_resolve,
-    )
+    from houston.signals.record_selectors import linked_executions
 
-    _cancel_linked_active_executions_for_signal_resolve(
-        signal=locked_self,
-        actor_membership=actor_membership,
-    )
+    if (
+        linked_executions(locked_self)
+        .filter(status__in=["in_progress", "scheduled", "pending_validation"])
+        .exists()
+    ):
+        raise SignalStateError(
+            "Des actions restent ouvertes. Terminez-les ou annulez-les explicitement."
+        )
     result = _transition_active_signal_to_terminal(
         signal=locked_self,
         target_status=Signal.Status.RESOLVED,
@@ -1706,18 +1708,18 @@ def _transition_active_signal_to_terminal(
         raise SignalStateError("Only active signals can be canceled or resolved.")
     if from_status == target_status:
         return locked_self
-    _maybe_delete_created_from_media_under_locks(
-        signal=locked_self,
-        related_signals=related_signals,
-        observation_id=observation_id,
-    )
+    # Closing a subject preserves its evidence; normal retention still applies.
     now = timezone.now()
     locked_self.status = target_status
+    locked_self.closure_reason = "resolved" if target_status == "resolved" else "abandoned"
+    locked_self.review_requested_at = None
     locked_self.is_pinned = False
     locked_self.pinned_at = None
     locked_self.pinned_by_membership = None
     update_fields = [
         "status",
+        "closure_reason",
+        "review_requested_at",
         "is_pinned",
         "pinned_at",
         "pinned_by_membership",
@@ -2059,7 +2061,7 @@ def merge_signal_into_resolved(
     resolution_audit: dict,
     candidate_expected_action: str | None,
 ) -> Signal:
-    """Absorb source into target then hard-delete the source. Caller holds UUID-order locks."""
+    """Absorb source while retaining its audit trail. Caller holds UUID-order locks."""
     if source.id == target.id:
         return target
 
@@ -2135,11 +2137,30 @@ def merge_signal_into_resolved(
     ]
     if associated_times:
         target.first_action_plan_associated_at = min(associated_times)
+    birth = min(source.created_at, target.created_at)
+    created_at_rewound = birth < target.created_at
+    if created_at_rewound:
+        target.created_at = birth
+    if not target.lifecycle_events.filter(
+        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
+        occurred_at__lte=birth,
+    ).exists():
+        record_signal_lifecycle_event(
+            signal=target,
+            event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
+            occurred_at=birth,
+            metadata_safe={
+                "to_status": Signal.Status.OPEN,
+                "origin": "qualify_merge",
+            },
+        )
     now = timezone.now()
     target.last_activity_at = max(target.last_activity_at, now)
     target_update_fields = ["last_activity_at", "updated_at"]
     if associated_times:
         target_update_fields.append("first_action_plan_associated_at")
+    if created_at_rewound:
+        target_update_fields.append("created_at")
     target.save(update_fields=target_update_fields)
     _schedule_signal_invalidation(signal=source, reason="signal.updated")
     _schedule_signal_invalidation(signal=target, reason="signal.updated")

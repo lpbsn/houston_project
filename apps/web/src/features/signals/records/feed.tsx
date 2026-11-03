@@ -13,12 +13,14 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '@/app/auth-provider'
+import { BusinessUnitBadge } from '@/components/ui/terrain/business-unit-badge'
 import { Button } from '@/components/ui/button'
 import { TerrainDialog } from '@/components/ui/terrain/terrain-dialog'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport } from '@/lib/lg-viewport'
 import {
   createRecord,
+  getRecord,
   listRecords,
   recordKeys,
   recordOptions,
@@ -58,9 +60,12 @@ function RecordCard({
       }
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="rounded-lg bg-[#EDF2EA] px-2 py-1 text-xs font-semibold text-[#244631]">
+        <BusinessUnitBadge colorIndex={record.color_index}>
           {record.pole}
-        </span>
+        </BusinessUnitBadge>
+        {record.is_pinned && (
+          <span className="text-xs font-semibold">Épinglée</span>
+        )}
         {record.can_manage && (
           <GripVertical size={15} aria-label="Déplacer la fiche" />
         )}
@@ -267,6 +272,11 @@ export function RecordFeedPage({
   const [mode, setMode] = useState<'list' | 'board' | 'calendar'>('list')
   const [mine, setMine] = useState(dayOnly || !manager)
   const [search, setSearch] = useState('')
+  const [pole, setPole] = useState('')
+  const options = useQuery({
+    queryKey: ['field-record-options', establishmentId],
+    queryFn: () => recordOptions(establishmentId),
+  })
   const [stage, setStage] = useState<RecordStage | ''>('')
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [closing, setClosing] = useState<FieldRecord | null>(null)
@@ -302,6 +312,7 @@ export function RecordFeedPage({
   const filters: RecordFilters = {
     mine,
     q: search,
+    ...(pole ? { pole } : {}),
     ...(stage ? { stage } : {}),
   }
   const { from, to } = monthWindow(month)
@@ -354,6 +365,19 @@ export function RecordFeedPage({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <select
+          aria-label="Filtrer par pôle"
+          value={pole}
+          onChange={(e) => setPole(e.target.value)}
+          className={`${inputClass} max-w-48`}
+        >
+          <option value="">Tous les pôles</option>
+          {options.data?.poles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -397,7 +421,7 @@ export function RecordFeedPage({
           ))}
         </div>
       </div>
-      <ErrorNote error={mutation.error ?? dropError} />
+      <ErrorNote error={mutation.error ?? dropError ?? options.error} />
       {mode === 'calendar' && (
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm">
@@ -438,10 +462,7 @@ export function RecordFeedPage({
                     )
                       return
                     if (s.id === 'closed') {
-                      void import('./api')
-                        .then(({ getRecord }) =>
-                          getRecord(establishmentId, drag.id),
-                        )
+                      void getRecord(establishmentId, drag.id)
                         .then(setClosing)
                         .catch((error) =>
                           setDropError(

@@ -156,6 +156,12 @@ def test_non_retroactivity_observer_linked_after_in_progress():
         actor_membership=alice,
     )
     signal.refresh_from_db()
+    assert signal.review_requested_at is not None
+    assert not _txs(membership=alice, reason_code=REASON_SIGNAL_RESOLVED)
+    from houston.signals.record_services import update_record
+    update_record(actor=alice, record_id=signal.id, expected_updated_at=signal.updated_at,
+                  stage="closed", closure_reason="resolved")
+    signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
 
     assert len(_txs(membership=alice, reason_code=REASON_SIGNAL_RESOLVED)) == 1
@@ -188,6 +194,11 @@ def test_cumulative_interesting_in_progress_resolved():
         execution_id=execution.id,
         actor_membership=membership,
     )
+    signal.refresh_from_db()
+    assert signal.review_requested_at is not None
+    from houston.signals.record_services import update_record
+    update_record(actor=membership, record_id=signal.id, expected_updated_at=signal.updated_at,
+                  stage="closed", closure_reason="resolved")
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
 

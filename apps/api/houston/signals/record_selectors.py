@@ -64,13 +64,15 @@ def record_queryset(membership):
     if membership.role in ("owner", "director"):
         project_access = Q()
     else:
-        project_access |= Q(owner_membership=membership)
-        if membership.role == "manager":
-            from houston.establishments.membership_scope import membership_business_unit_scope_ids
+        from houston.establishments.membership_scope import membership_business_unit_scope_ids
 
-            project_access |= Q(
-                responsible_business_unit_id__in=membership_business_unit_scope_ids(membership)
-            )
+        scoped_units = membership_business_unit_scope_ids(membership)
+        owner_scope = Q(responsible_business_unit_id__in=scoped_units) | Q(
+            affected_business_unit_id__in=scoped_units
+        )
+        project_access |= Q(owner_membership=membership) & owner_scope
+        if membership.role == "manager":
+            project_access |= Q(responsible_business_unit_id__in=scoped_units)
     return (
         base.annotate(is_reporter=Exists(reported))
         .filter(

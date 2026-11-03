@@ -339,4 +339,4 @@ def test_push_v1_event_keys_includes_chat():
         Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED
         in push_constants.PUSH_V1_EVENT_KEYS
     )
-    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 20
+    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 23

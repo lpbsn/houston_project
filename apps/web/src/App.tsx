@@ -1,5 +1,3 @@
-import { RecordFeedPage } from "@/features/signals/records/feed"
-import { RecordDetailPage } from "@/features/signals/records/detail"
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
@@ -33,6 +31,8 @@ import {
   LazyTeamMemberDetailPage,
   LazyOperationalConfigPage,
   LazyBrainPage,
+  LazyRecordFeedPage,
+  LazyRecordDetailPage,
   LazyReportPage,
   LazySignalDetailPage,
   LazySignalFeedPage,
@@ -744,7 +744,7 @@ function App() {
       const scope = route.scope
       const recordSiteId = scope?.type === 'establishment' ? scope.establishmentId : establishmentId
       if (scope?.type !== 'cross' && recordSiteId) {
-        return <RecordDetailPage key={`${recordSiteId}:${route.signalId}`} establishmentId={recordSiteId} recordId={route.signalId} onNavigate={navigate} onBack={terrainBackPath ? performBack : undefined} />
+        return <LazyRecordDetailPage key={`${recordSiteId}:${route.signalId}`} establishmentId={recordSiteId} recordId={route.signalId} onNavigate={navigate} onBack={terrainBackPath ? performBack : undefined} />
       }
       return (
         <LazySignalDetailPage
@@ -862,7 +862,7 @@ function App() {
         return <LazyAnalyticsPage scope={scope} />
       }
       if (route.page === 'signals') {
-        if (scope.type === 'establishment') return <RecordFeedPage key={scope.establishmentId} establishmentId={scope.establishmentId} onNavigate={navigate} />
+        if (scope.type === 'establishment') return <LazyRecordFeedPage key={scope.establishmentId} establishmentId={scope.establishmentId} onNavigate={navigate} />
         return (
           <LazySignalFeedPage
             establishmentId={establishmentIdForScope ?? null}
@@ -965,7 +965,7 @@ function App() {
     }
 
     if (route.path === '/signals' && establishmentId) {
-      return <RecordFeedPage key={establishmentId} establishmentId={establishmentId} onNavigate={navigate} />
+      return <LazyRecordFeedPage key={establishmentId} establishmentId={establishmentId} onNavigate={navigate} />
     }
 
     if (route.path === '/signals') {

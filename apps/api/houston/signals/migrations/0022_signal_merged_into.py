@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 blank=True,
                 null=True,
-                on_delete=django.db.models.deletion.PROTECT,
+                on_delete=django.db.models.deletion.RESTRICT,
                 related_name="merged_records",
                 to="signals.signal",
             ),

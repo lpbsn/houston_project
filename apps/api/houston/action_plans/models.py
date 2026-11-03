@@ -747,7 +747,7 @@ class ActionPlanExecutionTask(BaseModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     depends_on = models.ForeignKey(
         "self",
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         null=True,
         blank=True,
         related_name="dependent_tasks",

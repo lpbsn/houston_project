@@ -5733,6 +5733,7 @@ export interface components {
             /** Format: uuid */
             pole_id: string | null;
             color_index: number | null;
+            is_pinned: boolean;
             owner: components["schemas"]["RecordPerson"] | null;
             waiting_for: components["schemas"]["RecordPerson"] | null;
             /** Format: date */

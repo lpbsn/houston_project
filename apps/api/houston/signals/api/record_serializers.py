@@ -27,6 +27,7 @@ class FieldRecordSerializer(serializers.Serializer):
     pole = serializers.CharField()
     pole_id = serializers.UUIDField(allow_null=True)
     color_index = serializers.IntegerField(allow_null=True)
+    is_pinned = serializers.BooleanField()
     owner = RecordPersonSerializer(allow_null=True)
     waiting_for = RecordPersonSerializer(allow_null=True)
     due_on = serializers.DateField(allow_null=True)
@@ -123,6 +124,7 @@ def serialize_record(record, actor):
         "title": record.title,
         "summary": record.structured_summary,
         "kind": record.record_kind,
+        "is_pinned": record.is_pinned,
         "stage": record_stage(record),
         "closure_reason": record.closure_reason,
         "pole": pole.specific_name if pole else "À orienter",

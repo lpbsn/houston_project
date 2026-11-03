@@ -243,20 +243,26 @@ def _lock_source_signal_created_from_set_if_any(*, execution_id: uuid.UUID) -> N
     """
     from django.db.models import Q
 
-    from houston.signals.services import _lock_signal_created_from_set_or_self
+    from houston.signals.models import SignalSourceObservation
 
     execution = ActionPlanExecution.objects.filter(pk=execution_id).first()
     if execution is None:
         return
-    records = (
-        Signal.objects.filter(
-            Q(pk=execution.source_signal_id) | Q(work_links__execution_id=execution_id)
+    linked_ids = Signal.objects.filter(
+        Q(pk=execution.source_signal_id) | Q(work_links__execution_id=execution_id)
+    ).values("id")
+    observations = SignalSourceObservation.objects.filter(
+        signal_id__in=linked_ids, link_type="created_from"
+    ).values("observation_id")
+    # Acquire the entire union once, not successively overlapping sibling sets.
+    ids = Signal.objects.filter(
+        Q(pk__in=linked_ids)
+        | Q(
+            source_observation_links__observation_id__in=observations,
+            source_observation_links__link_type="created_from",
         )
-        .distinct()
-        .order_by("id")
-    )
-    for signal in records:
-        _lock_signal_created_from_set_or_self(signal=signal)
+    ).values("id")
+    list(Signal.objects.filter(pk__in=ids).order_by("id").select_for_update(of=("self",)))
 
 
 def _cancel_linked_active_executions_for_signal_resolve(

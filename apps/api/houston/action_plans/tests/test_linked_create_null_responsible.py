@@ -310,7 +310,7 @@ def test_merge_binds_execution_to_surviving_signal(
     source_id = source.id
     survivor.refresh_from_db()
     execution.refresh_from_db()
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into__isnull=False).exists()
     assert execution.source_signal_id == survivor.id
     assert ActionPlanExecution.objects.filter(source_signal_id=source_id).count() == 0
 

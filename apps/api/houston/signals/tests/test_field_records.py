@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import time, timedelta
 from uuid import uuid4
 
 import pytest
@@ -135,6 +135,41 @@ def test_open_work_prevents_false_resolution(context):
         change(owner, signal, stage="closed", closure_reason="resolved")
 
 
+def test_closed_record_refuses_new_work_link(context):
+    from houston.signals.record_services import link_execution
+
+    owner, _, signal = context
+    execution = work(owner, signal)
+    other = create_record(
+        actor=owner,
+        title="Information prise en compte",
+        business_unit_id=signal.responsible_business_unit_id,
+    )
+    other = change(owner, other, stage="closed", closure_reason="acknowledged")
+    with pytest.raises(SignalStateError):
+        link_execution(
+            actor=owner,
+            record_id=other.id,
+            execution_id=execution.id,
+            expected_updated_at=other.updated_at,
+        )
+    assert not other.work_links.exists()
+
+
+def test_project_owner_loses_access_after_pole_scope_is_revoked(context):
+    owner, staff, signal = context
+    record = create_record(
+        actor=owner,
+        title="Projet réservé au pôle",
+        business_unit_id=signal.responsible_business_unit_id,
+        owner_membership_id=staff.id,
+    )
+    assert get_record(staff, record.id) is not None
+    staff.scope_links.all().delete()
+    staff.refresh_from_db()
+    assert get_record(staff, record.id) is None
+
+
 def test_finished_work_requests_verification_instead_of_resolving(context):
     owner, _, signal = context
     execution = work(owner, signal)
@@ -258,3 +293,128 @@ def test_record_api_enforces_site_and_expected_version(api_client, context):
         api_client.get(url.replace(str(signal.id), str(uuid4())), **auth_headers(token)).status_code
         == 404
     )
+
+
+def test_pending_task_reorder_preserves_prerequisite_and_original_timestamp(context):
+    from houston.action_plans.execution_update import update_action_plan_execution
+
+    owner, _, signal = context
+    execution = work(owner, signal, ["Diagnostiquer", "Corriger"])
+    first, second = list(execution.task_executions.order_by("position"))
+    original = first.created_at
+    set_dependency(
+        actor=owner, execution_id=execution.id, task_id=second.id, depends_on_id=first.id
+    )
+    execution.refresh_from_db()
+    update_action_plan_execution(
+        execution_id=execution.id,
+        actor=owner,
+        expected_updated_at=execution.updated_at,
+        pending_tasks=[
+            {
+                "id": task.id,
+                "task": task.task,
+                "position": i,
+                "business_unit_id": signal.responsible_business_unit_id,
+                "assigned_membership_id": owner.id,
+            }
+            for i, task in enumerate([second, first], start=1)
+        ],
+    )
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.created_at == original
+    assert second.depends_on_id == first.id
+    assert second.position == 1
+
+
+def test_director_history_contains_prior_lifecycle_and_human_decisions(context):
+    from houston.signals.lifecycle_events import record_signal_lifecycle_event
+    from houston.signals.record_sections import history_page
+
+    owner, _, signal = context
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type="signal.created",
+        occurred_at=signal.created_at,
+        actor_membership=owner,
+    )
+    change(owner, signal, stage="closed", closure_reason="acknowledged")
+    rows = history_page(signal, 0)["items"]
+    assert {row["title"] for row in rows} == {"Observation reçue", "Fiche close"}
+    assert any("Information prise en compte" in row["text"] for row in rows)
+
+
+def test_repeated_notification_delivery_does_not_duplicate(context):
+    from houston.notifications.models import Notification
+    from houston.signals.record_notifications import deliver_record_event
+
+    owner, staff, signal = context
+    change(owner, signal, owner_membership_id=staff.id)
+    event = signal.record_events.get(kind="assigned")
+    deliver_record_event(event.id)
+    deliver_record_event(event.id)
+    assert (
+        Notification.objects.filter(
+            subject_id=signal.id, recipient_membership=staff, event_key="signal.record.updated"
+        ).count()
+        == 1
+    )
+
+
+def test_reminders_use_local_day_and_do_not_repeat(context):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from houston.notifications.models import Notification
+    from houston.signals.record_notifications import deliver_record_reminders
+
+    owner, staff, signal = context
+    tomorrow = timezone.now().astimezone(ZoneInfo(owner.establishment.timezone)).date() + timedelta(
+        days=1
+    )
+    change(owner, signal, owner_membership_id=staff.id, due_on=tomorrow)
+    before = datetime.combine(
+        tomorrow - timedelta(days=1), time(8), tzinfo=ZoneInfo(owner.establishment.timezone)
+    )
+    deliver_record_reminders(now=before)
+    assert not Notification.objects.filter(event_key="signal.record.due").exists()
+    deliver_record_reminders(now=before + timedelta(hours=1))
+    deliver_record_reminders(now=before + timedelta(hours=3))
+    assert (
+        Notification.objects.filter(
+            subject_id=signal.id, recipient_membership=staff, event_key="signal.record.due"
+        ).count()
+        == 1
+    )
+
+
+def test_dependency_protects_predecessor_but_allows_whole_group_cleanup(context):
+    from django.db.models.deletion import RestrictedError
+
+    owner, _, signal = context
+    execution = work(owner, signal, ["Diagnostiquer", "Corriger"])
+    first, second = list(execution.task_executions.order_by("position"))
+    set_dependency(
+        actor=owner, execution_id=execution.id, task_id=second.id, depends_on_id=first.id
+    )
+    with pytest.raises(RestrictedError):
+        first.delete()
+    execution.task_executions.all().delete()
+    assert not execution.task_executions.exists()
+
+
+def test_merged_history_protects_survivor_but_allows_joint_cleanup(context):
+    from django.db.models.deletion import RestrictedError
+
+    owner, _, target = context
+    source = create_record(
+        actor=owner, title="Ancien épisode", business_unit_id=target.responsible_business_unit_id
+    )
+    source.merged_into = target
+    source.save(update_fields=["merged_into"])
+    with pytest.raises(RestrictedError):
+        target.delete()
+    ids = [source.id, target.id]
+    Signal.objects.filter(id__in=ids).delete()
+    assert not Signal.objects.filter(id__in=ids).exists()

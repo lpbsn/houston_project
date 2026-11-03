@@ -3,7 +3,7 @@
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.accounts.legal_services import require_current_terms
@@ -59,6 +59,13 @@ def _member(signal, membership_id):
     # Participants and ownership do not widen access to a pole, plan or private thread.
     from houston.signals.permissions import signal_pole_visible_to_membership
 
+    if signal.record_kind == "project" and member.role == "manager":
+        from houston.establishments.membership_scope import membership_scope_covers_business_unit
+
+        if not signal.responsible_business_unit or not membership_scope_covers_business_unit(
+            member, signal.responsible_business_unit
+        ):
+            raise SignalValidationError("Ce membre ne couvre pas le pôle de la fiche.")
     if not signal_pole_visible_to_membership(member, signal):
         raise SignalValidationError("Ce membre ne couvre pas le pôle de la fiche.")
     return member
@@ -69,7 +76,15 @@ def _event(signal, actor, kind, changes):
     from houston.signals.services import _schedule_signal_invalidation
 
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
-    if kind in {"assigned", "closed", "reopened", "review_requested", "linked", "taken_in_charge"}:
+    if kind in {
+        "assigned",
+        "closed",
+        "reopened",
+        "review_requested",
+        "linked",
+        "taken_in_charge",
+        "work_added",
+    }:
         from houston.signals.record_notifications import schedule_record_event
 
         schedule_record_event(event.id)
@@ -196,7 +211,8 @@ def update_record(*, actor, record_id, expected_updated_at, **data):
                 )
                 if signal.routing_status == "resolved" and collision:
                     raise SignalStateError(
-                        "Un sujet actif correspond déjà. Rapprochez les fiches avant de rouvrir."
+                        "Un sujet équivalent est déjà actif. Poursuivez dans sa fiche "
+                        "pour conserver les deux épisodes."
                     )
                 signal.resolved_at = signal.canceled_at = None
                 signal.resolved_by_membership = signal.canceled_by_membership = None
@@ -222,16 +238,29 @@ def update_record(*, actor, record_id, expected_updated_at, **data):
             "closed": f"signal.{signal.status}",
         }[stage]
         if signal.record_kind == Signal.RecordKind.OBSERVATION:
-            record_signal_lifecycle_event(
+            lifecycle_event = record_signal_lifecycle_event(
                 signal=signal,
                 event_type=event_name,
                 actor_membership=actor,
                 occurred_at=timezone.now(),
                 metadata_safe={"to_status": signal.status, "origin": "record"},
             )
+            from houston.gamification.services import award_signal_progress_points
+
+            award_signal_progress_points(signal=signal, lifecycle_event=lifecycle_event)
     if changes:
         signal.last_activity_at = timezone.now()
-        signal.save()
+        try:
+            with transaction.atomic():
+                signal.save()
+        except IntegrityError as exc:
+            from houston.signals.services import _is_active_aggregation_unique_violation
+
+            if _is_active_aggregation_unique_violation(exc):
+                raise SignalStateError(
+                    "Un sujet équivalent est déjà actif. Actualisez et poursuivez dans cette fiche."
+                ) from exc
+            raise
         _event(signal, actor, kind, changes)
     return signal
 
@@ -260,6 +289,8 @@ def link_execution(*, actor, record_id, execution_id, expected_updated_at):
 
     signal = _lock(actor, record_id, expected_updated_at)
     _require_manager(actor, signal)
+    if record_stage(signal) == "closed":
+        raise SignalStateError("Rouvrez la fiche avant d’y rattacher du travail.")
     execution = (
         ActionPlanExecution.objects.select_for_update()
         .filter(
@@ -338,11 +369,21 @@ def add_record_work(
             }
             for i, task in enumerate(tasks)
         )
+        assignees = [
+            {
+                "membership_id": a.membership_id,
+                "business_unit_id": a.execution_team.business_unit_id,
+            }
+            for a in execution.assignees.select_related("execution_team")
+        ]
+        if member.id not in {a["membership_id"] for a in assignees}:
+            assignees.append({"membership_id": member.id, "business_unit_id": unit_id})
         update_action_plan_execution(
             execution_id=execution.id,
             actor=actor,
             expected_updated_at=execution.updated_at,
             pending_tasks=pending,
+            assignees=assignees,
         )
     else:
         if quick_link:
@@ -376,7 +417,12 @@ def add_record_work(
         )
     signal.refresh_from_db()
     signal.review_requested_at = None
-    signal.save(update_fields=["review_requested_at", "updated_at"])
+    fields = ["review_requested_at", "updated_at"]
+    if signal.due_on is None and due_on is not None:
+        signal.due_on = due_on
+        signal.due_revision += 1
+        fields.extend(["due_on", "due_revision"])
+    signal.save(update_fields=fields)
     _event(signal, actor, "work_added", {"execution_id": str(execution.id)})
     return signal
 

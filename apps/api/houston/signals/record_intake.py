@@ -108,7 +108,7 @@ def attach_execution(execution):
             responsible_business_unit_id=execution.pilot_business_unit_id,
             affected_business_unit_id=execution.pilot_business_unit_id,
             status="in_progress",
-            owner_membership_id=execution.chronology_owner_membership_id,
+            owner_membership_id=execution.chronology_owner_membership_id or execution.created_by_id,
             due_on=execution.end_at.astimezone(ZoneInfo(execution.establishment.timezone)).date()
             if execution.end_at
             else None,

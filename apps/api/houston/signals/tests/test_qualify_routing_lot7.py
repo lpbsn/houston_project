@@ -473,14 +473,19 @@ def test_collision_merges_without_third_signal_or_duplicate_links(api_client):
 
     source_id = source.id
     survivor.refresh_from_db()
-    assert not Signal.objects.filter(id=source_id).exists()
-    assert Signal.objects.filter(establishment=membership.establishment).count() == 1
+    assert Signal.objects.filter(id=source_id, merged_into_id=survivor.id).exists()
+    assert (
+        Signal.objects.filter(
+            establishment=membership.establishment, merged_into__isnull=True
+        ).count()
+        == 1
+    )
     assert Signal.objects.filter(
         establishment=membership.establishment,
         status__in={"open", "in_progress"},
     ).count() == 1
 
-    assert not SignalSourceObservation.objects.filter(
+    assert SignalSourceObservation.objects.filter(
         signal_id=source_id,
         observation=observation,
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
@@ -503,7 +508,8 @@ def test_collision_merges_without_third_signal_or_duplicate_links(api_client):
         format="json",
         **auth_headers(token),
     )
-    assert retry.status_code == 404
+    assert retry.status_code == 200
+    assert retry.json()["id"] == str(survivor.id)
 
 
 def test_qualify_deleted_merged_source_returns_404(api_client):

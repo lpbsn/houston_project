@@ -61,7 +61,8 @@ def test_observation_handoff_happy_path(
     assert observation.action_plan_execution_task_id == task.id
     assert updated.observation_id == observation.id
     assert updated.status == "observation_created"
-    assert Signal.objects.count() == signal_count_before
+    assert Signal.objects.count() == signal_count_before + 1
+    assert Signal.objects.filter(intake_observation=observation, record_kind="intake").exists()
     mock_enqueue.assert_not_called()
 
 

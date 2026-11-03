@@ -390,7 +390,8 @@ describe('applyOperationalInvalidation', () => {
       { queryClient, establishmentId: 'est-1' },
     )
 
-    expect(invalidateSpy).not.toHaveBeenCalled()
+    expect(invalidateSpy).toHaveBeenCalledTimes(1)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['field-records', 'est-1'] })
   })
 })
 

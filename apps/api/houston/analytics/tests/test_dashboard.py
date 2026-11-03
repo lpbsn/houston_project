@@ -1851,7 +1851,7 @@ def test_dashboard_after_operational_cleanup_reset():
     assert {item.name for item in responsible.segments} == {"Maintenance"}
     assert result.locations.items[0].comparison.coverage == COVERAGE_COMPLETE
     assert result.contributors == ()
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into__isnull=False).exists()
 
     later = get_analytics_dashboard(
         membership.user,
