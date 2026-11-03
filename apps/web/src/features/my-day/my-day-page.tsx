@@ -1,29 +1,87 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { ArrowRight, AtSign, Bell, ChevronDown, ChevronRight, ClipboardList, Mail, Sun } from 'lucide-react'
-import type { MouseEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  ArrowRight,
+  AtSign,
+  Bell,
+  Calendar,
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  ClipboardList,
+  Clock,
+  Eye,
+  ListChecks,
+  Mail,
+  Repeat,
+  ShieldCheck,
+  Sun,
+} from 'lucide-react'
+import { useState, type MouseEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { TerrainErrorState } from '@/components/ui/terrain'
 import { useNotificationSelection, useNotificationsInfiniteQuery } from '@/features/notifications/hooks'
 import {
   formatNotificationRelativeTime,
   getNotificationIconVariant,
 } from '@/features/notifications/lib/notification-display'
 import type { NotificationItem } from '@/features/notifications/types'
-import { terrain, terrainCardClassName, terrainSectionDotVariants } from '@/lib/terrain-styles'
+import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-import { fetchMyDay, myDayQueryKey, type MyDayTask } from './api'
+import {
+  fetchMyDay,
+  fetchMyDaySection,
+  MyDayRequestError,
+  myDayQueryKey,
+  type MyDayCard,
+  type MyDaySectionKey,
+} from './api'
+import {
+  applyMyDayContinuation,
+  applyMyDayInitial,
+  emptyMyDayWindow,
+  markMyDayContinuationError,
+  type MyDayWindow,
+} from './my-day-reading'
 
-const sections: {
-  key: MyDayTask['bucket']
+const workSections: {
+  key: MyDaySectionKey
   title: string
-  dot?: keyof typeof terrainSectionDotVariants
+  description: string
+  emptyTitle: string
+  emptyDetail: string
+  emblemClassName: string
+  icon: typeof ListChecks
 }[] = [
-  { key: 'overdue', title: 'En retard', dot: 'danger' },
-  { key: 'today', title: 'Aujourd’hui', dot: 'success' },
-  { key: 'upcoming', title: 'À venir' },
-  { key: 'undated', title: 'Sans échéance' },
+  {
+    key: 'action',
+    title: 'À traiter',
+    description: 'Ce qui attend une action de votre part',
+    emptyTitle: 'Aucune tâche à traiter pour le moment.',
+    emptyDetail: 'Vous êtes à jour.',
+    emblemClassName: 'text-[#416b5e]',
+    icon: ListChecks,
+  },
+  {
+    key: 'follow',
+    title: 'À suivre',
+    description: 'Mes engagements sans action immédiate',
+    emptyTitle: 'Rien à suivre pour le moment.',
+    emptyDetail: 'Les plans qui demandent un suivi apparaîtront ici.',
+    emblemClassName: 'text-[#66746b]',
+    icon: Eye,
+  },
+  {
+    key: 'upcoming',
+    title: 'À venir',
+    description: 'Le travail futur déjà visible pour moi',
+    emptyTitle: 'Rien de prévu pour le moment.',
+    emptyDetail: 'Vos prochains plans visibles apparaîtront ici.',
+    emblemClassName: 'text-[#63716e]',
+    icon: Calendar,
+  },
 ]
 
 const textNavClassName = cn(
@@ -96,6 +154,26 @@ function formatClock(date: Date, timeZone: string): string {
   }).format(date)
 }
 
+function formatPlanDay(iso: string | null, timeZone: string, now: Date): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  const day = civilDay(date, timeZone)
+  const today = civilDay(now, timeZone)
+  if (!day || !today) return null
+  return formatDayMonth(date, timeZone, day, today)
+}
+
+function planSpan(card: MyDayCard, timeZone: string | undefined, now = new Date()): string | null {
+  if (!timeZone) return null
+  const start = formatPlanDay(card.start_at, timeZone, now)
+  const end = formatPlanDay(card.plan_end_at, timeZone, now)
+  if (start && end) return `Début ${start} · Fin ${end}`
+  if (start) return `Début ${start}`
+  if (end) return `Fin ${end}`
+  return null
+}
+
 function formatDayMonth(date: Date, timeZone: string, day: CivilDay, today: CivilDay): string {
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',
@@ -116,7 +194,7 @@ export function formatMyDayHeadingDate(timeZone: string, now = new Date()): stri
 }
 
 export function formatTaskDeadline(
-  task: MyDayTask,
+  task: { due_at: string | null, all_day?: boolean },
   timeZone: string,
   now = new Date(),
 ): string | null {
@@ -143,175 +221,388 @@ function attributionLabel(shared: boolean): 'Pour moi' | 'Équipe' {
   return shared ? 'Équipe' : 'Pour moi'
 }
 
+const lateTextClassName = 'text-[#8A5A00]'
+
+const kindLabel: Record<MyDayCard['kind'], string> = {
+  validate: 'À valider',
+  awaiting_validation: 'En attente de validation',
+  scheduled: 'Plan programmé',
+  realize: 'Plan à réaliser',
+  tasks: 'Tâches à effectuer',
+  follow: 'Plan à suivre',
+  finalize: 'Plan à finaliser',
+  relay: 'Relais de finalisation',
+}
+
+const kindIconClassName: Record<MyDayCard['kind'], string> = {
+  validate: 'bg-[#e7eff8] text-[#36608d]',
+  awaiting_validation: 'bg-[#f0f1ed] text-[#67746a]',
+  scheduled: 'bg-[#f1f0e9] text-[#787764]',
+  realize: 'bg-[#eaf0f4] text-[#426b7e]',
+  tasks: 'bg-[#eaf3ef] text-[#326a59]',
+  follow: 'bg-[#f0f1ed] text-[#67746a]',
+  finalize: 'bg-[#eaf2e9] text-[#48734e]',
+  relay: 'bg-[#eaf2e9] text-[#48734e]',
+}
+
+function KindIcon({ kind, upcoming = false }: { kind: MyDayCard['kind'], upcoming?: boolean }) {
+  const className = 'size-5 @min-[560px]/day:size-[23px]'
+  if (kind === 'validate') return <ShieldCheck className={className} aria-hidden />
+  if (kind === 'relay') return <Repeat className={className} aria-hidden />
+  if (kind === 'finalize') return <CheckCheck className={className} aria-hidden />
+  if (kind === 'awaiting_validation') return <Clock className={className} aria-hidden />
+  if (kind === 'follow') return <Eye className={className} aria-hidden />
+  if (kind === 'scheduled' || upcoming) return <Calendar className={className} aria-hidden />
+  if (kind === 'realize') return <ClipboardList className={className} aria-hidden />
+  return <ListChecks className={className} aria-hidden />
+}
+
+function cardKindLabel(card: MyDayCard): string {
+  if (card.kind === 'tasks' && card.section === 'upcoming') return 'Tâches à venir'
+  return kindLabel[card.kind]
+}
+
+function taskQuantity(count: number, adjective: 'concernée' | 'prévue'): string {
+  const tasks = count > 1 ? 'tâches' : 'tâche'
+  const qualifier = count > 1 ? `${adjective}s` : adjective
+  return `${count} ${tasks} ${qualifier}`
+}
+
+function cardNote(card: MyDayCard): string | null {
+  if (card.kind === 'realize') {
+    return 'Vous êtes assigné au plan. Aucune tâche détaillée n’a été définie.'
+  }
+  if (card.kind === 'follow') {
+    return card.own_tasks_done
+      ? 'Vos tâches sont traitées. D’autres membres poursuivent le plan.'
+      : 'Les tâches restantes sont attribuées à d’autres personnes.'
+  }
+  if (card.kind === 'awaiting_validation') {
+    return 'Le plan a été transmis pour validation. Aucune tâche n’est à traiter ici.'
+  }
+  if (card.kind === 'relay') {
+    return 'Toutes les tâches sont traitées. Aucun assigné actif du pôle pilote ne peut clôturer ce plan.'
+  }
+  if (card.kind === 'scheduled') return 'Ce plan est programmé. Son démarrage est à venir.'
+  if (card.kind === 'finalize') {
+    return 'Le travail est traité. La clôture explicite du plan reste à effectuer dans Exécution.'
+  }
+  if (card.kind === 'validate') {
+    return 'Validation collective : chaque manager habilité du pôle pilote voit cette carte.'
+  }
+  return null
+}
+
+function cardMeta(card: MyDayCard, timeZone: string | undefined): string {
+  const concerned = card.tasks.length > 0 ? taskQuantity(card.tasks.length, 'concernée') : null
+  const planned = card.tasks.length > 0 ? taskQuantity(card.tasks.length, 'prévue') : null
+  if (card.kind === 'scheduled') {
+    const formatted = card.start_at && timeZone
+      ? formatTaskDeadline({ due_at: card.start_at, all_day: card.plan_all_day }, timeZone)
+      : null
+    const pastStart = card.start_at !== null && new Date(card.start_at).getTime() < Date.now()
+    const when = formatted
+      ? `${pastStart ? 'Démarrage prévu' : 'Démarre'} ${formatted}`
+      : 'Début non daté'
+    return planned ? `${when} · ${planned}` : when
+  }
+  if (card.kind === 'validate') return 'Validation requise'
+  if (card.kind === 'awaiting_validation') return 'En attente de validation'
+  if (card.kind === 'realize') return 'Plan sans tâche · À réaliser'
+  if (card.kind === 'finalize') return 'Toutes les tâches sont traitées'
+  if (card.kind === 'relay') return 'Relais de finalisation'
+  if (card.kind === 'follow') {
+    return card.own_tasks_done ? 'Vos tâches sont traitées' : 'Tâches portées par d’autres'
+  }
+  if (card.kind === 'tasks' && card.section === 'upcoming') {
+    const firstDated = card.tasks.find((task) => task.due_at)
+    const formatted = firstDated?.due_at && timeZone
+      ? formatTaskDeadline({ due_at: firstDated.due_at }, timeZone)
+      : null
+    return formatted ? `Prochaine échéance · ${formatted}` : (concerned ?? 'Sans échéance')
+  }
+  const sharedWork = card.tasks.length > 0 && card.tasks.every((task) => task.shared)
+  if (sharedWork && concerned) return `Travail d’équipe · ${concerned}`
+  return concerned ?? 'Sans échéance'
+}
+
+function taskDueLabel(
+  task: MyDayCard['tasks'][number],
+  timeZone: string | undefined,
+): string {
+  const formatted = timeZone ? formatTaskDeadline(task, timeZone) : null
+  if (task.late) return formatted ? `En retard · ${formatted}` : 'En retard'
+  if (!formatted) return 'Sans échéance'
+  if (/^\d{2}:\d{2}$/.test(formatted)) return `Aujourd’hui · ${formatted}`
+  return formatted
+}
+
 type WorkColumnProps = {
-  tasks: MyDayTask[]
+  sections: MyDayWindow['sections']
   timeZone: string | undefined
   isPending: boolean
   isLoadingError: boolean
   isRefetchError: boolean
-  isFetchNextPageError: boolean
-  isFetchingNextPage: boolean
-  hasNextPage: boolean
   onRetry: () => void
-  onLoadMore: () => void
-  taskHref: (task: MyDayTask) => string
+  onLoadMore: (section: MyDaySectionKey) => void
+  loadingSection: MyDaySectionKey | null
+  cardHref: (card: MyDayCard) => string
   plansHref: string
   onNavigate: (path: string) => void
 }
 
 function WorkColumn({
-  tasks,
+  sections,
   timeZone,
   isPending,
   isLoadingError,
   isRefetchError,
-  isFetchNextPageError,
-  isFetchingNextPage,
-  hasNextPage,
   onRetry,
   onLoadMore,
-  taskHref,
+  loadingSection,
+  cardHref,
   plansHref,
   onNavigate,
 }: WorkColumnProps) {
-  const showGroups = tasks.length > 0
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [collapsed, setCollapsed] = useState<Record<MyDaySectionKey, boolean>>({
+    action: false,
+    follow: false,
+    upcoming: false,
+  })
+  const showSections = !isPending && !isLoadingError
 
   return (
-    <section className="min-w-0 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">À traiter</h3>
-        <p className={cn('mt-1 text-sm', terrain.muted)}>
-          Vos tâches personnelles et le travail de vos pôles.
-        </p>
-      </div>
-
-      {isPending ? <p role="status">Chargement de votre journée…</p> : null}
+    <div className="min-w-0">
+      {isPending ? (
+        <div>
+          <p role="status" className="sr-only">Chargement de votre journée…</p>
+          <div className="space-y-3" aria-hidden>
+            <div className="h-[100px] animate-pulse rounded-[15px] bg-[#ecefe9] motion-reduce:animate-none" />
+            <div className="h-[100px] animate-pulse rounded-[15px] bg-[#ecefe9] motion-reduce:animate-none" />
+          </div>
+        </div>
+      ) : null}
       {isLoadingError ? (
         <TerrainErrorState message="Impossible de charger votre travail." onRetry={onRetry} />
       ) : null}
-      {!isPending && !isLoadingError && !showGroups ? (
-        <TerrainEmptyState title="Aucune tâche à traiter pour le moment." />
-      ) : null}
-
-      {showGroups ? (
-        <div className="space-y-5">
-          {sections.map((section) => {
-            const rows = tasks.filter((task) => task.bucket === section.key)
-            if (rows.length === 0) return null
-            return (
-              <section key={section.key}>
-                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                  {section.dot ? (
-                    <span
-                      className={cn('size-2 shrink-0 rounded-full', terrainSectionDotVariants[section.dot])}
-                      aria-hidden
-                    />
-                  ) : null}
-                  {section.title}
-                </h4>
-                <div className={terrainCardClassName()}>
-                  <ul className="divide-y divide-[#E8E6DF]">
-                    {rows.map((task) => {
-                      const deadline = timeZone ? formatTaskDeadline(task, timeZone) : null
-                      const todayClock = task.bucket === 'today' && deadline !== null && /^\d{2}:\d{2}$/.test(deadline)
-                        ? deadline
-                        : null
-                      const badge = (
+      {showSections ? workSections.map((section) => {
+        const slot = sections[section.key]
+        const Icon = section.icon
+        const countLabel = `${slot.count} plan${slot.count > 1 ? 's' : ''}`
+        const remaining = Math.max(slot.count - slot.items.length, 0)
+        return (
+          <section key={section.key} aria-labelledby={`my-day-${section.key}`} className="mb-8 min-w-0 last:mb-0">
+            <button
+              type="button"
+              className="mb-3.5 flex min-h-11 w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl text-left outline-none focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#7cb0bc]"
+              aria-expanded={!collapsed[section.key]}
+              onClick={() => setCollapsed((current) => ({
+                ...current,
+                [section.key]: !current[section.key],
+              }))}
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-3">
+                <span className={cn(
+                  'grid size-9 shrink-0 place-items-center rounded-full border border-[#E2E5DF] bg-white @min-[560px]/day:size-10',
+                  section.emblemClassName,
+                )}
+                >
+                  <Icon className="size-[19px]" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span
+                    id={`my-day-${section.key}`}
+                    role="heading"
+                    aria-level={3}
+                    className="block text-lg font-semibold tracking-[-0.025em] break-words @min-[560px]/day:text-xl"
+                  >
+                    {section.title}
+                  </span>
+                  <span className="mt-1 block text-[11.5px] break-words text-[#808781] @min-[560px]/day:text-xs">{section.description}</span>
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <ChevronDown
+                  className={cn(
+                    'size-4 text-[#808781] transition-transform motion-reduce:transition-none',
+                    collapsed[section.key] && '-rotate-90',
+                  )}
+                  aria-hidden
+                />
+                <span className="rounded-full border border-[#E2E5DF] bg-white px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-[#6d776f]">
+                  {countLabel}
+                </span>
+              </span>
+            </button>
+            {collapsed[section.key] ? null : slot.items.length === 0 ? (
+              <div className="flex min-h-[142px] flex-col items-center justify-center gap-2.5 rounded-[18px] border border-dashed border-[#d9ded8] bg-white px-4 py-6 text-center">
+                <span className="grid size-[34px] place-items-center rounded-full bg-[#f0f4f0] text-[#8fa098]">
+                  <CircleCheck className="size-[19px]" aria-hidden />
+                </span>
+                <p className="text-[13px] font-semibold text-[#4e5b54]">{section.emptyTitle}</p>
+                <p className="text-[11px] text-[#969d96]">{section.emptyDetail}</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {slot.items.map((card) => {
+                  const href = cardHref(card)
+                  const meta = cardMeta(card, timeZone)
+                  const span = planSpan(card, timeZone)
+                  const note = cardNote(card)
+                  const opened = expanded[card.execution_id] === true
+                  const visibleTasks = opened ? card.tasks : card.tasks.slice(0, 2)
+                  const hiddenCount = card.tasks.length - 2
+                  const upcomingTasks = card.kind === 'tasks' && card.section === 'upcoming'
+                  return (
+                    <article
+                      key={card.execution_id}
+                      className={cn(
+                        'group relative min-w-0 overflow-hidden rounded-[20px] border border-[#E2E5DF] bg-white shadow-[0_3px_14px_rgba(37,54,47,0.035)] transition duration-150 motion-reduce:transition-none hover:border-[#bdcec3] hover:bg-[#f2f8f5] hover:shadow-[0_7px_23px_rgba(28,65,49,0.10)]',
+                        card.late && 'border-l-[3px] border-l-[#b59658] hover:border-l-[#b59658]',
+                        card.kind === 'validate' && 'border-l-[3px] border-l-[#668aaf] hover:border-l-[#668aaf]',
+                        (card.kind === 'finalize' || card.kind === 'relay') && 'border-l-[3px] border-l-[#6a967a] hover:border-l-[#6a967a]',
+                      )}
+                    >
+                      <a
+                        href={href}
+                        aria-label={`Ouvrir le détail du plan : ${card.title}`}
+                        className="absolute inset-0 z-[1] rounded-[inherit] focus-visible:outline focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-[#2e718c]"
+                        onClick={(event) => openInPage(event, href, onNavigate)}
+                      />
+                      <div className="pointer-events-none relative flex items-start gap-2.5 px-3.5 pt-4 pb-3 @min-[560px]/day:gap-3.5 @min-[560px]/day:px-5 @min-[560px]/day:pt-[18px] @min-[560px]/day:pb-3.5">
                         <span className={cn(
-                          'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                          task.shared ? 'bg-[#E8E6DF] text-[#555]' : terrain.transcript,
+                          'grid size-9 shrink-0 place-items-center rounded-[11px] @min-[560px]/day:size-[43px] @min-[560px]/day:rounded-[13px]',
+                          card.late ? 'bg-[#f8f2e5] text-[#99713b]' : upcomingTasks ? 'bg-[#f1f0e9] text-[#787764]' : kindIconClassName[card.kind],
                         )}
                         >
-                          {attributionLabel(task.shared)}
+                          <KindIcon kind={card.kind} upcoming={upcomingTasks} />
                         </span>
-                      )
-                      const deadlineText = deadline ? (
-                        <p className={cn(
-                          'text-sm',
-                          task.bucket === 'overdue' ? cn('font-medium', terrain.danger) : terrain.muted,
-                        )}
-                        >
-                          {deadline}
-                        </p>
-                      ) : null
-                      const chevron = <ChevronRight className="size-4 shrink-0 text-[#a3a19a]" aria-hidden />
-                      const title = (
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold break-words">{task.title}</p>
-                          <p className={cn('mt-0.5 text-sm break-words', terrain.muted)}>
-                            {task.pole} · {task.execution_title}
+                          <p className="mb-1 flex flex-wrap items-center gap-1.5 text-[10.5px] font-semibold text-[#677a70] @min-[560px]/day:text-[11px]">
+                            <span className={cn(
+                              'font-bold',
+                              card.kind === 'validate' && 'text-[#37638e]',
+                              card.kind === 'relay' && 'text-[#39634e]',
+                              card.kind !== 'validate' && card.kind !== 'relay' && 'text-[#43695d]',
+                            )}
+                            >
+                              {cardKindLabel(card)}
+                            </span>
+                            <span className="text-[#b4beb5]" aria-hidden>·</span>
+                            <span>{card.pilot_pole}</span>
+                          </p>
+                          <h4 className="text-sm leading-snug font-semibold tracking-[-0.014em] break-words text-[#252c28] @min-[560px]/day:text-[15.5px]">
+                            {card.title}
+                          </h4>
+                          {span ? (
+                            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-[#6b7280]">
+                              <Calendar className="size-3.5 shrink-0" aria-hidden />
+                              <span>{span}</span>
+                            </p>
+                          ) : null}
+                          <p className="mt-2 flex flex-wrap items-center gap-2 text-[10.5px] text-[#777f77] @min-[560px]/day:text-[11.5px]">
+                            {card.late ? (
+                              <>
+                                <span className={cn('font-semibold', lateTextClassName)}>En retard</span>
+                                <span className="text-[#c6cac3]" aria-hidden>·</span>
+                              </>
+                            ) : null}
+                            <span>{meta}</span>
                           </p>
                         </div>
-                      )
-                      return (
-                        <li key={task.id} className="@container/task">
-                          <a
-                            href={taskHref(task)}
-                            className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left no-underline outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
-                            onClick={(event) => openInPage(event, taskHref(task), onNavigate)}
-                          >
-                            {task.bucket === 'today' ? (
-                              <>
-                                {title}
-                                {todayClock ? <p className={cn('shrink-0 text-sm', terrain.muted)}>{todayClock}</p> : null}
-                                {badge}
-                                {chevron}
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
-                                  {title}
-                                  <div className="flex shrink-0 flex-col items-start gap-1 @min-[32rem]/task:items-end">
-                                    {task.bucket === 'upcoming' ? badge : deadlineText}
-                                    {task.bucket === 'upcoming' ? deadlineText : badge}
-                                  </div>
-                                </div>
-                                {chevron}
-                              </>
-                            )}
-                          </a>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              </section>
-            )
-          })}
-        </div>
-      ) : null}
-
-      {isFetchNextPageError ? (
-        <p role="alert" className={cn('text-sm', terrain.danger)}>Impossible de charger la suite.</p>
-      ) : null}
+                        <ChevronRight className="mt-4 size-4 shrink-0 text-[#8d9b92] transition-transform group-hover:translate-x-0.5 group-hover:text-[#32624e] motion-reduce:transition-none" aria-hidden />
+                      </div>
+                      {visibleTasks.length > 0 ? (
+                        <ul className="pointer-events-none relative border-t border-[#edf0ec] px-3.5 pt-1.5 pb-2 pl-[60px] @min-[560px]/day:px-5 @min-[560px]/day:pb-2.5 @min-[560px]/day:pl-[77px]">
+                          {visibleTasks.map((task) => (
+                            <li key={task.id} className="flex min-w-0 items-start gap-2.5 py-2">
+                              <span className="relative mt-0.5 size-[15px] shrink-0 rounded-[4px] border-[1.7px] border-[#97aaa0]" aria-hidden>
+                                <span className="absolute inset-1 rounded-full bg-[#a8b9ad]" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs leading-snug font-medium break-words text-[#343e38] @min-[560px]/day:text-[13px]">{task.title}</p>
+                                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-[#808981] @min-[560px]/day:text-[10.5px]">
+                                  <span className={task.late ? cn('font-semibold', lateTextClassName) : undefined}>
+                                    {taskDueLabel(task, timeZone)}
+                                  </span>
+                                  <span className={cn(
+                                    'inline-flex items-center rounded px-[7px] py-0.5 text-[10px] leading-tight font-semibold',
+                                    task.shared ? 'bg-[#3b423e] text-white' : 'bg-[#e6f0eb] text-[#315a4b]',
+                                  )}
+                                  >
+                                    {attributionLabel(task.shared)}
+                                  </span>
+                                  {task.pole ? <span className="font-semibold text-[#5f786d]">{task.pole}</span> : null}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {hiddenCount > 0 ? (
+                        <button
+                          type="button"
+                          className="relative z-[2] mb-2 ml-[60px] inline-flex min-h-11 items-center gap-1.5 rounded py-1.5 pr-2 text-[11.5px] font-semibold text-[#3b6859] outline-none hover:underline focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#7cb0bc] @min-[560px]/day:ml-[77px]"
+                          aria-expanded={opened}
+                          onClick={() => setExpanded((current) => ({
+                            ...current,
+                            [card.execution_id]: !opened,
+                          }))}
+                        >
+                          {opened ? 'Masquer les tâches' : `Afficher ${hiddenCount} autre${hiddenCount > 1 ? 's' : ''} tâche${hiddenCount > 1 ? 's' : ''}`}
+                          <ChevronDown className={cn('size-4 transition-transform motion-reduce:transition-none', opened && 'rotate-180')} aria-hidden />
+                        </button>
+                      ) : null}
+                      {note ? (
+                        <p className="pointer-events-none relative px-3.5 pt-1 pb-4 pl-[60px] text-[11.5px] leading-relaxed text-[#67736a] @min-[560px]/day:px-5 @min-[560px]/day:pb-[17px] @min-[560px]/day:pl-[77px]">
+                          {note}
+                        </p>
+                      ) : null}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+            {!collapsed[section.key] && slot.continuationError ? (
+              <p role="alert" className={cn('mt-3 text-sm', terrain.danger)}>Impossible de charger la suite.</p>
+            ) : null}
+            {!collapsed[section.key] && slot.nextCursor && !slot.stalled ? (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-4 text-xs font-semibold text-[#5d6f65] outline-none hover:bg-[#e9eee9] hover:text-[#294d3b] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#7cb0bc] disabled:opacity-60"
+                  disabled={loadingSection === section.key}
+                  onClick={() => onLoadMore(section.key)}
+                >
+                  {loadingSection === section.key ? 'Chargement…' : 'Afficher plus de plans'}
+                  {loadingSection === section.key ? null : <ChevronDown className="size-4" aria-hidden />}
+                  {loadingSection !== section.key && remaining > 0 ? (
+                    <span className="font-normal">({remaining} restants)</span>
+                  ) : null}
+                </button>
+              </div>
+            ) : null}
+          </section>
+        )
+      }) : null}
       {isRefetchError ? (
         <TerrainErrorState message="Impossible d’actualiser votre travail." onRetry={onRetry} />
       ) : null}
-      <div className={hasNextPage || isFetchNextPageError ? 'space-y-8' : undefined}>
-        {hasNextPage || isFetchNextPageError ? (
-          <div className="flex justify-center">
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-sm px-3 text-sm font-medium text-[#676560] outline-none hover:bg-[#E8E6DF] hover:text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 disabled:opacity-60"
-              disabled={isFetchingNextPage}
-              aria-busy={isFetchingNextPage || undefined}
-              onClick={onLoadMore}
-            >
-              {isFetchingNextPage ? 'Chargement…' : 'Afficher plus de tâches'}
-              {isFetchingNextPage ? null : <ChevronDown className="size-4 shrink-0" aria-hidden />}
-            </button>
-          </div>
-        ) : null}
-        <a
-          href={plansHref}
-          className={textNavClassName}
-          onClick={(event) => openInPage(event, plansHref, onNavigate)}
-        >
-          Voir tous les plans d’exécution
-          <ArrowRight className="size-4" aria-hidden />
-        </a>
-      </div>
-    </section>
+      {showSections ? (
+        <div className="mt-4">
+          <a
+            href={plansHref}
+            className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-[#225477] no-underline outline-none hover:underline focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#7cb0bc]"
+            onClick={(event) => openInPage(event, plansHref, onNavigate)}
+          >
+            Voir tous les plans d’exécution
+            <ChevronRight className="size-4" aria-hidden />
+          </a>
+          <p className="text-[10px] text-[#a1a69f]">La navigation et les actions réelles restent dans Exécution.</p>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -468,24 +759,64 @@ export function MyDayPage({ establishmentId, onNavigate }: {
   establishmentId: string | null
   onNavigate: (path: string) => void
 }) {
-  const query = useInfiniteQuery({
+  const query = useQuery({
     queryKey: myDayQueryKey(establishmentId),
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => fetchMyDay(establishmentId!, pageParam),
-    getNextPageParam: (page) => page.next_offset ?? undefined,
+    queryFn: () => fetchMyDay(establishmentId!),
     enabled: Boolean(establishmentId),
-    // Refresh dates at midnight and recover when realtime is temporarily unavailable.
+    // Refresh the first window. Deep pages are dropped with the new generation.
     refetchInterval: 60_000,
   })
+  const [dayWindow, setDayWindow] = useState(() => emptyMyDayWindow(establishmentId))
+  const [loadingSection, setLoadingSection] = useState<MyDaySectionKey | null>(null)
   const notifications = useNotificationsInfiniteQuery(establishmentId)
   const { handleSelectNotification } = useNotificationSelection(establishmentId, { onNavigate })
+
+  let reading = dayWindow
+  if (reading.establishmentId !== establishmentId) {
+    reading = emptyMyDayWindow(establishmentId)
+  }
+  if (query.data?.sections && reading.updatedAt !== query.dataUpdatedAt) {
+    reading = applyMyDayInitial(reading, query.data.sections, query.dataUpdatedAt)
+  }
+  if (reading !== dayWindow) setDayWindow(reading)
 
   if (!establishmentId) {
     return <p className="p-4 text-sm text-[#1a1a1a]">Sélectionnez un établissement.</p>
   }
 
-  const tasks = query.data?.pages.flatMap((page) => page.items) ?? []
-  const timeZone = query.data?.pages[0]?.timezone
+  async function loadMore(section: MyDaySectionKey) {
+    const slot = reading.sections[section]
+    const cursor = slot.nextCursor
+    if (!establishmentId || !cursor || slot.stalled) return
+    const generation = reading.generation
+    setLoadingSection(section)
+    try {
+      const page = await fetchMyDaySection(establishmentId, section, cursor)
+      if (!page.section || !page.items) return
+      setDayWindow((current) => applyMyDayContinuation(
+        current,
+        generation,
+        establishmentId,
+        section,
+        cursor,
+        {
+          section: page.section as MyDaySectionKey,
+          next_cursor: page.next_cursor ?? null,
+          items: page.items ?? [],
+        },
+      ).window)
+    } catch (error) {
+      if (error instanceof MyDayRequestError && error.status === 400) {
+        void query.refetch()
+        return
+      }
+      setDayWindow((current) => markMyDayContinuationError(current, generation, establishmentId, section))
+    } finally {
+      setLoadingSection(null)
+    }
+  }
+
+  const timeZone = query.data?.timezone
   const latest = notifications.data?.pages.flatMap((page) => page.items).slice(0, 5) ?? []
   const base = `/e/${establishmentId}`
 
@@ -503,25 +834,26 @@ export function MyDayPage({ establishmentId, onNavigate }: {
               {formatMyDayHeadingDate(timeZone)}
             </p>
           ) : null}
-          <h2 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
+          <h2 className="text-2xl font-semibold tracking-[-0.036em] @min-[960px]/day:text-[2rem]">
             Votre travail, en un coup d’œil.
           </h2>
+          <p className="mt-2 text-[13px] text-[#6b706a]">
+            Ce qui demande votre attention, ce que vous suivez et ce qui arrive.
+          </p>
         </header>
 
         {/* Container query, not a viewport breakpoint: native keeps a max-w-md shell on large screens. */}
         <div className="grid items-start gap-6 @min-[960px]/day:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
           <WorkColumn
-            tasks={tasks}
+            sections={reading.sections}
             timeZone={timeZone}
             isPending={query.isPending}
             isLoadingError={query.isLoadingError}
             isRefetchError={query.isRefetchError}
-            isFetchNextPageError={query.isFetchNextPageError}
-            isFetchingNextPage={query.isFetchingNextPage}
-            hasNextPage={Boolean(query.hasNextPage)}
             onRetry={() => void query.refetch()}
-            onLoadMore={() => void query.fetchNextPage()}
-            taskHref={(task) => `${base}/execution/${task.execution_id}`}
+            onLoadMore={(section) => void loadMore(section)}
+            loadingSection={loadingSection}
+            cardHref={(card) => `${base}/execution/${card.execution_id}`}
             plansHref={`${base}/execution`}
             onNavigate={onNavigate}
           />

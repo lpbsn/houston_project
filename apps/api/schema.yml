@@ -8491,6 +8491,10 @@ paths:
     get:
       operationId: v1_establishments_my_day_retrieve
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
       - in: path
         name: establishment_id
         schema:
@@ -8498,9 +8502,9 @@ paths:
           format: uuid
         required: true
       - in: query
-        name: offset
+        name: section
         schema:
-          type: integer
+          type: string
       tags:
       - action-plans
       security:
@@ -14920,18 +14924,6 @@ components:
       description: |-
         * `analysis` - analysis
         * `follow_up` - follow_up
-    BucketEnum:
-      enum:
-      - overdue
-      - today
-      - upcoming
-      - undated
-      type: string
-      description: |-
-        * `overdue` - overdue
-        * `today` - today
-        * `upcoming` - upcoming
-        * `undated` - undated
     BusinessUnitGeneric:
       type: object
       properties:
@@ -17074,22 +17066,127 @@ components:
         * `all` - all
         * `mentions` - mentions
         * `silent` - silent
-    MyDayResponse:
+    MyDayCard:
       type: object
       properties:
-        items:
+        execution_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        pilot_pole:
+          type: string
+        section:
+          $ref: '#/components/schemas/SectionEnum'
+        kind:
+          $ref: '#/components/schemas/MyDayCardKindEnum'
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        plan_end_at:
+          type: string
+          format: date-time
+          nullable: true
+        plan_all_day:
+          type: boolean
+        late:
+          type: boolean
+        own_tasks_done:
+          type: boolean
+        tasks:
           type: array
           items:
             $ref: '#/components/schemas/MyDayTask'
-        next_offset:
-          type: integer
-          nullable: true
+      required:
+      - execution_id
+      - kind
+      - late
+      - own_tasks_done
+      - pilot_pole
+      - plan_all_day
+      - plan_end_at
+      - section
+      - start_at
+      - tasks
+      - title
+    MyDayCardKindEnum:
+      enum:
+      - validate
+      - awaiting_validation
+      - scheduled
+      - realize
+      - tasks
+      - follow
+      - finalize
+      - relay
+      type: string
+      description: |-
+        * `validate` - validate
+        * `awaiting_validation` - awaiting_validation
+        * `scheduled` - scheduled
+        * `realize` - realize
+        * `tasks` - tasks
+        * `follow` - follow
+        * `finalize` - finalize
+        * `relay` - relay
+    MyDayResponse:
+      type: object
+      properties:
         timezone:
           type: string
+        sections:
+          allOf:
+          - $ref: '#/components/schemas/MyDaySections'
+          nullable: true
+        section:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/SectionEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        next_cursor:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyDayCard'
+          nullable: true
       required:
       - items
-      - next_offset
+      - next_cursor
+      - section
+      - sections
       - timezone
+    MyDaySection:
+      type: object
+      properties:
+        count:
+          type: integer
+        next_cursor:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyDayCard'
+      required:
+      - count
+      - items
+      - next_cursor
+    MyDaySections:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/MyDaySection'
+        follow:
+          $ref: '#/components/schemas/MyDaySection'
+        upcoming:
+          $ref: '#/components/schemas/MyDaySection'
+      required:
+      - action
+      - follow
+      - upcoming
     MyDayTask:
       type: object
       properties:
@@ -17098,30 +17195,21 @@ components:
           format: uuid
         title:
           type: string
-        execution_id:
-          type: string
-          format: uuid
-        execution_title:
-          type: string
-        pole:
-          type: string
         due_at:
           type: string
           format: date-time
           nullable: true
-        all_day:
+        late:
           type: boolean
         shared:
           type: boolean
-        bucket:
-          $ref: '#/components/schemas/BucketEnum'
+        pole:
+          type: string
+          nullable: true
       required:
-      - all_day
-      - bucket
       - due_at
-      - execution_id
-      - execution_title
       - id
+      - late
       - pole
       - shared
       - title
@@ -18687,6 +18775,16 @@ components:
       - membership_id
       - role
       - username
+    SectionEnum:
+      enum:
+      - action
+      - follow
+      - upcoming
+      type: string
+      description: |-
+        * `action` - action
+        * `follow` - follow
+        * `upcoming` - upcoming
     SignalDetail:
       type: object
       properties:
