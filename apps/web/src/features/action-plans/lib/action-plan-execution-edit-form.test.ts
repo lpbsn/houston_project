@@ -283,6 +283,25 @@ describe('action-plan-execution-edit-form', () => {
     ])
   })
 
+  it('refuses an execution update that would omit an assignee without a pilot pole', () => {
+    const form = hydrateActionPlanExecutionEditForm(buildExecution())
+    form.pilotBusinessUnitId = ''
+    form.planningDraft.assignees = [
+      { ...form.planningDraft.assignees[0], businessUnitId: 'bu-kept' },
+      {
+        ...form.planningDraft.assignees[0],
+        id: 'assignee-2',
+        membershipId: 'mem-2',
+        displayName: 'Bob',
+        businessUnitId: '',
+      },
+    ]
+
+    expect(() => buildActionPlanExecutionUpdateRequest(form)).toThrow(
+      'Chaque assigné doit être rattaché à un pôle.',
+    )
+  })
+
   it('blocks an execution edit when an assignee has neither a draft pole nor a pilot', () => {
     const form = hydrateActionPlanExecutionEditForm(buildExecution())
     form.pilotBusinessUnitId = ''

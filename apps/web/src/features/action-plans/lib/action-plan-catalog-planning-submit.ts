@@ -61,10 +61,26 @@ export function validateCatalogPlanningDraft(
   })
 }
 
+function hasUnresolvedAssigneePole(
+  assignees: Array<{ membershipId: string; businessUnitId: string }>,
+  pilotBusinessUnitId: string,
+): boolean {
+  return assignees.some(
+    (assignee) => assignee.membershipId && !(assignee.businessUnitId || pilotBusinessUnitId),
+  )
+}
+
 function buildSharedPlanningItems(
   draft: ActionPlanEventPlanningDraft,
   options: { staffMode?: boolean; pilotBusinessUnitId?: string },
 ): ActionPlanPlanningSubmitRequest['items'] {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (
+    !options.staffMode &&
+    hasUnresolvedAssigneePole(draft.assignees, pilotBusinessUnitId)
+  ) {
+    return []
+  }
   if (hasGlobalRepeat(draft)) {
     const scheduleBodies = buildScheduleRequestsFromDraft(draft, options)
     const scheduleBody = scheduleBodies[0]
@@ -87,6 +103,9 @@ function buildSharedPlanningItems(
   }
 
   const useBody = buildUseRequestFromDraft(draft, options)
+  if (!useBody) {
+    return []
+  }
   return [
     {
       item_id: newItemId(),
@@ -106,6 +125,12 @@ function buildIndividualPlanningItems(
 ): ActionPlanPlanningSubmitRequest['items'] {
   const items: ActionPlanPlanningSubmitRequest['items'] = []
   const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (
+    !options.staffMode &&
+    hasUnresolvedAssigneePole(draft.assignees, pilotBusinessUnitId)
+  ) {
+    return []
+  }
 
   for (const assignee of draft.assignees) {
     const businessUnitId = assignee.businessUnitId || pilotBusinessUnitId
@@ -144,6 +169,9 @@ function buildIndividualPlanningItems(
 
   if (options.staffMode && items.length === 0) {
     const useBody = buildUseRequestFromDraft(draft, options)
+    if (!useBody) {
+      return []
+    }
     items.push({
       item_id: newItemId(),
       kind: 'execution',

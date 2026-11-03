@@ -154,6 +154,28 @@ describe('action-plan-catalog-planning-submit', () => {
     expect(submit?.body.items.every((item) => item.kind === 'schedule')).toBe(true)
   })
 
+  it('refuses a template payload that would omit an assignee without a pilot pole', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-kept',
+          businessUnitId: 'bu-kept',
+        }),
+        createActionPlanAssigneeDraft({
+          membershipId: 'm-open',
+          businessUnitId: '',
+        }),
+      ],
+    }
+
+    expect(
+      resolveCatalogPlanningSubmit(draft, {
+        canSchedule: false,
+      }),
+    ).toBeUndefined()
+  })
+
   it('includes a template assignee on the pilot pole when the draft pole is empty', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),

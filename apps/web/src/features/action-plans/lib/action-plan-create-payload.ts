@@ -23,6 +23,17 @@ function toIsoDateTime(value: string): string | undefined {
   return new Date(parsed).toISOString()
 }
 
+const UNRESOLVED_ASSIGNEE_POLE_MESSAGE = 'Chaque assigné doit être rattaché à un pôle.'
+
+function hasUnresolvedAssigneePole(
+  assignees: Array<{ membershipId: string; businessUnitId: string }>,
+  pilotBusinessUnitId: string,
+): boolean {
+  return assignees.some(
+    (assignee) => assignee.membershipId && !(assignee.businessUnitId || pilotBusinessUnitId),
+  )
+}
+
 function buildAssigneePayloads(
   assignees: ActionPlanAssigneeDraft[],
   options: {
@@ -34,6 +45,9 @@ function buildAssigneePayloads(
   },
 ): ActionPlanCreateRequest['assignees'] {
   const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (hasUnresolvedAssigneePole(assignees, pilotBusinessUnitId)) {
+    throw new Error(UNRESOLVED_ASSIGNEE_POLE_MESSAGE)
+  }
   return assignees
     .filter(
       (assignee) => assignee.membershipId && (assignee.businessUnitId || pilotBusinessUnitId),
