@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NotificationItem } from '@/features/notifications/types'
 
-import { fetchMyDay, myDayQueryKey, type MyDayTask } from './api'
+import {
+  fetchMyDay,
+  fetchMyDaySection,
+  MyDayRequestError,
+  myDayQueryKey,
+  type MyDayCard,
+  type MyDayResponse,
+  type MyDayTask,
+} from './api'
+import { applyMyDayContinuation, applyMyDayInitial, emptyMyDayWindow } from './my-day-reading'
 import { formatMyDayHeadingDate, formatTaskDeadline, MyDayPage } from './my-day-page'
 
 const notifications = vi.hoisted(() => ({
@@ -19,6 +28,7 @@ const notifications = vi.hoisted(() => ({
 vi.mock('./api', async (original) => ({
   ...await original<typeof import('./api')>(),
   fetchMyDay: vi.fn(),
+  fetchMyDaySection: vi.fn(),
 }))
 vi.mock('@/features/notifications/hooks', () => ({
   useNotificationsInfiniteQuery: () => ({
@@ -39,16 +49,56 @@ afterEach(() => {
   notifications.items = []
 })
 
-const task: MyDayTask = {
-  id: 'task-1',
-  title: 'Tester le micro',
-  execution_id: 'plan-1',
-  execution_title: 'Préparer les salles',
-  pole: 'Loisirs',
-  due_at: '2026-10-30T15:00:00Z',
-  all_day: false,
-  shared: false,
-  bucket: 'today',
+function task(overrides: Partial<MyDayTask> = {}): MyDayTask {
+  return {
+    id: 'task-1',
+    title: 'Tester le micro',
+    due_at: '2026-10-30T15:00:00Z',
+    late: false,
+    shared: false,
+    pole: null,
+    ...overrides,
+  }
+}
+
+function card(overrides: Partial<MyDayCard> = {}): MyDayCard {
+  return {
+    execution_id: 'plan-1',
+    title: 'Préparer les salles',
+    pilot_pole: 'Loisirs',
+    section: 'action',
+    kind: 'tasks',
+    start_at: null,
+    plan_end_at: null,
+    plan_all_day: false,
+    late: false,
+    own_tasks_done: false,
+    tasks: [task()],
+    ...overrides,
+  }
+}
+
+function sectionPage(items: MyDayCard[], nextCursor: string | null = null) {
+  return { count: items.length, next_cursor: nextCursor, items }
+}
+
+function myDay(
+  action: MyDayCard[] = [card()],
+  follow: MyDayCard[] = [],
+  upcoming: MyDayCard[] = [],
+  nextCursor: string | null = null,
+): MyDayResponse {
+  return {
+    timezone: 'Europe/Paris',
+    section: null,
+    next_cursor: null,
+    items: null,
+    sections: {
+      action: { ...sectionPage(action, nextCursor), count: action.length },
+      follow: sectionPage(follow),
+      upcoming: sectionPage(upcoming),
+    },
+  }
 }
 
 const now = new Date('2026-11-01T12:00:00Z')
@@ -84,42 +134,66 @@ function mount(establishmentId: string | null = 'site-1') {
 }
 
 describe('Ma journée', () => {
-  it('shows the personal queue and keeps the existing destinations', async () => {
-    vi.mocked(fetchMyDay).mockResolvedValue({
-      items: [{
-        ...task,
+  it('shows the three sections and opens the execution', async () => {
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay(
+      [card({
         title: 'Contrôler la réparation du projecteur dans la salle de séminaire nord',
-      }],
-      next_offset: null,
-      timezone: 'Europe/Paris',
-    })
+        tasks: [
+          task({ title: 'Vérifier le câble' }),
+          task({ id: 'task-2', title: 'Tester le micro', pole: 'Maintenance' }),
+          task({ id: 'task-3', title: 'Ranger la scène', shared: true }),
+        ],
+      })],
+      [card({
+        execution_id: 'plan-2',
+        title: 'Suivre le relais',
+        section: 'follow',
+        kind: 'follow',
+        own_tasks_done: true,
+        tasks: [],
+      })],
+      [card({
+        execution_id: 'plan-3',
+        title: 'Plan de la semaine prochaine',
+        section: 'upcoming',
+        kind: 'scheduled',
+        start_at: '2026-11-10T08:00:00Z',
+        tasks: [],
+      })],
+    ))
     const { navigate } = mount()
 
-    expect(await screen.findByText('Contrôler la réparation du projecteur dans la salle de séminaire nord')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 3, name: 'À traiter' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'À suivre' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'À venir' })).toBeTruthy()
+    expect(screen.getByText('Ce qui attend une action de votre part')).toBeTruthy()
+    expect(screen.getByText('Mes engagements sans action immédiate')).toBeTruthy()
+    expect(screen.getByText('Le travail futur déjà visible pour moi')).toBeTruthy()
+    expect(screen.getAllByText('1 plan')).toHaveLength(3)
+    expect(screen.getByText('Vérifier le câble')).toBeTruthy()
+    expect(screen.getByText('Tester le micro')).toBeTruthy()
+    expect(screen.queryByText('Ranger la scène')).toBeNull()
+    expect(screen.getByText('Maintenance')).toBeTruthy()
+    expect(screen.getByText('Tâches à effectuer')).toBeTruthy()
+    expect(screen.getAllByText('Pour moi').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Loisirs · Contrôler la réparation du projecteur dans la salle de séminaire nord')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Afficher 1 autre tâche' }))
+    expect(screen.getByText('Ranger la scène')).toBeTruthy()
+    expect(screen.getByText('Équipe')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
+
     expect(screen.getByRole('heading', { level: 2, name: 'Votre travail, en un coup d’œil.' })).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 3, name: 'À traiter' })).toBeTruthy()
-    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.')).toBeTruthy()
-    expect(screen.getByText('Loisirs · Préparer les salles')).toBeTruthy()
-    expect(screen.getByText('Pour moi')).toBeTruthy()
     expect(screen.getByText(formatMyDayHeadingDate('Europe/Paris'))).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: 'Ma journée' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'En retard' })).toBeNull()
     expect(screen.queryByRole('checkbox')).toBeNull()
-    expect(screen.queryByText('Ouvrir')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Discuter/ })).toBeNull()
-    expect(screen.queryByText(/actualités restent secondaires/)).toBeNull()
-    expect(screen.queryByRole('link', { name: 'Partager une observation' })).toBeNull()
-    expect(screen.queryByText('Ce qui vous concerne')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'En retard' })).toBeNull()
     expect(screen.getByRole('heading', { level: 3, name: 'Dernières nouvelles' })).toBeTruthy()
     expect(screen.getByText('Activité récente').className).toContain('text-[#676560]')
     expect(screen.getByText('Aucune notification pour le moment.').className).toContain('text-[#676560]')
-    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.').className).toContain('text-[#7D7B75]')
 
-    const taskLink = screen.getByRole('link', {
-      name: /Contrôler la réparation du projecteur dans la salle de séminaire nord/,
-    })
-    expect(taskLink.getAttribute('href')).toBe('/e/site-1/execution/plan-1')
-    fireEvent.click(taskLink)
+    const executionLink = screen.getByRole('link', { name: /Contrôler la réparation du projecteur/ })
+    expect(executionLink.getAttribute('href')).toBe('/e/site-1/execution/plan-1')
+    fireEvent.click(executionLink)
     expect(navigate).toHaveBeenLastCalledWith('/e/site-1/execution/plan-1')
     const plansLink = screen.getByRole('link', { name: 'Voir tous les plans d’exécution' })
     expect(plansLink.getAttribute('href')).toBe('/e/site-1/execution')
@@ -129,13 +203,94 @@ describe('Ma journée', () => {
     expect(notificationsLink.getAttribute('href')).toBe('/notifications-center')
     fireEvent.click(notificationsLink)
     expect(navigate).toHaveBeenLastCalledWith('/notifications-center')
+
+    const column = document.querySelector('.\\@container\\/day')
+    expect(column?.innerHTML).toContain('@min-[960px]/day:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]')
+    expect(column?.innerHTML).toContain('min-w-0')
+  })
+
+  it('shows the plan dates under the title and folds a section without dropping its cards', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-01T12:00:00Z'))
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay(
+      [card({
+        title: 'Préparer l’ouverture du restaurant',
+        start_at: '2026-11-03T08:00:00Z',
+        plan_end_at: '2026-11-07T18:00:00Z',
+      })],
+      [card({
+        execution_id: 'plan-2',
+        title: 'Carte à suivre',
+        section: 'follow',
+        kind: 'follow',
+        tasks: [],
+      })],
+      [],
+      'cursor-1',
+    ))
+    vi.mocked(fetchMyDaySection).mockResolvedValue({
+      timezone: 'Europe/Paris',
+      sections: null,
+      section: 'action',
+      next_cursor: null,
+      items: [card({
+        execution_id: 'plan-9',
+        title: 'Suite conservée',
+        tasks: [task({ id: 'task-9', title: 'Tâche de la suite' })],
+      })],
+    })
+    mount()
+
+    expect(await screen.findByText('Début 3 nov. · Fin 7 nov.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Afficher plus de plans/ }))
+    expect(await screen.findByText('Suite conservée')).toBeTruthy()
+
+    const actionToggle = screen.getByRole('button', { name: /À traiter/ })
+    expect(actionToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(actionToggle)
+    expect(actionToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('Suite conservée')).toBeNull()
+    expect(screen.queryByText('Préparer l’ouverture du restaurant')).toBeNull()
+    expect(screen.getByText('Carte à suivre')).toBeTruthy()
+
+    fireEvent.click(actionToggle)
+    expect(screen.getByText('Suite conservée')).toBeTruthy()
+    expect(screen.getByText('Préparer l’ouverture du restaurant')).toBeTruthy()
+    expect(screen.getByText('Début 3 nov. · Fin 7 nov.')).toBeTruthy()
+  })
+
+  it('keeps late copy out of the danger color and hides validation age', async () => {
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay([
+      card({
+        late: true,
+        tasks: [task({ late: true, title: 'Tâche en retard' })],
+      }),
+      card({
+        execution_id: 'plan-validation',
+        title: 'Clôturer le week-end',
+        kind: 'validate',
+        tasks: [],
+      }),
+    ]))
+    mount()
+
+    const lateNodes = await screen.findAllByText(/En retard/)
+    for (const node of lateNodes) {
+      const colored = node.className.includes('text-[#8A5A00]') ? node : node.parentElement
+      expect(colored?.className).toContain('text-[#8A5A00]')
+      expect(colored?.className).not.toContain('text-[#E24B4A]')
+    }
+    expect(screen.getByText('Validation requise')).toBeTruthy()
+    expect(screen.getByText(/chaque manager habilité du pôle pilote/)).toBeTruthy()
+    expect(screen.queryByText(/depuis/i)).toBeNull()
+    expect(screen.getByText('2 plans')).toBeTruthy()
   })
 
   it('leaves modified anchor clicks to the browser', async () => {
-    vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay())
     const { navigate } = mount()
     const links = [
-      await screen.findByRole('link', { name: /Tester le micro/ }),
+      await screen.findByRole('link', { name: /Préparer les salles/ }),
       screen.getByRole('link', { name: 'Voir tous les plans d’exécution' }),
       screen.getByRole('link', { name: 'Voir toutes les notifications' }),
     ]
@@ -159,121 +314,69 @@ describe('Ma journée', () => {
     expect(navigate).toHaveBeenCalledWith('/e/site-1/execution/plan-1')
   })
 
-  it('groups loaded tasks in product order and pages without dropping them', async () => {
-    vi.mocked(fetchMyDay)
-      .mockResolvedValueOnce({
-        items: [
-          { ...task, id: 'today', title: 'Tâche du jour', bucket: 'today' },
-          { ...task, id: 'late', title: 'Retard A', bucket: 'overdue' },
-          { ...task, id: 'late-2', title: 'Retard B', bucket: 'overdue', due_at: '2026-10-01T08:00:00Z' },
-        ],
-        next_offset: 30,
-        timezone: 'Europe/Paris',
-      })
-      .mockResolvedValueOnce({
-        items: [{ ...task, id: 'shared', title: 'Ranger les accessoires', shared: true, bucket: 'upcoming' }],
-        next_offset: null,
-        timezone: 'Europe/Paris',
-      })
+  it('appends a continuation and keeps the cards when it fails', async () => {
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay(
+      [card()],
+      [],
+      [],
+      'cursor-1',
+    ))
+    vi.mocked(fetchMyDaySection).mockRejectedValueOnce(new Error('offline'))
     mount()
 
-    expect(await screen.findByRole('heading', { name: 'En retard' })).toBeTruthy()
-    const loadMore = screen.getByRole('button', { name: 'Afficher plus de tâches' })
-    expect(loadMore.className).toContain('text-[#676560]')
-    expect(loadMore.className).not.toContain('border')
-    expect(loadMore.parentElement?.className).toContain('justify-center')
-    expect(loadMore.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
-    const plansLink = screen.getByRole('link', { name: 'Voir tous les plans d’exécution' })
-    expect(plansLink.className).toContain('text-[#1B4FD8]')
-    expect(plansLink.className).not.toContain('justify-center')
-    expect(plansLink.parentElement).toBe(loadMore.parentElement?.parentElement)
-    expect(plansLink.parentElement?.className).toContain('space-y-8')
-    fireEvent.click(loadMore)
-    expect(await screen.findByText('Ranger les accessoires')).toBeTruthy()
-    expect(screen.getByText('Équipe')).toBeTruthy()
-    expect(screen.getAllByText('Pour moi').length).toBeGreaterThan(0)
-    const text = document.body.textContent ?? ''
-    expect(text.indexOf('En retard')).toBeLessThan(text.indexOf('Aujourd’hui'))
-    expect(text.indexOf('Aujourd’hui')).toBeLessThan(text.indexOf('À venir'))
-    expect(text.indexOf('Retard A')).toBeLessThan(text.indexOf('Retard B'))
-    expect(text.indexOf('Retard B')).toBeLessThan(text.indexOf('Ranger les accessoires'))
-    expect(fetchMyDay).toHaveBeenLastCalledWith('site-1', 30)
-    expect(screen.queryByRole('heading', { name: 'Sans échéance' })).toBeNull()
-  })
-
-  it('aligns today attribution with the chevron and stacks upcoming attribution above the deadline', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-11-02T12:00:00Z'))
-    const todayTask: MyDayTask = {
-      ...task,
-      id: 'today',
-      title: 'Brief du matin',
-      bucket: 'today',
-      due_at: '2026-11-02T08:00:00Z',
-      shared: false,
-    }
-    const datedTodayTask: MyDayTask = {
-      ...task,
-      id: 'today-dated',
-      title: 'Contrôle déjà daté',
-      bucket: 'today',
-      due_at: '2020-01-15T10:00:00Z',
-      shared: true,
-    }
-    const upcomingTask: MyDayTask = {
-      ...task,
-      id: 'upcoming',
-      title: 'Ranger les accessoires',
-      bucket: 'upcoming',
-      due_at: '2026-11-04T14:00:00Z',
-      shared: true,
-    }
-    vi.mocked(fetchMyDay).mockResolvedValue({
-      items: [todayTask, datedTodayTask, upcomingTask],
-      next_offset: null,
-      timezone: 'Europe/Paris',
-    })
-    mount()
-
-    const todayLink = await screen.findByRole('link', { name: /Brief du matin/ })
-    const todayBadge = within(todayLink).getByText('Pour moi')
-    expect(formatTaskDeadline(todayTask, 'Europe/Paris', new Date())).toBe('09:00')
-    expect(todayLink.className).toContain('items-center')
-    expect(todayBadge.parentElement).toBe(todayLink)
-    expect(todayBadge.previousElementSibling?.textContent).toBe('09:00')
-    expect(todayBadge.nextElementSibling?.tagName).toBe('svg')
-
-    const datedLink = screen.getByRole('link', { name: /Contrôle déjà daté/ })
-    const datedBadge = within(datedLink).getByText('Équipe')
-    expect(datedBadge.parentElement).toBe(datedLink)
-    expect(datedBadge.previousElementSibling?.textContent).not.toContain('2020')
-    expect(datedLink.textContent).not.toContain('2020')
-    expect(datedBadge.nextElementSibling?.tagName).toBe('svg')
-
-    const upcomingLink = screen.getByRole('link', { name: /Ranger les accessoires/ })
-    const upcomingBadge = within(upcomingLink).getByText('Équipe')
-    const upcomingMeta = upcomingBadge.parentElement
-    expect(upcomingLink.className).toContain('items-center')
-    expect(upcomingMeta?.className).toContain('flex-col')
-    expect(upcomingMeta?.className).toContain('@min-[32rem]/task:items-end')
-    const upcomingDeadline = formatTaskDeadline(upcomingTask, 'Europe/Paris', new Date())
-    expect(upcomingDeadline).toBeTruthy()
-    expect(upcomingMeta?.textContent?.indexOf('Équipe')).toBeLessThan(
-      upcomingMeta?.textContent?.indexOf(upcomingDeadline ?? '') ?? -1,
-    )
-    expect(upcomingMeta?.contains(upcomingLink.querySelector('svg'))).toBe(false)
-  })
-
-  it('keeps the loaded tasks when the next page fails', async () => {
-    vi.mocked(fetchMyDay)
-      .mockResolvedValueOnce({ items: [task], next_offset: 30, timezone: 'Europe/Paris' })
-      .mockRejectedValueOnce(new Error('offline'))
-    mount()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Afficher plus de tâches' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Afficher plus de plans/ }))
     expect(await screen.findByText('Impossible de charger la suite.')).toBeTruthy()
     expect(screen.getByText('Tester le micro')).toBeTruthy()
-    expect(screen.queryByText('Aucune tâche à traiter pour le moment.')).toBeNull()
+    expect(fetchMyDaySection).toHaveBeenCalledWith('site-1', 'action', 'cursor-1')
+
+    vi.mocked(fetchMyDaySection).mockResolvedValueOnce({
+      timezone: 'Europe/Paris',
+      sections: null,
+      section: 'action',
+      next_cursor: null,
+      items: [card({ execution_id: 'plan-9', title: 'Suite chargée', tasks: [task({ id: 'task-9', title: 'Tâche suivante' })] })],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Afficher plus de plans/ }))
+    expect(await screen.findByText('Suite chargée')).toBeTruthy()
+    expect(screen.getAllByText('Tester le micro')).toHaveLength(1)
+  })
+
+  it('reloads the first window when the cursor is rejected', async () => {
+    vi.mocked(fetchMyDay)
+      .mockResolvedValueOnce(myDay([card({ title: 'Fenêtre initiale' })], [], [], 'cursor-1'))
+      .mockResolvedValueOnce(myDay([card({ execution_id: 'plan-fresh', title: 'Fenêtre rechargée', tasks: [] })]))
+    vi.mocked(fetchMyDaySection).mockRejectedValue(new MyDayRequestError(400, 'Invalid cursor.'))
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Afficher plus de plans/ }))
+    expect(await screen.findByText('Fenêtre rechargée')).toBeTruthy()
+    expect(screen.queryByText('Fenêtre initiale')).toBeNull()
+    expect(fetchMyDay).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops deep pages on refresh without duplicating a card', async () => {
+    vi.mocked(fetchMyDay)
+      .mockResolvedValueOnce(myDay([card({ title: 'Première carte' })], [], [], 'cursor-1'))
+      .mockResolvedValueOnce(myDay([
+        card({ title: 'Première carte' }),
+        card({ execution_id: 'plan-9', title: 'Carte déjà vue', tasks: [task({ id: 'task-9', title: 'Tâche déjà vue' })] }),
+      ]))
+    vi.mocked(fetchMyDaySection).mockResolvedValue({
+      timezone: 'Europe/Paris',
+      sections: null,
+      section: 'action',
+      next_cursor: null,
+      items: [card({ execution_id: 'plan-9', title: 'Carte déjà vue', tasks: [task({ id: 'task-9', title: 'Tâche déjà vue' })] })],
+    })
+    const { client } = mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Afficher plus de plans/ }))
+    expect(await screen.findByText('Carte déjà vue')).toBeTruthy()
+    await client.refetchQueries({ queryKey: myDayQueryKey('site-1') })
+
+    await waitFor(() => expect(screen.getAllByText('Carte déjà vue')).toHaveLength(1))
+    expect(screen.getAllByText('Première carte')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /Afficher plus de plans/ })).toBeNull()
   })
 
   it('shows a retry rather than an empty queue after an API error', async () => {
@@ -288,26 +391,31 @@ describe('Ma journée', () => {
 
   it('keeps an empty queue when a refresh fails', async () => {
     vi.mocked(fetchMyDay)
-      .mockResolvedValueOnce({ items: [], next_offset: null, timezone: 'Europe/Paris' })
+      .mockResolvedValueOnce(myDay([], [], []))
       .mockRejectedValueOnce(new Error('offline'))
     const { client } = mount()
 
     expect(await screen.findByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
+    expect(screen.getByText('Rien à suivre pour le moment.')).toBeTruthy()
+    expect(screen.getByText('Rien de prévu pour le moment.')).toBeTruthy()
     await client.refetchQueries({ queryKey: myDayQueryKey('site-1') })
 
     expect(await screen.findByText('Impossible d’actualiser votre travail.')).toBeTruthy()
     expect(screen.getByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
+    expect(screen.getByText('Rien à suivre pour le moment.')).toBeTruthy()
+    expect(screen.getByText('Rien de prévu pour le moment.')).toBeTruthy()
     expect(screen.queryByText('Impossible de charger votre travail.')).toBeNull()
     expect(screen.queryByText('Impossible de charger la suite.')).toBeNull()
     expect(screen.getAllByRole('button', { name: 'Réessayer' })).toHaveLength(1)
     expect(screen.getByText(formatMyDayHeadingDate('Europe/Paris'))).toBeTruthy()
   })
 
-  it('states an empty queue without claiming the establishment is finished', async () => {
-    vi.mocked(fetchMyDay).mockResolvedValue({ items: [], next_offset: null, timezone: 'Europe/Paris' })
+  it('states an empty section without claiming the establishment is finished', async () => {
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay([], [], []))
     const { navigate } = mount()
 
     expect(await screen.findByText('Aucune tâche à traiter pour le moment.')).toBeTruthy()
+    expect(screen.getByText('Vous êtes à jour.')).toBeTruthy()
     fireEvent.click(screen.getByRole('link', { name: 'Voir tous les plans d’exécution' }))
     expect(navigate).toHaveBeenCalledWith('/e/site-1/execution')
   })
@@ -318,7 +426,29 @@ describe('Ma journée', () => {
 
     expect(screen.getByRole('status').textContent).toContain('Chargement de votre journée')
     expect(screen.queryByText('Aucune tâche à traiter pour le moment.')).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'En retard' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'À traiter' })).toBeNull()
+  })
+
+  it('forgets the previous establishment while the next window loads', async () => {
+    vi.mocked(fetchMyDay).mockImplementation((id: string) => {
+      if (id === 'site-1') return Promise.resolve(myDay([card({ title: 'Site un' })]))
+      return new Promise(() => {})
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(
+      <QueryClientProvider client={client}>
+        <MyDayPage establishmentId="site-1" onNavigate={vi.fn()} />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('Site un')).toBeTruthy()
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <MyDayPage establishmentId="site-2" onNavigate={vi.fn()} />
+      </QueryClientProvider>,
+    )
+    expect(screen.queryByText('Site un')).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('Chargement de votre journée')
   })
 
   it('does not load another establishment when none is selected', () => {
@@ -328,7 +458,7 @@ describe('Ma journée', () => {
   })
 
   it('previews five notifications without blocking the work queue', async () => {
-    vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay())
     notifications.items = Array.from({ length: 6 }, (_, index) => notification({
       id: `note-${index + 1}`,
       title: `Nouvelle ${index + 1}`,
@@ -350,7 +480,7 @@ describe('Ma journée', () => {
   })
 
   it('shows the activity feed as a secondary panel with type icons', async () => {
-    vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay())
     notifications.items = [
       notification({
         id: 'plan',
@@ -400,11 +530,10 @@ describe('Ma journée', () => {
     expect(reopened.innerHTML).toContain('bg-[#EEF2FF]')
     expect(screen.getByText('Une exécution de plan d’action vous a été assignée.').className).toContain('text-[#676560]')
     expect(plan.querySelector('.text-xs')?.className).toContain('text-[#676560]')
-    expect(screen.getByText('Vos tâches personnelles et le travail de vos pôles.').className).toContain('text-[#7D7B75]')
   })
 
   it('keeps the work queue usable when notifications fail', async () => {
-    vi.mocked(fetchMyDay).mockResolvedValue({ items: [task], next_offset: null, timezone: 'Europe/Paris' })
+    vi.mocked(fetchMyDay).mockResolvedValue(myDay())
     notifications.isError = true
     const { navigate } = mount()
 
@@ -412,49 +541,77 @@ describe('Ma journée', () => {
     expect(screen.getByText('Les notifications sont momentanément indisponibles.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(notifications.refetch).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('link', { name: /Tester le micro/ }))
+    fireEvent.click(screen.getByRole('link', { name: /Préparer les salles/ }))
     expect(navigate).toHaveBeenCalledWith('/e/site-1/execution/plan-1')
   })
 
+  it('ignores a stale continuation and stalls a repeated cursor', () => {
+    const initial = applyMyDayInitial(emptyMyDayWindow('site-1'), {
+      action: sectionPage([card()], 'cursor-1'),
+      follow: sectionPage([]),
+      upcoming: sectionPage([]),
+    }, 1)
+    const stale = applyMyDayContinuation(initial, 0, 'site-1', 'action', 'cursor-1', {
+      section: 'action',
+      next_cursor: null,
+      items: [card({ execution_id: 'plan-9', title: 'Trop tard' })],
+    })
+    expect(stale.ignored).toBe(true)
+    expect(stale.window.sections.action.items).toHaveLength(1)
+
+    const stalled = applyMyDayContinuation(initial, initial.generation, 'site-1', 'action', 'cursor-1', {
+      section: 'action',
+      next_cursor: 'cursor-1',
+      items: [card({ execution_id: 'plan-9', title: 'Doublon' })],
+    })
+    expect(stalled.stalled).toBe(true)
+    expect(stalled.window.sections.action.items).toHaveLength(1)
+    expect(stalled.window.sections.action.stalled).toBe(true)
+  })
+
   it('formats deadlines in the establishment timezone', () => {
-    expect(formatTaskDeadline(task, 'Europe/Paris', now)).toContain('16:00')
-    expect(formatTaskDeadline(task, 'Europe/Paris', now)).not.toContain('Hier')
-    expect(formatTaskDeadline({ ...task, all_day: true }, 'Europe/Paris', now)).not.toContain('16:00')
-    expect(formatTaskDeadline({ ...task, due_at: null }, 'Europe/Paris', now)).toBeNull()
+    const deadline = {
+      due_at: '2026-10-30T15:00:00Z',
+      all_day: false,
+    }
+    expect(formatTaskDeadline(deadline, 'Europe/Paris', now)).toContain('16:00')
+    expect(formatTaskDeadline(deadline, 'Europe/Paris', now)).not.toContain('Hier')
+    expect(formatTaskDeadline({ ...deadline, all_day: true }, 'Europe/Paris', now)).not.toContain('16:00')
+    expect(formatTaskDeadline({ ...deadline, due_at: null }, 'Europe/Paris', now)).toBeNull()
     expect(formatTaskDeadline(
-      { ...task, due_at: '2026-11-01T13:00:00Z' },
+      { ...deadline, due_at: '2026-11-01T13:00:00Z' },
       'Europe/Paris',
       now,
     )).toContain('14:00')
     expect(formatTaskDeadline(
-      { ...task, due_at: '2026-11-01T13:00:00Z', all_day: true },
+      { ...deadline, due_at: '2026-11-01T13:00:00Z', all_day: true },
       'Europe/Paris',
       now,
     )).toBeNull()
     expect(formatTaskDeadline(
-      { ...task, due_at: '2026-10-31T15:00:00Z' },
+      { ...deadline, due_at: '2026-10-31T15:00:00Z' },
       'Europe/Paris',
       now,
     )).toContain('Hier')
     expect(formatTaskDeadline(
-      { ...task, due_at: '2026-10-31T15:00:00Z', all_day: true },
+      { ...deadline, due_at: '2026-10-31T15:00:00Z', all_day: true },
       'Europe/Paris',
       now,
     )).toBe('Hier')
     expect(formatTaskDeadline(
-      { ...task, due_at: '2026-11-03T10:05:00Z' },
+      { ...deadline, due_at: '2026-11-03T10:05:00Z' },
       'Europe/Paris',
       now,
     )).toContain('11:05')
     expect(formatTaskDeadline(
-      { ...task, due_at: '2027-01-02T10:00:00Z' },
+      { ...deadline, due_at: '2027-01-02T10:00:00Z' },
       'Europe/Paris',
       now,
     )).toContain('2027')
 
     const dstNow = new Date('2026-10-25T00:30:00Z')
     const sameCivilMorning = formatTaskDeadline(
-      { ...task, due_at: '2026-10-24T22:30:00Z' },
+      { ...deadline, due_at: '2026-10-24T22:30:00Z' },
       'Europe/Paris',
       dstNow,
     )

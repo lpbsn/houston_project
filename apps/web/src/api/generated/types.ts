@@ -4920,14 +4920,6 @@ export interface components {
          * @enum {string}
          */
         BrainWorkKindEnum: "analysis" | "follow_up";
-        /**
-         * @description * `overdue` - overdue
-         *     * `today` - today
-         *     * `upcoming` - upcoming
-         *     * `undated` - undated
-         * @enum {string}
-         */
-        BucketEnum: "overdue" | "today" | "upcoming" | "undated";
         BusinessUnitGeneric: {
             key: string;
             label: string;
@@ -5803,24 +5795,60 @@ export interface components {
          * @enum {string}
          */
         ModeEnum: "all" | "mentions" | "silent";
+        MyDayCard: {
+            /** Format: uuid */
+            execution_id: string;
+            title: string;
+            pilot_pole: string;
+            section: components["schemas"]["SectionEnum"];
+            kind: components["schemas"]["MyDayCardKindEnum"];
+            /** Format: date-time */
+            start_at: string | null;
+            /** Format: date-time */
+            plan_end_at: string | null;
+            plan_all_day: boolean;
+            late: boolean;
+            own_tasks_done: boolean;
+            tasks: components["schemas"]["MyDayTask"][];
+        };
+        /**
+         * @description * `validate` - validate
+         *     * `awaiting_validation` - awaiting_validation
+         *     * `scheduled` - scheduled
+         *     * `realize` - realize
+         *     * `tasks` - tasks
+         *     * `follow` - follow
+         *     * `finalize` - finalize
+         *     * `relay` - relay
+         * @enum {string}
+         */
+        MyDayCardKindEnum: "validate" | "awaiting_validation" | "scheduled" | "realize" | "tasks" | "follow" | "finalize" | "relay";
         MyDayResponse: {
-            items: components["schemas"]["MyDayTask"][];
-            next_offset: number | null;
             timezone: string;
+            sections: components["schemas"]["MyDaySections"] | null;
+            section: (components["schemas"]["SectionEnum"] | components["schemas"]["NullEnum"]) | null;
+            next_cursor: string | null;
+            items: components["schemas"]["MyDayCard"][] | null;
+        };
+        MyDaySection: {
+            count: number;
+            next_cursor: string | null;
+            items: components["schemas"]["MyDayCard"][];
+        };
+        MyDaySections: {
+            action: components["schemas"]["MyDaySection"];
+            follow: components["schemas"]["MyDaySection"];
+            upcoming: components["schemas"]["MyDaySection"];
         };
         MyDayTask: {
             /** Format: uuid */
             id: string;
             title: string;
-            /** Format: uuid */
-            execution_id: string;
-            execution_title: string;
-            pole: string;
             /** Format: date-time */
             due_at: string | null;
-            all_day: boolean;
+            late: boolean;
             shared: boolean;
-            bucket: components["schemas"]["BucketEnum"];
+            pole: string | null;
         };
         NotificationActor: {
             /** Format: uuid */
@@ -6482,6 +6510,13 @@ export interface components {
             membership_id: string;
             readonly business_unit_ids: string[];
         };
+        /**
+         * @description * `action` - action
+         *     * `follow` - follow
+         *     * `upcoming` - upcoming
+         * @enum {string}
+         */
+        SectionEnum: "action" | "follow" | "upcoming";
         SignalDetail: {
             /** Format: uuid */
             id: string;
@@ -15046,7 +15081,8 @@ export interface operations {
     v1_establishments_my_day_retrieve: {
         parameters: {
             query?: {
-                offset?: number;
+                cursor?: string;
+                section?: string;
             };
             header?: never;
             path: {

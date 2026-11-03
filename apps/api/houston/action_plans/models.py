@@ -667,12 +667,19 @@ class ActionPlanAssignee(BaseModel):
         "establishments.EstablishmentMembership",
         on_delete=models.PROTECT,
         related_name="action_plan_execution_assignments",
+        db_index=False,
     )
     start_at = models.DateTimeField(null=True, blank=True)
     visible_from = models.DateTimeField(null=True, blank=True)
     end_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        indexes = [
+            models.Index(
+                fields=["membership", "visible_from"],
+                name="ap_assignee_member_visible_idx",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["action_plan_execution", "membership"],
