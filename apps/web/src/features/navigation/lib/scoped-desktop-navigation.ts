@@ -143,14 +143,8 @@ function establishmentItems(
     },
     {
       id: 'signals',
-      label: 'Observations',
+      label: 'Fiches terrain',
       href: serializeScopedTerrainPath(scope, 'signals'),
-      group: 2,
-    },
-    {
-      id: 'execution',
-      label: 'Exécution',
-      href: serializeScopedTerrainPath(scope, 'execution'),
       group: 2,
     },
   )
@@ -355,6 +349,7 @@ export function resolveDesktopScopeNavigation(options: {
   const items = scope ? itemsForDesktopScope(scope, options.bootstrap) : []
   const navFunction = resolveDesktopNavFunction(options.route)
   const activeItemId =
+    navFunction === 'execution' && scope?.type === 'establishment' ? 'signals' :
     navFunction && items.some((item) => item.id === navFunction) ? navFunction : null
 
   return {
@@ -378,6 +373,9 @@ export function resolveDesktopScopeSwitchHref(options: {
   }
   const items = itemsForDesktopScope(options.target, options.bootstrap)
   const navFunction = resolveDesktopNavFunction(options.route)
+  if (navFunction === 'execution') {
+    return serializeScopedTerrainPath(options.target, 'execution')
+  }
   const preserved = navFunction
     ? items.find((item) => item.id === navFunction)
     : undefined

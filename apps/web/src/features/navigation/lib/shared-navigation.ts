@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { BarChart3, CirclePlay, Eye, MessageCircle, Plus, Settings } from 'lucide-react'
+import { BarChart3, Sun, Eye, MessageCircle, Plus, Settings } from 'lucide-react'
 
 import type { TerrainNavPath } from '@/app/terrain-routes'
 import type { AppPath } from '@/app/app-routes'
@@ -9,6 +9,7 @@ export type SharedNavigationItemId =
   | 'new-observation'
   | 'observations'
   | 'execution'
+  | 'my-day'
   | 'chat'
   | 'analytics'
   | 'general'
@@ -41,18 +42,18 @@ export const SHARED_NAVIGATION_ITEMS: SharedNavigationItem[] = [
   {
     id: 'observations',
     path: '/signals',
-    label: 'Observations',
+    label: 'Fiches',
     icon: Eye,
     activePaths: ['/signals'],
     visibility: 'always',
     mobileBottom: true,
   },
   {
-    id: 'execution',
-    path: '/execution',
-    label: 'Exécution',
-    icon: CirclePlay,
-    activePaths: ['/execution', '/execution/upcoming'],
+    id: 'my-day',
+    path: '/my-day',
+    label: 'Ma journée',
+    icon: Sun,
+    activePaths: ['/my-day'],
     visibility: 'always',
     mobileBottom: true,
   },

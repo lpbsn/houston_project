@@ -1,3 +1,4 @@
+import { MyDayRecords } from "@/features/signals/records/my-day"
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { ArrowRight, AtSign, Bell, ChevronDown, ChevronRight, ClipboardList, Mail, Sun } from 'lucide-react'
 import type { MouseEvent } from 'react'
@@ -507,6 +508,8 @@ export function MyDayPage({ establishmentId, onNavigate }: {
             Votre travail, en un coup d’œil.
           </h2>
         </header>
+
+        <MyDayRecords site={establishmentId} onNavigate={onNavigate} />
 
         {/* Container query, not a viewport breakpoint: native keeps a max-w-md shell on large screens. */}
         <div className="grid items-start gap-6 @min-[960px]/day:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">

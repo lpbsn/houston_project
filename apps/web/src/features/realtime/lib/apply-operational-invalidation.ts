@@ -35,6 +35,9 @@ export function applyOperationalInvalidation(
   event: OperationalRealtimeInvalidateEvent,
   { queryClient, establishmentId }: ApplyOperationalInvalidationOptions,
 ) {
+  if (['signal', 'action_plan_execution', 'action_plan_execution_task', 'observation_processing'].includes(event.subject_type)) {
+    void queryClient.invalidateQueries({ queryKey: ['field-records', establishmentId] })
+  }
   if (event.subject_type === 'signal') {
     invalidateEstablishmentSignalQueries(queryClient, establishmentId)
     if (event.reason === 'signal.created') {
@@ -113,6 +116,7 @@ export function applyOperationalReconnectInvalidation(
   queryClient: QueryClient,
   establishmentId: string,
 ) {
+  void queryClient.invalidateQueries({ queryKey: ['field-records', establishmentId] })
   const force = { force: true } as const
   invalidateEstablishmentSignalQueries(queryClient, establishmentId, force)
   invalidateEstablishmentActionPlanCatalogQueries(queryClient, establishmentId)

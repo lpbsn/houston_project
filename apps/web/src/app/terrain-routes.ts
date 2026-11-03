@@ -7,6 +7,7 @@ import {
 export type { AppRoute } from '@/app/app-routes'
 
 export type TerrainNavPath =
+  | '/my-day'
   | '/reporting'
   | '/signals'
   | '/execution'
@@ -329,7 +330,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   }
 
   if (route.kind === 'static' && route.path === '/my-day') {
-    return { topbarVariant: 'hub', pageTitle: 'Ma journée', showBottomNav: true, mainScroll: 'auto', showTopbarBottomBorder: false }
+    return { topbarVariant: 'hub', pageTitle: 'Ma journée', activeNavPath: '/my-day', showBottomNav: true, mainScroll: 'auto', showTopbarBottomBorder: false }
   }
 
   if (route.kind === 'static' && route.path === '/reporting') {
