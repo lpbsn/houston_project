@@ -41,6 +41,11 @@ def _create_linked_execution(
     assignees=None,
     last_activity_at=None,
 ):
+    resolved_assignees = (
+        [build_assignee_payload(membership=owner_membership, business_unit=business_unit)]
+        if assignees is None
+        else assignees
+    )
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
@@ -48,7 +53,7 @@ def _create_linked_execution(
         title=title,
         source_signal_id=signal.id,
         tasks=[build_task_payload(task=f"Task for {title}", business_unit=business_unit)],
-        assignees=assignees or [],
+        assignees=resolved_assignees,
     )
     if last_activity_at is not None:
         execution.last_activity_at = last_activity_at
