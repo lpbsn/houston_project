@@ -288,6 +288,38 @@ describe('validateActionPlanCreatePlanningErrors', () => {
     expect(errors[`assignee.${assignee.id}.recurrenceDays`]).toBeTruthy()
   })
 
+  it('requires at least one assignee for a one-shot execution without tasks', () => {
+    const errors = validateActionPlanCreatePlanningErrors(
+      createActionPlanEventPlanningDraft(),
+      { saveToLibrary: false },
+    )
+
+    expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
+  })
+
+  it('allows a one-shot execution with an assignee and no tasks', () => {
+    const errors = validateActionPlanCreatePlanningErrors(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        assignees: [
+          createActionPlanAssigneeDraft({ membershipId: 'm1', businessUnitId: 'bu1' }),
+        ],
+      },
+      { saveToLibrary: false },
+    )
+
+    expect(errors.assignees).toBeUndefined()
+  })
+
+  it('allows a library template without assignees', () => {
+    const errors = validateActionPlanCreatePlanningErrors(
+      createActionPlanEventPlanningDraft(),
+      { saveToLibrary: true },
+    )
+
+    expect(errors).toEqual({})
+  })
+
   it('requires at least one assignee for create when per-assignee chronology is enabled', () => {
     const errors = validateActionPlanCreatePlanningErrors(
       {

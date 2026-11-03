@@ -346,10 +346,7 @@ def _create_individual_execution(
         establishment_id=action_plan.establishment_id,
         assignees=merged_payloads,
     )
-    _validate_execution_has_content(
-        task_count=len(plan_tasks),
-        assignee_count=len(validated_assignees),
-    )
+    _validate_execution_has_content(assignee_count=len(validated_assignees))
 
     execution = _create_execution_record(
         action_plan=action_plan,

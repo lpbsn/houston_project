@@ -450,10 +450,7 @@ def materialize_execution_from_schedule(
         chronology=chronology,
     )
 
-    _validate_execution_has_content(
-        task_count=len(plan_tasks),
-        assignee_count=len(assignees),
-    )
+    _validate_execution_has_content(assignee_count=len(assignees))
 
     if not known_missing:
         resolved = _resolve_existing_schedule_execution(

@@ -1166,7 +1166,7 @@ export interface paths {
         };
         get: operations["v1_establishments_action_plans_list"];
         put?: never;
-        /** @description Creates an action plan. Reusable catalog entries may omit tasks; execution or schedule flows require at least one task or assignee. With submission_id + items, creates a non-reusable plan and planning resources atomically. */
+        /** @description Creates an action plan. Reusable catalog entries may omit tasks and assignees; execution and schedule flows require at least one assignee, with or without tasks. With submission_id + items, creates a non-reusable plan and planning resources atomically. */
         post: operations["v1_establishments_action_plans_create"];
         delete?: never;
         options?: never;
@@ -3512,7 +3512,7 @@ export interface components {
             requires_validation: boolean;
             /** @default false */
             is_reusable: boolean;
-            /** @description Optional for reusable catalog plans. Direct execution or schedule create still requires at least one task or assignee. */
+            /** @description Optional for reusable catalog plans. Direct execution or schedule create still requires at least one assignee, with or without tasks. */
             tasks?: components["schemas"]["ActionPlanTaskInput"][];
             assignees?: components["schemas"]["ActionPlanAssigneeInput"][];
             /** Format: uuid */

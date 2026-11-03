@@ -38,7 +38,6 @@ from houston.action_plans.models import (
     ActionPlanExecution,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
-    ActionPlanTask,
 )
 from houston.action_plans.permissions import (
     can_create_action_plan_schedule,
@@ -587,11 +586,7 @@ def _create_action_plan_schedule_core(
         )
     if not validated_assignees:
         raise ActionPlanValidationError("At least one assignee is required.")
-    task_count = ActionPlanTask.objects.filter(action_plan=action_plan).count()
-    _validate_execution_has_content(
-        task_count=task_count,
-        assignee_count=len(validated_assignees),
-    )
+    _validate_execution_has_content(assignee_count=len(validated_assignees))
 
     schedule = ActionPlanSchedule.objects.create(
         action_plan=action_plan,
@@ -858,11 +853,7 @@ def update_action_plan_schedule(
             pilot_business_unit=action_plan.pilot_business_unit,
             validated_assignees=_schedule_assignees_as_validated_payloads(validated_assignees),
         )
-        task_count = ActionPlanTask.objects.filter(action_plan=schedule.action_plan_id).count()
-        _validate_execution_has_content(
-            task_count=task_count,
-            assignee_count=len(validated_assignees),
-        )
+        _validate_execution_has_content(assignee_count=len(validated_assignees))
         _replace_schedule_assignees(
             schedule=schedule,
             validated_assignees=validated_assignees,

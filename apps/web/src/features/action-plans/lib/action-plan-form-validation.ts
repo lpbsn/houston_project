@@ -2,7 +2,6 @@ import type { ActionPlanRecurrenceDay } from './action-plan-schedule-constants'
 import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
 import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
 import {
-  hasGlobalRepeat,
   validateActionPlanEventPlanningDraft,
   validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -268,9 +267,7 @@ export function validateActionPlanCreatePlanningErrors(
   }
 
   return validateActionPlanEventPlanningDraft(planningDraft, {
-    requireAssignees:
-      !options.saveToLibrary &&
-      (hasGlobalRepeat(planningDraft) || planningDraft.repeatEnabled),
+    requireAssignees: true,
     allowRepeat: !options.staffExecutionMode,
   })
 }
