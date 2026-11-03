@@ -343,7 +343,7 @@ function SourcesSection({
       ) : (
         <ul className="mt-3 flex flex-col gap-3 text-sm">
           {sources.map((source) => {
-            const href = liveSourceHref(establishmentId, source.category, source.sourceId)
+            const href = liveSourceHref(establishmentId, source.liveCategory ?? source.category, source.sourceId)
             return (
               <li key={source.itemId || source.title}>
                 <p>{source.title || 'Preuve'}</p>
@@ -353,7 +353,7 @@ function SourcesSection({
                 ) : null}
                 {href ? (
                   <a className="underline" href={href}>
-                    {source.category === 'execution' ? "Ouvrir l'exécution actuelle" : "Ouvrir l'observation actuelle"}
+                    {(source.liveCategory ?? source.category) === 'execution' ? "Ouvrir l'exécution actuelle" : "Ouvrir l'observation actuelle"}
                   </a>
                 ) : null}
               </li>

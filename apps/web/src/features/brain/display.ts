@@ -342,6 +342,7 @@ export type FrozenSource = {
   category: string
   title: string
   sourceId: string | null
+  liveCategory?: string
   periodStatusUnreconstructable: boolean
 }
 
@@ -351,6 +352,11 @@ export function readFrozenSource(value: unknown): FrozenSource | null {
     return null
   }
   const locators = Array.isArray(record.locators) ? record.locators : []
+  const parentLocator = asString(record.category) === 'terrain_evidence'
+    ? locators.map(asRecord).find((locator) =>
+      (locator?.format === 'spore_signal' || locator?.format === 'spore_execution') &&
+      typeof locator.source_id === 'string' && locator.source_id.length > 0)
+    : undefined
   const sourceId = locators
     .map((locator) => asRecord(locator)?.source_id)
     .find((item): item is string => typeof item === 'string' && item.length > 0)
@@ -359,7 +365,8 @@ export function readFrozenSource(value: unknown): FrozenSource | null {
     itemId: asString(record.item_id),
     category: asString(record.category),
     title: asString(record.title) || asString(record.label) || asString(record.item_id),
-    sourceId: sourceId ?? null,
+    sourceId: parentLocator ? asString(parentLocator.source_id) : sourceId ?? null,
+    ...(parentLocator ? { liveCategory: parentLocator.format === 'spore_signal' ? 'signal' : 'execution' } : {}),
     periodStatusUnreconstructable: periodStatuses.some((status) => status === 'not_reconstructable'),
   }
 }

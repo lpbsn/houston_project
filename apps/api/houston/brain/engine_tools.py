@@ -20,17 +20,37 @@ from houston.brain.configuration import canonical_json, json_token_count
 from houston.brain.models import BrainDossier, BrainDossierItem
 from houston.brain.numbers import decimal_text
 from houston.brain.objectives import single_sealed_measure_reading
+from houston.brain.terrain_evidence import EVIDENCE_CATEGORY, EVIDENCE_FAMILIES
 
 PAGE_SIZE = 10
 QUERY_CHAR_LIMIT = 200
 MEMORY_RESULT_TOKEN_CAP = 4_000
 NOTE_UNAVAILABLE = (
-    "Source non capturée ou hors périmètre : indisponible. "
-    "Ce n'est pas une absence dans le métier."
+    "Source non capturée ou hors périmètre : indisponible. Ce n'est pas une absence dans le métier."
 )
 NOTE_EMPTY = "Aucun élément dans le périmètre recherché."
 
 TOOL_SCHEMAS = (
+    {
+        "name": "search_evidence",
+        "description": (
+            "Détails terrain scellés : remontées individuelles même agrégées, tâches, "
+            "discussions opérationnelles, évaluations et assignations. Aucun chat privé. "
+            "Filtrer par source_id d'un signal/une exécution, ou par texte/période. "
+            "Plusieurs détails du même event_key ne sont pas des témoignages indépendants."
+        ),
+        "parameters": {
+            "kind": (
+                "observation_fact, execution_task, plan_discussion, "
+                "execution_review, assignment ou all."
+            ),
+            "parent_id": "source_id du signal ou de l'exécution, facultatif.",
+            "text": "Texte à chercher, facultatif.",
+            "window_start": "Date de déclaration inclusive, facultative avec window_end.",
+            "window_end": "Date de déclaration exclusive, facultative avec window_start.",
+            "cursor": "Page suivante, facultative.",
+        },
+    },
     {
         "name": "compare",
         "description": "Verdict de comparabilité entre deux mesures scellées.",
@@ -149,6 +169,7 @@ def execute_tool(
     arguments = arguments if isinstance(arguments, dict) else {}
     handlers = {
         "compare": lambda: _compare(view, arguments),
+        "search_evidence": lambda: _search_evidence(view, arguments, examined, remaining_copies),
         "search_signals": lambda: _search_signals(view, arguments, examined, remaining_copies),
         "search_actions": lambda: _search_actions(view, arguments, examined, remaining_copies),
         "search_objectives": lambda: _search_objectives(
@@ -185,6 +206,63 @@ def render_tool_result(view: SealedView, entry: dict) -> dict:
     envelope["returned_count"] = len(rows)
     envelope["rows"] = rows
     return envelope
+
+
+def _search_evidence(view, arguments, examined, remaining_copies) -> dict:
+    kind = str(arguments.get("kind") or "all")
+    if kind not in (*EVIDENCE_FAMILIES, "all"):
+        return _unavailable("evidence_kind_invalid")
+    families = EVIDENCE_FAMILIES if kind == "all" else (kind,)
+    window = _optional_window(arguments, view.tz)
+    if window.get("unavailable"):
+        return _unavailable(window["reason"])
+    if window.get("active") and window["start_dt"] >= view.capture_at:
+        return _unavailable("after_reference")
+    parent = str(arguments.get("parent_id") or "")
+    query, truncated_query = _query(arguments.get("text"))
+    incomplete = [family for family in families if not view.family_complete(family)]
+    matched = []
+    for item in view.of(EVIDENCE_CATEGORY):
+        payload = _payload(item)
+        if payload.get("kind") not in families:
+            continue
+        if parent and parent not in {payload.get("signal_id"), payload.get("execution_id")}:
+            continue
+        if (
+            query
+            and query.casefold()
+            not in (
+                str(payload.get("title") or "") + "\n" + str(payload.get("text") or "")
+            ).casefold()
+        ):
+            continue
+        moment = _parse_dt(payload.get("reported_at") or payload.get("created_at"))
+        if window.get("active") and (moment is None or not _in_datetime(moment, window)):
+            continue
+        matched.append(item)
+    matched.sort(key=_created_sort)
+    if incomplete and not matched:
+        return _unavailable("capture_incomplete")
+    result = _page(
+        matched,
+        arguments,
+        examined,
+        remaining_copies,
+        extra={
+            "query_truncated": truncated_query,
+            "window_applied": window.get("applied"),
+            "temporal_basis": "declaration_not_occurrence",
+            "unavailable_families": incomplete,
+            "match_count_is": "source_details_not_independent_observations",
+        },
+    )
+    if incomplete:
+        result["envelope"].update(
+            empty_means=None,
+            note=NOTE_UNAVAILABLE,
+            capture_omitted=sum(_omitted(view, family) for family in incomplete),
+        )
+    return result
 
 
 def _search_signals(view, arguments, examined, remaining_copies) -> dict:
@@ -568,6 +646,8 @@ def _unavailable(reason: str) -> dict:
 
 def _render_row(view, name, item, arguments) -> dict:
     payload = _payload(item)
+    if name == "search_evidence":
+        return {"item_id": str(item.id), "source_kind": EVIDENCE_CATEGORY, **payload}
     if name == "search_signals":
         return _signal_row(view, item, payload, arguments)
     if name == "search_actions":
@@ -596,6 +676,8 @@ def _signal_row(view, item, payload, arguments) -> dict:
     return {
         "item_id": str(item.id),
         "source_kind": "signal",
+        "source_id": payload.get("source_id"),
+        "details_tool": "search_evidence",
         "title": payload.get("title"),
         "structured_summary": payload.get("structured_summary"),
         "created_at": payload.get("created_at"),
@@ -620,6 +702,9 @@ def _action_row(view, item, payload, arguments) -> dict:
     row = {
         "item_id": str(item.id),
         "source_kind": kind,
+        "source_id": payload.get("source_id"),
+        "details_tool": "search_evidence",
+        "events": payload.get("events") or [],
         "title": payload.get("title"),
         "description": payload.get("description"),
         "created_at": payload.get("created_at"),
@@ -888,9 +973,10 @@ def _activity_matches(payload, activity: str) -> bool:
     if not isinstance(block, dict):
         return False
     wanted = activity.casefold()
-    return str(block.get("id") or "").casefold() == wanted or str(
-        block.get("label") or ""
-    ).casefold() == wanted
+    return (
+        str(block.get("id") or "").casefold() == wanted
+        or str(block.get("label") or "").casefold() == wanted
+    )
 
 
 def _signal_text(payload) -> str:
