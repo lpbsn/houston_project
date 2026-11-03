@@ -58,3 +58,11 @@ Use specialized documentation only when the task requires it. Documentation is s
 Explicit human workflows live under `.agents/skills/`. Cursor-specific scoped rules live under `.cursor/rules/`.
 
 Use the workflow requested by the human. Do not silently substitute another workflow.
+
+## Cloud Agent environment
+
+On boot, Docker runs Postgres, Redis, RabbitMQ, the API, and Celery, and the host Vite server listens on port 5173. A missing `.env` is copied from `.env.example` with the observation, analytics, and transcription providers set to `fake`, so the stack runs without an OpenAI key.
+
+Node 24.15.0 and uv 0.11.16 live in `/usr/local/bin`. Put that directory first on `PATH` when another Node is listed earlier.
+
+Backend validation stays in Docker (`make backend-check`). Frontend validation stays on the host (`make web-check`). Leave the host Vite server on port 5173; `make up` binds that same port from the web container.
