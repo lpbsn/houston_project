@@ -1236,7 +1236,8 @@ def test_calendar_includes_dated_pending_validation_in_window(
     business_unit,
 ):
     now = timezone.now()
-    start_at = now - timedelta(hours=3)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_at = max(day_start, now - timedelta(hours=3))
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,

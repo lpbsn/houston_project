@@ -626,18 +626,17 @@ def test_reactivate_directly_to_in_progress_without_started_event(
         use_shared_chronology=True,
         **visible_schedule_window(),
     )
-    # Ensure recomputed occurrence start is always in the past at reactivation time.
-    past_hour = (timezone.now() - timezone.timedelta(hours=2)).time().replace(
-        second=0,
-        microsecond=0,
-    )
-    end_hour = (timezone.now() - timezone.timedelta(hours=1)).time().replace(
-        second=0,
-        microsecond=0,
-    )
-    if end_hour <= past_hour:
+    # The recomputed occurrence start must already be due. Subtracting hours wraps
+    # onto the previous evening before 02:00 UTC, which would schedule later today.
+    now = timezone.now()
+    start_dt = now - timezone.timedelta(hours=2)
+    end_dt = now - timezone.timedelta(hours=1)
+    if start_dt.date() == now.date() and end_dt.date() == now.date() and end_dt > start_dt:
+        past_hour = start_dt.time().replace(second=0, microsecond=0)
+        end_hour = end_dt.time().replace(second=0, microsecond=0)
+    else:
         past_hour = dt_time(0, 0)
-        end_hour = dt_time(1, 0)
+        end_hour = dt_time(0, 30)
     schedule.start_at = past_hour
     schedule.end_at = end_hour
     schedule.save(update_fields=["start_at", "end_at", "updated_at"])
@@ -647,7 +646,6 @@ def test_reactivate_directly_to_in_progress_without_started_event(
     ).first()
     assert execution is not None
 
-    now = timezone.now()
     execution.status = EXECUTION_STATUS_CANCELED
     execution.cancel_origin = CANCEL_ORIGIN_SCHEDULE_SYNC
     execution.canceled_at = now
