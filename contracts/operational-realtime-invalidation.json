@@ -115,6 +115,11 @@
       "subject_type": "observation_processing",
       "reason": "observation_processing.updated",
       "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.execution.updated",
+      "dispatch": "by_reason"
     }
   ]
 }

@@ -20,6 +20,7 @@ EMITTER_SCAN_FILES: tuple[Path, ...] = (
     API_ROOT / "houston/action_plans/schedule_services.py",
     API_ROOT / "houston/action_plans/realtime.py",
     API_ROOT / "houston/comments/services.py",
+    API_ROOT / "houston/comments/discussion_services.py",
     API_ROOT / "houston/notifications/services.py",
     API_ROOT / "houston/observations/services.py",
 )
@@ -46,7 +47,7 @@ FIXED_EVENT_WRAPPERS: dict[str, tuple[str, str | None]] = {
 
 WRAPPER_SUBJECT_TYPES = {
     "_schedule_signal_invalidation": "signal",
-    "_schedule_comment_invalidation": "comment",
+    "schedule_comment_invalidation": "comment",
     "_schedule_notification_invalidation": "notification",
 }
 

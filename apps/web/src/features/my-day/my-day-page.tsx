@@ -1,0 +1,541 @@
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { ArrowRight, AtSign, Bell, ChevronDown, ChevronRight, ClipboardList, Mail, Sun } from 'lucide-react'
+import type { MouseEvent } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { useNotificationSelection, useNotificationsInfiniteQuery } from '@/features/notifications/hooks'
+import {
+  formatNotificationRelativeTime,
+  getNotificationIconVariant,
+} from '@/features/notifications/lib/notification-display'
+import type { NotificationItem } from '@/features/notifications/types'
+import { terrain, terrainCardClassName, terrainSectionDotVariants } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
+
+import { fetchMyDay, myDayQueryKey, type MyDayTask } from './api'
+
+const sections: {
+  key: MyDayTask['bucket']
+  title: string
+  dot?: keyof typeof terrainSectionDotVariants
+}[] = [
+  { key: 'overdue', title: 'En retard', dot: 'danger' },
+  { key: 'today', title: 'Aujourd’hui', dot: 'success' },
+  { key: 'upcoming', title: 'À venir' },
+  { key: 'undated', title: 'Sans échéance' },
+]
+
+const textNavClassName = cn(
+  'inline-flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium no-underline outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40',
+  terrain.primary,
+)
+
+// 12–14px copy on the beige feed (#F1EDEA) and its row hover (#E9E4DE). terrain.muted is below 4.5:1 there.
+const activitySecondaryTextClassName = 'text-[#676560]'
+
+function openInPage(
+  event: MouseEvent<HTMLAnchorElement>,
+  href: string,
+  onNavigate: (path: string) => void,
+) {
+  if (
+    event.defaultPrevented
+    || event.button !== 0
+    || event.metaKey
+    || event.ctrlKey
+    || event.shiftKey
+    || event.altKey
+  ) {
+    return
+  }
+  event.preventDefault()
+  onNavigate(href)
+}
+
+type CivilDay = {
+  year: number
+  month: number
+  day: number
+}
+
+function civilDay(date: Date, timeZone: string): CivilDay | null {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value)
+  const year = read('year')
+  const month = read('month')
+  const day = read('day')
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
+  return { year, month, day }
+}
+
+function sameCivilDay(left: CivilDay, right: CivilDay): boolean {
+  return left.year === right.year && left.month === right.month && left.day === right.day
+}
+
+function shiftCivilDay(day: CivilDay, days: number): CivilDay {
+  const shifted = new Date(Date.UTC(day.year, day.month - 1, day.day + days))
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  }
+}
+
+function formatClock(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone,
+  }).format(date)
+}
+
+function formatDayMonth(date: Date, timeZone: string, day: CivilDay, today: CivilDay): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone,
+    ...(day.year === today.year ? {} : { year: 'numeric' }),
+  }).format(date)
+}
+
+export function formatMyDayHeadingDate(timeZone: string, now = new Date()): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone,
+  }).format(now)
+}
+
+export function formatTaskDeadline(
+  task: MyDayTask,
+  timeZone: string,
+  now = new Date(),
+): string | null {
+  if (!task.due_at) return null
+  const due = new Date(task.due_at)
+  if (Number.isNaN(due.getTime())) return null
+
+  const dueDay = civilDay(due, timeZone)
+  const today = civilDay(now, timeZone)
+  if (!dueDay || !today) return null
+  if (sameCivilDay(dueDay, today)) {
+    return task.all_day ? null : formatClock(due, timeZone)
+  }
+  if (sameCivilDay(dueDay, shiftCivilDay(today, -1))) {
+    return task.all_day ? 'Hier' : `Hier, ${formatClock(due, timeZone)}`
+  }
+
+  const day = formatDayMonth(due, timeZone, dueDay, today)
+  return task.all_day ? day : `${day}, ${formatClock(due, timeZone)}`
+}
+
+function attributionLabel(shared: boolean): 'Pour moi' | 'Équipe' {
+  // `shared` is unassigned work in the member's poles, not an assignment to everyone.
+  return shared ? 'Équipe' : 'Pour moi'
+}
+
+type WorkColumnProps = {
+  tasks: MyDayTask[]
+  timeZone: string | undefined
+  isPending: boolean
+  isLoadingError: boolean
+  isRefetchError: boolean
+  isFetchNextPageError: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  onRetry: () => void
+  onLoadMore: () => void
+  taskHref: (task: MyDayTask) => string
+  plansHref: string
+  onNavigate: (path: string) => void
+}
+
+function WorkColumn({
+  tasks,
+  timeZone,
+  isPending,
+  isLoadingError,
+  isRefetchError,
+  isFetchNextPageError,
+  isFetchingNextPage,
+  hasNextPage,
+  onRetry,
+  onLoadMore,
+  taskHref,
+  plansHref,
+  onNavigate,
+}: WorkColumnProps) {
+  const showGroups = tasks.length > 0
+
+  return (
+    <section className="min-w-0 space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold">À traiter</h3>
+        <p className={cn('mt-1 text-sm', terrain.muted)}>
+          Vos tâches personnelles et le travail de vos pôles.
+        </p>
+      </div>
+
+      {isPending ? <p role="status">Chargement de votre journée…</p> : null}
+      {isLoadingError ? (
+        <TerrainErrorState message="Impossible de charger votre travail." onRetry={onRetry} />
+      ) : null}
+      {!isPending && !isLoadingError && !showGroups ? (
+        <TerrainEmptyState title="Aucune tâche à traiter pour le moment." />
+      ) : null}
+
+      {showGroups ? (
+        <div className="space-y-5">
+          {sections.map((section) => {
+            const rows = tasks.filter((task) => task.bucket === section.key)
+            if (rows.length === 0) return null
+            return (
+              <section key={section.key}>
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  {section.dot ? (
+                    <span
+                      className={cn('size-2 shrink-0 rounded-full', terrainSectionDotVariants[section.dot])}
+                      aria-hidden
+                    />
+                  ) : null}
+                  {section.title}
+                </h4>
+                <div className={terrainCardClassName()}>
+                  <ul className="divide-y divide-[#E8E6DF]">
+                    {rows.map((task) => {
+                      const deadline = timeZone ? formatTaskDeadline(task, timeZone) : null
+                      const todayClock = task.bucket === 'today' && deadline !== null && /^\d{2}:\d{2}$/.test(deadline)
+                        ? deadline
+                        : null
+                      const badge = (
+                        <span className={cn(
+                          'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                          task.shared ? 'bg-[#E8E6DF] text-[#555]' : terrain.transcript,
+                        )}
+                        >
+                          {attributionLabel(task.shared)}
+                        </span>
+                      )
+                      const deadlineText = deadline ? (
+                        <p className={cn(
+                          'text-sm',
+                          task.bucket === 'overdue' ? cn('font-medium', terrain.danger) : terrain.muted,
+                        )}
+                        >
+                          {deadline}
+                        </p>
+                      ) : null
+                      const chevron = <ChevronRight className="size-4 shrink-0 text-[#a3a19a]" aria-hidden />
+                      const title = (
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold break-words">{task.title}</p>
+                          <p className={cn('mt-0.5 text-sm break-words', terrain.muted)}>
+                            {task.pole} · {task.execution_title}
+                          </p>
+                        </div>
+                      )
+                      return (
+                        <li key={task.id} className="@container/task">
+                          <a
+                            href={taskHref(task)}
+                            className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left no-underline outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                            onClick={(event) => openInPage(event, taskHref(task), onNavigate)}
+                          >
+                            {task.bucket === 'today' ? (
+                              <>
+                                {title}
+                                {todayClock ? <p className={cn('shrink-0 text-sm', terrain.muted)}>{todayClock}</p> : null}
+                                {badge}
+                                {chevron}
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[32rem]/task:flex-row @min-[32rem]/task:items-start @min-[32rem]/task:justify-between @min-[32rem]/task:gap-4">
+                                  {title}
+                                  <div className="flex shrink-0 flex-col items-start gap-1 @min-[32rem]/task:items-end">
+                                    {task.bucket === 'upcoming' ? badge : deadlineText}
+                                    {task.bucket === 'upcoming' ? deadlineText : badge}
+                                  </div>
+                                </div>
+                                {chevron}
+                              </>
+                            )}
+                          </a>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {isFetchNextPageError ? (
+        <p role="alert" className={cn('text-sm', terrain.danger)}>Impossible de charger la suite.</p>
+      ) : null}
+      {isRefetchError ? (
+        <TerrainErrorState message="Impossible d’actualiser votre travail." onRetry={onRetry} />
+      ) : null}
+      <div className={hasNextPage || isFetchNextPageError ? 'space-y-8' : undefined}>
+        {hasNextPage || isFetchNextPageError ? (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-sm px-3 text-sm font-medium text-[#676560] outline-none hover:bg-[#E8E6DF] hover:text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 disabled:opacity-60"
+              disabled={isFetchingNextPage}
+              aria-busy={isFetchingNextPage || undefined}
+              onClick={onLoadMore}
+            >
+              {isFetchingNextPage ? 'Chargement…' : 'Afficher plus de tâches'}
+              {isFetchingNextPage ? null : <ChevronDown className="size-4 shrink-0" aria-hidden />}
+            </button>
+          </div>
+        ) : null}
+        <a
+          href={plansHref}
+          className={textNavClassName}
+          onClick={(event) => openInPage(event, plansHref, onNavigate)}
+        >
+          Voir tous les plans d’exécution
+          <ArrowRight className="size-4" aria-hidden />
+        </a>
+      </div>
+    </section>
+  )
+}
+
+type NewsPanelProps = {
+  items: NotificationItem[]
+  isPending: boolean
+  isError: boolean
+  onRetry: () => void
+  onSelect: (notification: NotificationItem) => void
+  notificationsHref: string
+  onNavigate: (path: string) => void
+}
+
+function activityIcon(notification: NotificationItem) {
+  if (
+    notification.subject_type === 'chat_conversation'
+    || notification.event_key === 'chat.message.received'
+  ) {
+    return {
+      icon: Mail,
+      iconClassName: 'text-[#3C7E63]',
+      containerClassName: 'bg-[#CDE8DC]',
+    }
+  }
+  if (notification.event_key === 'comment.mention.created') {
+    return {
+      icon: AtSign,
+      iconClassName: 'text-[#5137A1]',
+      containerClassName: 'bg-[#E4D9F8]',
+    }
+  }
+  if (
+    notification.event_key === 'action_plan.execution.created'
+    || notification.event_key === 'action_plan.execution.created_from_signal'
+  ) {
+    return {
+      icon: ClipboardList,
+      iconClassName: 'text-[#3A7A96]',
+      containerClassName: 'bg-[#D1E6F6]',
+    }
+  }
+  return getNotificationIconVariant(notification.event_key, notification.subject_type)
+}
+
+function NewsPanel({
+  items,
+  isPending,
+  isError,
+  onRetry,
+  onSelect,
+  notificationsHref,
+  onNavigate,
+}: NewsPanelProps) {
+  const hasItems = items.length > 0
+
+  return (
+    <aside className="min-w-0" aria-labelledby="my-day-activity-heading">
+      <div className="rounded-[14px] border border-[#E8E6DF] bg-[#F1EDEA]">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
+          <h3 id="my-day-activity-heading" className="flex items-center gap-2 text-base font-semibold">
+            <Bell className={cn('size-4 shrink-0', terrain.muted)} aria-hidden />
+            Dernières nouvelles
+          </h3>
+          <p className={cn('text-xs', activitySecondaryTextClassName)}>Activité récente</p>
+        </div>
+        {isPending && !hasItems ? (
+          <p role="status" className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', activitySecondaryTextClassName)}>
+            Chargement des notifications…
+          </p>
+        ) : null}
+        {isError && !hasItems ? (
+          <div className="border-t border-[#E4DFD8] px-4 py-3" role="alert">
+            <p className="text-sm">Les notifications sont momentanément indisponibles.</p>
+            <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>
+              Réessayer
+            </Button>
+          </div>
+        ) : null}
+        {!isPending && !isError && !hasItems ? (
+          <p className={cn('border-t border-[#E4DFD8] px-4 py-3 text-sm', activitySecondaryTextClassName)}>
+            Aucune notification pour le moment.
+          </p>
+        ) : null}
+        {hasItems ? (
+          <ul className="divide-y divide-[#E4DFD8] border-t border-[#E4DFD8]">
+            {items.map((notification) => {
+              const isUnread = notification.status === 'unread'
+              const icon = activityIcon(notification)
+              const Icon = icon.icon
+              return (
+                <li key={notification.id}>
+                  <button
+                    type="button"
+                    className="group flex w-full items-start gap-3 px-4 py-3 text-left outline-none hover:bg-[#E9E4DE] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40 focus-visible:ring-inset"
+                    onClick={() => onSelect(notification)}
+                  >
+                    <span className="relative mt-0.5 shrink-0">
+                      <span
+                        className={cn(
+                          'flex size-8 items-center justify-center rounded-full',
+                          icon.containerClassName,
+                        )}
+                        aria-hidden
+                      >
+                        <Icon className={cn('size-4', icon.iconClassName)} />
+                      </span>
+                      {isUnread ? (
+                        <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-[#1B4FD8] ring-2 ring-[#F1EDEA] group-hover:ring-[#E9E4DE]" aria-hidden />
+                      ) : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold break-words">{notification.title}</span>
+                      {notification.body ? (
+                        <span className={cn('mt-0.5 block line-clamp-2 text-sm', activitySecondaryTextClassName)}>
+                          {notification.body}
+                        </span>
+                      ) : null}
+                      <span className={cn('mt-1 block text-xs', activitySecondaryTextClassName)}>
+                        {formatNotificationRelativeTime(notification.created_at)}
+                        {notification.priority === 'urgent' ? ' · Urgent' : null}
+                        {isUnread ? <span className="sr-only"> Non lu</span> : null}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+        {isError && hasItems ? (
+          <div className="border-t border-[#E4DFD8] px-4 py-3" role="alert">
+            <p className="text-sm">Les notifications sont momentanément indisponibles.</p>
+            <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>
+              Réessayer
+            </Button>
+          </div>
+        ) : null}
+        <div className="border-t border-[#E4DFD8] px-4">
+          <a
+            href={notificationsHref}
+            className={textNavClassName}
+            onClick={(event) => openInPage(event, notificationsHref, onNavigate)}
+          >
+            Voir toutes les notifications
+            <ArrowRight className="size-4" aria-hidden />
+          </a>
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+export function MyDayPage({ establishmentId, onNavigate }: {
+  establishmentId: string | null
+  onNavigate: (path: string) => void
+}) {
+  const query = useInfiniteQuery({
+    queryKey: myDayQueryKey(establishmentId),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => fetchMyDay(establishmentId!, pageParam),
+    getNextPageParam: (page) => page.next_offset ?? undefined,
+    enabled: Boolean(establishmentId),
+    // Refresh dates at midnight and recover when realtime is temporarily unavailable.
+    refetchInterval: 60_000,
+  })
+  const notifications = useNotificationsInfiniteQuery(establishmentId)
+  const { handleSelectNotification } = useNotificationSelection(establishmentId, { onNavigate })
+
+  if (!establishmentId) {
+    return <p className="p-4 text-sm text-[#1a1a1a]">Sélectionnez un établissement.</p>
+  }
+
+  const tasks = query.data?.pages.flatMap((page) => page.items) ?? []
+  const timeZone = query.data?.pages[0]?.timezone
+  const latest = notifications.data?.pages.flatMap((page) => page.items).slice(0, 5) ?? []
+  const base = `/e/${establishmentId}`
+
+  return (
+    <div className="@container/day mx-auto w-full min-w-0 max-w-6xl">
+      <div className={cn('space-y-6 p-4 @min-[960px]/day:p-6', terrain.foreground)}>
+        <header>
+          {timeZone ? (
+            <p className={cn(
+              'mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em]',
+              terrain.muted,
+            )}
+            >
+              <Sun className={cn('size-3.5', terrain.amber)} aria-hidden />
+              {formatMyDayHeadingDate(timeZone)}
+            </p>
+          ) : null}
+          <h2 className="text-2xl font-semibold tracking-tight @min-[960px]/day:text-[1.75rem]">
+            Votre travail, en un coup d’œil.
+          </h2>
+        </header>
+
+        {/* Container query, not a viewport breakpoint: native keeps a max-w-md shell on large screens. */}
+        <div className="grid items-start gap-6 @min-[960px]/day:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <WorkColumn
+            tasks={tasks}
+            timeZone={timeZone}
+            isPending={query.isPending}
+            isLoadingError={query.isLoadingError}
+            isRefetchError={query.isRefetchError}
+            isFetchNextPageError={query.isFetchNextPageError}
+            isFetchingNextPage={query.isFetchingNextPage}
+            hasNextPage={Boolean(query.hasNextPage)}
+            onRetry={() => void query.refetch()}
+            onLoadMore={() => void query.fetchNextPage()}
+            taskHref={(task) => `${base}/execution/${task.execution_id}`}
+            plansHref={`${base}/execution`}
+            onNavigate={onNavigate}
+          />
+          <NewsPanel
+            items={latest}
+            isPending={notifications.isPending}
+            isError={notifications.isError}
+            onRetry={() => void notifications.refetch()}
+            onSelect={handleSelectNotification}
+            notificationsHref="/notifications-center"
+            onNavigate={onNavigate}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}

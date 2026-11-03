@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
 
+import { createElement, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { DiscussionToolbarMock } = vi.hoisted(() => ({
+  DiscussionToolbarMock: vi.fn((): ReactNode => null),
+}))
+
+vi.mock('./components/discussion-toolbar', () => ({
+  DiscussionToolbar: (props: {
+    onFilter: (filter: 'all' | 'unresolved' | 'pinned') => void
+  }) => DiscussionToolbarMock(props),
+}))
+vi.mock('./components/comment-tools', () => ({ CommentTools: () => null }))
 
 import { resolveApiUrl } from '@/lib/runtime'
 
@@ -166,6 +178,8 @@ function submitRootComment(text = 'Nouveau commentaire') {
 
 beforeEach(() => {
   createExecutionCommentMutationCallCount = 0
+  DiscussionToolbarMock.mockReset()
+  DiscussionToolbarMock.mockReturnValue(null)
   executionCommentsQueryData.current = executionComments
   rootCommentMutation.isPending = false
   rootCommentMutation.error = null
@@ -382,6 +396,33 @@ describe('CommentSection', () => {
 
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByPlaceholderText(/Répondre à /)).toBeTruthy()
+  })
+
+  it('shows an empty pinned state without claiming the discussion has no comments', () => {
+    DiscussionToolbarMock.mockImplementation(
+      (props: { onFilter: (filter: 'all' | 'unresolved' | 'pinned') => void }) =>
+        createElement(
+          'button',
+          { type: 'button', onClick: () => props.onFilter('pinned') },
+          'Filtrer les décisions épinglées',
+        ),
+    )
+
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="action-plan-execution"
+        targetId="exec-1"
+      />,
+    )
+
+    expect(screen.getByText('note execution')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Filtrer les décisions épinglées' }))
+
+    expect(screen.getByText('Aucune décision épinglée.')).toBeTruthy()
+    expect(screen.queryByText('note execution')).toBeNull()
+    expect(screen.queryByText("Soyez le premier à laisser un commentaire sur ce plan d'action.")).toBeNull()
+    expect(screen.queryByText("Aucun commentaire pour l'instant.")).toBeNull()
   })
 
   it('shows unavailable message when highlight id is missing from loaded comments', () => {

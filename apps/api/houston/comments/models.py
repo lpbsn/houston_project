@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.db.models import Q
 
@@ -47,11 +49,20 @@ class Comment(BaseModel):
         null=True,
         blank=True,
     )
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    created_task = models.OneToOneField(
+        "action_plans.ActionPlanExecutionTask",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="source_comment",
+    )
     body = models.TextField(max_length=COMMENT_BODY_MAX_LENGTH)
 
     class Meta:
         ordering = ["created_at", "id"]
         indexes = [
+            GinIndex(SearchVector("body", config="french"), name="comment_search_idx"),
             models.Index(fields=["establishment", "signal", "created_at", "id"]),
             models.Index(
                 fields=["establishment", "action_plan_execution", "created_at", "id"],
@@ -188,4 +199,38 @@ class ActionPlanCommentAttachment(BaseModel):
                 fields=["comment", "position"],
                 name="uniq_action_plan_comment_attachment_position",
             ),
+        ]
+
+
+class PlanDiscussionPreference(BaseModel):
+    execution = models.ForeignKey("action_plans.ActionPlanExecution", on_delete=models.CASCADE)
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership", on_delete=models.CASCADE
+    )
+    seen_at = models.DateTimeField(null=True)
+    notification_mode = models.CharField(
+        max_length=16,
+        default="all",
+        choices=[("all", "All"), ("mentions", "Mentions"), ("silent", "Silent")],
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["execution", "membership"], name="unique_plan_discussion_preference"
+            )
+        ]
+
+
+class CommentAcknowledgement(BaseModel):
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="acknowledgements")
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership", on_delete=models.CASCADE
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["comment", "membership"], name="unique_comment_acknowledgement"
+            )
         ]

@@ -9,6 +9,7 @@ const ANALYTICS_ROLES = new Set(['owner', 'director', 'manager'])
 const SPORE_BRAIN_ROLES = new Set(['owner', 'director'])
 
 export type ScopedDesktopNavItemId =
+  | 'my-day'
   | 'dashboard'
   | 'brain'
   | 'reporting'
@@ -116,7 +117,7 @@ function establishmentItems(
   },
 ): ScopedDesktopNavItem[] {
   const scope: TerrainScope = { type: 'establishment', establishmentId }
-  const items: ScopedDesktopNavItem[] = []
+  const items: ScopedDesktopNavItem[] = [{ id: 'my-day', label: 'Ma journée', href: serializeScopedTerrainPath(scope, 'my-day'), group: 1 }]
   if (options.showDashboard) {
     items.push({
       id: 'dashboard',
@@ -277,6 +278,7 @@ function resolveDesktopNavFunction(
     }
     return route.page satisfies ScopedDesktopNavItemId
   }
+  if (route.kind === 'static' && route.path === '/my-day') return 'my-day'
   if (route.kind === 'signal-detail' || route.kind === 'signal-action-create') {
     return 'signals'
   }

@@ -115,7 +115,7 @@ class CanAccessChat(permissions.BasePermission):
         return membership is not None
 
 
-def _resolve_membership(request, establishment_id: uuid.UUID):
+def resolve_chat_request_membership(request, establishment_id: uuid.UUID):
     membership = resolve_chat_actor_membership(
         request,
         establishment_id=establishment_id,
@@ -135,7 +135,7 @@ def _resolve_settings_membership(request, establishment_id: uuid.UUID):
     return membership
 
 
-def _chat_error_response(exc: ChatError) -> Response:
+def chat_error_response(exc: ChatError) -> Response:
     if isinstance(exc, ChatNotFoundError):
         return Response(status=status.HTTP_404_NOT_FOUND)
     if isinstance(exc, ChatPermissionError):
@@ -166,7 +166,7 @@ def _parse_message_page_size(raw: str | None) -> int:
     return value
 
 
-def _parse_message_cursor(raw: str | None) -> tuple[object, uuid.UUID] | None:
+def parse_message_cursor(raw: str | None) -> tuple[object, uuid.UUID] | None:
     if not raw:
         return None
     parts = raw.split("|", 1)
@@ -272,7 +272,7 @@ class ChatWsTicketView(ChatRateLimitedMixin, EstablishmentScopedChatMixin, APIVi
         },
     )
     def post(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -331,7 +331,7 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -350,6 +350,7 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
         latest_messages_by_conversation_id = get_latest_messages_by_conversation_ids(
             [conversation.id for conversation in conversations],
             history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
+            viewer_membership_id=membership.id,
         )
         unread_counts_by_conversation_id = get_unread_message_counts_by_conversation_ids(
             membership_id=membership.id,
@@ -401,7 +402,7 @@ class ChatCreateDmView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -413,7 +414,7 @@ class ChatCreateDmView(EstablishmentScopedChatMixin, APIView):
                 target_membership_id=body.validated_data["membership_id"],
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         conversation = get_conversation_for_participant(
             establishment_id=self.establishment_id,
@@ -465,7 +466,7 @@ class ChatCreateGroupView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -478,7 +479,7 @@ class ChatCreateGroupView(EstablishmentScopedChatMixin, APIView):
                 membership_ids=body.validated_data["membership_ids"],
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         conversation = get_conversation_for_participant(
             establishment_id=self.establishment_id,
@@ -524,7 +525,7 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -566,7 +567,7 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def patch(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -579,7 +580,7 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
                 title=body.validated_data["title"],
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         conversation = get_conversation_for_participant(
             establishment_id=self.establishment_id,
@@ -614,7 +615,7 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def delete(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -624,7 +625,7 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -652,7 +653,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -666,9 +667,9 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
 
         try:
             page_size = _parse_message_page_size(request.query_params.get("page_size"))
-            cursor = _parse_message_cursor(request.query_params.get("cursor"))
+            cursor = parse_message_cursor(request.query_params.get("cursor"))
         except ChatValidationError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         before_created_at = cursor[0] if cursor else None
         before_id = cursor[1] if cursor else None
@@ -681,6 +682,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
             history_cutoff_at=(
                 participant.history_cutoff_at if participant is not None else None
             ),
+            viewer_membership_id=membership.id,
         )
         has_more = len(messages) > page_size
         page = messages[:page_size]
@@ -714,7 +716,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             logger.warning(
                 "chat_message_send_denied",
@@ -774,7 +776,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
         except ChatError as exc:
-            response = _chat_error_response(exc)
+            response = chat_error_response(exc)
             log_name = (
                 "chat_message_send_denied"
                 if isinstance(exc, ChatPermissionError)
@@ -851,7 +853,7 @@ class ChatConversationSeenView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -861,7 +863,7 @@ class ChatConversationSeenView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -885,7 +887,7 @@ class ChatConversationPresenceView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -895,7 +897,7 @@ class ChatConversationPresenceView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -931,7 +933,7 @@ class ChatEligibleMembershipsView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -967,7 +969,7 @@ class ChatEligibleMembershipsView(EstablishmentScopedChatMixin, APIView):
                 membership_id=membership.id,
             )
             if conversation is None:
-                return _chat_error_response(ChatNotFoundError())
+                return chat_error_response(ChatNotFoundError())
             if conversation.type != ChatConversation.Type.GROUP:
                 return Response(
                     {
@@ -1012,7 +1014,7 @@ class ChatAddParticipantView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1025,7 +1027,7 @@ class ChatAddParticipantView(EstablishmentScopedChatMixin, APIView):
                 target_membership_id=body.validated_data["membership_id"],
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_201_CREATED)
 
@@ -1049,7 +1051,7 @@ class ChatRemoveParticipantView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def delete(self, request, establishment_id, conversation_id, membership_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1060,7 +1062,7 @@ class ChatRemoveParticipantView(EstablishmentScopedChatMixin, APIView):
                 target_membership_id=uuid.UUID(str(membership_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1084,7 +1086,7 @@ class ChatPromoteParticipantView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id, membership_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1095,7 +1097,7 @@ class ChatPromoteParticipantView(EstablishmentScopedChatMixin, APIView):
                 target_membership_id=uuid.UUID(str(membership_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1120,7 +1122,7 @@ class ChatLeaveConversationView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1130,7 +1132,7 @@ class ChatLeaveConversationView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1154,7 +1156,7 @@ class ChatPinConversationView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1164,7 +1166,7 @@ class ChatPinConversationView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1179,7 +1181,7 @@ class ChatPinConversationView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def delete(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1189,7 +1191,7 @@ class ChatPinConversationView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1214,7 +1216,7 @@ class ChatHideConversationView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def post(self, request, establishment_id, conversation_id):
-        membership = _resolve_membership(request, self.establishment_id)
+        membership = resolve_chat_request_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
 
@@ -1224,7 +1226,7 @@ class ChatHideConversationView(EstablishmentScopedChatMixin, APIView):
                 conversation_id=uuid.UUID(str(conversation_id)),
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1257,7 +1259,7 @@ class ChatSettingsView(EstablishmentScopedChatMixin, APIView):
                 chat_enabled=body.validated_data["chat_enabled"],
             )
         except ChatError as exc:
-            return _chat_error_response(exc)
+            return chat_error_response(exc)
 
         membership.establishment.refresh_from_db(fields=["chat_enabled", "updated_at"])
         payload = build_chat_status(membership=membership)

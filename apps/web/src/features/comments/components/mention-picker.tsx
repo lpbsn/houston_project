@@ -1,8 +1,7 @@
 import { Check } from 'lucide-react'
 
+import { getDisplayNameInitials } from '@/lib/display-names'
 import { cn } from '@/lib/utils'
-
-import { getDisplayNameInitials } from '../lib/comment-display'
 import type { MentionUserSearchResult } from '../types'
 
 const AVATAR_BG_CLASSES = [

@@ -11,6 +11,7 @@ from django.db.models import (
     DateTimeField,
     Exists,
     F,
+    IntegerField,
     OuterRef,
     Q,
     QuerySet,
@@ -20,7 +21,13 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 from houston.accounts.models import User
-from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
+from houston.chat.models import (
+    ChatConversation,
+    ChatMessage,
+    ChatMessageAcknowledgement,
+    ChatObservationSource,
+    ChatParticipant,
+)
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
@@ -188,24 +195,70 @@ def get_latest_visible_message(
     ).get(conversation_id)
 
 
+def message_viewer_activity_annotations(*, viewer_membership_id: uuid.UUID) -> dict:
+    """Fold acknowledgement and observation flags into the message SELECT.
+
+    A separate prefetch would add two round-trips on every list. These
+    subqueries stay on the indexed message foreign keys and do not multiply
+    DISTINCT ON rows.
+    """
+    acknowledgement_totals = (
+        ChatMessageAcknowledgement.objects.filter(message_id=OuterRef("pk"))
+        .order_by()
+        .values("message_id")
+        .annotate(total=Count("pk"))
+        .values("total")
+    )
+    return {
+        "acknowledgement_count": Coalesce(
+            Subquery(acknowledgement_totals[:1], output_field=IntegerField()),
+            Value(0),
+        ),
+        "acknowledged": Exists(
+            ChatMessageAcknowledgement.objects.filter(
+                message_id=OuterRef("pk"),
+                membership_id=viewer_membership_id,
+            )
+        ),
+        "observation_created": Exists(
+            ChatObservationSource.objects.filter(message_id=OuterRef("pk"))
+        ),
+    }
+
+
+def _with_viewer_activity(
+    queryset: QuerySet[ChatMessage], *, viewer_membership_id: uuid.UUID | None
+):
+    if viewer_membership_id is None:
+        return queryset
+    return queryset.annotate(
+        **message_viewer_activity_annotations(viewer_membership_id=viewer_membership_id)
+    )
+
+
 def get_latest_messages_by_conversation_ids(
     conversation_ids: list[uuid.UUID],
     *,
     history_cutoffs_by_conversation_id: dict[uuid.UUID, datetime | None] | None = None,
+    viewer_membership_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, ChatMessage]:
     if not conversation_ids:
         return {}
 
-    cutoffs = history_cutoffs_by_conversation_id or {}
-    if not cutoffs:
-        latest_messages = (
-            ChatMessage.objects.filter(conversation_id__in=conversation_ids)
+    def latest_messages_for(queryset: QuerySet[ChatMessage]) -> dict[uuid.UUID, ChatMessage]:
+        # Annotate before DISTINCT ON so the extra columns do not add a query.
+        rows = (
+            _with_viewer_activity(queryset, viewer_membership_id=viewer_membership_id)
             .select_related("author_membership", "author_membership__user", "conversation")
             .prefetch_related("mentions__membership__user", "attachments__upload")
             .order_by("conversation_id", "-created_at", "-id")
             .distinct("conversation_id")
         )
-        return {message.conversation_id: message for message in latest_messages}
+        return {message.conversation_id: message for message in rows}
+
+    cutoffs = history_cutoffs_by_conversation_id or {}
+    if not cutoffs:
+        return latest_messages_for(ChatMessage.objects.filter(conversation_id__in=conversation_ids))
 
     visibility_q = Q()
     for conversation_id in conversation_ids:
@@ -215,14 +268,7 @@ def get_latest_messages_by_conversation_ids(
         else:
             visibility_q |= Q(conversation_id=conversation_id, created_at__gt=cutoff)
 
-    latest_messages = (
-        ChatMessage.objects.filter(visibility_q)
-        .select_related("author_membership", "author_membership__user", "conversation")
-        .prefetch_related("mentions__membership__user", "attachments__upload")
-        .order_by("conversation_id", "-created_at", "-id")
-        .distinct("conversation_id")
-    )
-    return {message.conversation_id: message for message in latest_messages}
+    return latest_messages_for(ChatMessage.objects.filter(visibility_q))
 
 
 def list_messages_for_conversation(
@@ -232,15 +278,17 @@ def list_messages_for_conversation(
     before_created_at=None,
     before_id: uuid.UUID | None = None,
     history_cutoff_at: datetime | None = None,
+    viewer_membership_id: uuid.UUID | None = None,
 ) -> list[ChatMessage]:
-    queryset = (
+    queryset = _with_viewer_activity(
         ChatMessage.objects.filter(conversation_id=conversation_id)
         .select_related(
             "author_membership",
             "author_membership__user",
             "conversation",
         )
-        .prefetch_related("mentions__membership__user", "attachments__upload")
+        .prefetch_related("mentions__membership__user", "attachments__upload"),
+        viewer_membership_id=viewer_membership_id,
     )
     if history_cutoff_at is not None:
         queryset = queryset.filter(created_at__gt=history_cutoff_at)
@@ -276,8 +324,7 @@ def _message_visible_after_viewer_cutoff(*, membership_id: uuid.UUID) -> Exists:
             membership_id=membership_id,
             left_at__isnull=True,
         ).filter(
-            Q(history_cutoff_at__isnull=True)
-            | Q(history_cutoff_at__lt=OuterRef("created_at"))
+            Q(history_cutoff_at__isnull=True) | Q(history_cutoff_at__lt=OuterRef("created_at"))
         )
     )
 
@@ -305,9 +352,9 @@ def get_unread_message_counts_by_conversation_ids(
 
 
 def count_unread_messages_for_participant(*, participant: ChatParticipant) -> int:
-    queryset = ChatMessage.objects.filter(
-        conversation_id=participant.conversation_id
-    ).exclude(author_membership_id=participant.membership_id)
+    queryset = ChatMessage.objects.filter(conversation_id=participant.conversation_id).exclude(
+        author_membership_id=participant.membership_id
+    )
     if participant.history_cutoff_at is not None:
         queryset = queryset.filter(created_at__gt=participant.history_cutoff_at)
     if participant.last_seen_message_id is None or participant.last_seen_message_created_at is None:
@@ -335,3 +382,14 @@ def find_existing_dm_conversation(
         dm_membership_a_id=first_id,
         dm_membership_b_id=second_id,
     ).first()
+
+
+def visible_messages(*, membership: EstablishmentMembership) -> QuerySet[ChatMessage]:
+    from houston.chat.permissions import can_access_chat
+
+    if not can_access_chat(membership):
+        return ChatMessage.objects.none()
+    return ChatMessage.objects.filter(
+        conversation__establishment_id=membership.establishment_id,
+        conversation__deleted_at__isnull=True,
+    ).filter(_message_visible_after_viewer_cutoff(membership_id=membership.id))

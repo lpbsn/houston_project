@@ -449,11 +449,6 @@ function ActionPlanExecutionDetailPageContent({
       highlightCommentId={highlightCommentId}
       readOnly={source === 'cross'}
       documentFlow={isDesktopWeb}
-      documentFlowTitle={
-        isDesktopWeb ? (
-          <ActionPlanExecutionDetailLabel>Commentaires</ActionPlanExecutionDetailLabel>
-        ) : undefined
-      }
       pinComposer={!isDesktopWeb}
       attachTrigger="icon"
       attachEnabled={
@@ -594,7 +589,9 @@ function ActionPlanExecutionDetailPageContent({
               data-testid="execution-detail-comments-section"
               className="flex scroll-mt-4 flex-col xl:col-start-1 xl:row-start-2"
             >
-              <TerrainCard>{commentSection}</TerrainCard>
+              <TerrainCard className="rounded-[27px] px-8 py-7 shadow-[0_1px_2px_rgba(26,40,26,0.025)]">
+                {commentSection}
+              </TerrainCard>
             </section>
           </div>
         </div>
@@ -670,7 +667,7 @@ function ActionPlanExecutionDetailPageContent({
             data-testid="execution-detail-comments-panel"
             className={
               resolvedActiveTab === 'comments'
-                ? 'flex min-h-0 flex-1 flex-col px-3 pt-2 pb-4'
+                ? 'flex min-h-0 flex-1 flex-col bg-white px-4 pt-5 pb-4'
                 : 'hidden'
             }
           >

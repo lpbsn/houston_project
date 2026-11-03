@@ -1,3 +1,8 @@
+import {
+  commentMatchesDiscussionFilter,
+  type DiscussionListFilter,
+} from '../lib/discussion-filter'
+import { DiscussionToolbar } from './discussion-toolbar'
 import { useRef, useState, type ReactNode } from 'react'
 import { Info, LoaderCircle } from 'lucide-react'
 
@@ -40,7 +45,6 @@ type CommentSectionProps = {
   readOnly?: boolean
   attachEnabled?: boolean
   attachTrigger?: 'label' | 'icon'
-  documentFlowTitle?: ReactNode
   /** Page flow: the thread grows with its content. The panel layout keeps an internal scroller. */
   documentFlow?: boolean
   pinComposer?: boolean
@@ -62,11 +66,13 @@ function OperationalCommentsLayout({
   composer,
   documentFlow = false,
   pinComposer = true,
+  executionPanel = false,
 }: {
   list: ReactNode
   composer: ReactNode
   documentFlow?: boolean
   pinComposer?: boolean
+  executionPanel?: boolean
 }) {
   if (documentFlow) {
     return (
@@ -77,6 +83,17 @@ function OperationalCommentsLayout({
         <div className="flex flex-col">{list}</div>
         {composer ? (
           <div className={cn('shrink-0 pt-4', pinComposer && 'mt-auto pt-6')}>{composer}</div>
+        ) : null}
+      </div>
+    )
+  }
+
+  if (executionPanel) {
+    return (
+      <div data-testid="comment-section" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">{list}</div>
+        {composer ? (
+          <div className={cn('shrink-0 pt-4', pinComposer && 'mt-auto')}>{composer}</div>
         ) : null}
       </div>
     )
@@ -123,7 +140,6 @@ export function CommentSection({
   readOnly = false,
   attachEnabled = false,
   attachTrigger = 'label',
-  documentFlowTitle,
   documentFlow = false,
   pinComposer = true,
 }: CommentSectionProps) {
@@ -144,6 +160,7 @@ export function CommentSection({
     isSignal ? establishmentId : null,
     isSignal ? targetId : null,
   )
+  const [discussionFilter, setDiscussionFilter] = useState<DiscussionListFilter>('all')
   const executionQuery = useExecutionCommentsQuery(
     isExecution ? establishmentId : null,
     isExecution ? targetId : null,
@@ -220,21 +237,43 @@ export function CommentSection({
   const mediaAccessButton = isExecution ? (
     <button
       type="button"
-      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
+      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-[#e4e3df] px-2.5 text-[13px] font-medium text-[#7a827c] hover:bg-[#f5f4f1]"
       data-testid="execution-plan-medias"
       onClick={() => setInfoOpen(true)}
     >
-      <Info className="h-3.5 w-3.5" aria-hidden="true" />
+      <Info className="size-3.5" aria-hidden="true" />
       Médias
     </button>
   ) : null
 
+  const executionToolbar =
+    isExecution && targetId ? (
+      <DiscussionToolbar
+        establishmentId={establishmentId}
+        executionId={targetId}
+        filter={discussionFilter}
+        onFilter={setDiscussionFilter}
+        latestAt={executionQuery.data
+          ?.flatMap((item) => [
+            item.created_at,
+            ...(item.replies ?? []).map((reply) => reply.created_at),
+          ])
+          .sort()
+          .at(-1)}
+      />
+    ) : null
+
   const list = (
     <>
-      {documentFlow && documentFlowTitle ? (
-        <div className="flex items-center justify-between gap-2">
-          {documentFlowTitle}
-          {mediaAccessButton}
+      {isExecution ? (
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-bold tracking-[0.025em] text-[#222522] sm:text-[21px] sm:leading-snug">
+              COMMENTAIRES
+            </h2>
+            {mediaAccessButton}
+          </div>
+          {executionToolbar}
         </div>
       ) : (
         <div className="flex items-center gap-2">
@@ -281,7 +320,23 @@ export function CommentSection({
       {executionQuery.isSuccess && isExecution ? (
         <CommentList
           mode="execution"
-          comments={executionQuery.data}
+          comments={executionQuery.data.filter((item) =>
+            commentMatchesDiscussionFilter(item, discussionFilter, highlightCommentId),
+          )}
+          emptyTitle={
+            discussionFilter === 'unresolved'
+              ? 'Aucun commentaire non résolu.'
+              : discussionFilter === 'pinned'
+                ? 'Aucune décision épinglée.'
+                : "Aucun commentaire pour l'instant."
+          }
+          emptyDescription={
+            discussionFilter === 'unresolved'
+              ? 'Aucun commentaire en attente de résolution.'
+              : discussionFilter === 'pinned'
+                ? ''
+                : "Soyez le premier à laisser un commentaire sur ce plan d'action."
+          }
           {...threadListProps}
           disabled={readOnly || threadListProps.disabled}
           replyErrorMessage={
@@ -341,6 +396,7 @@ export function CommentSection({
       ref={composerRef}
       establishmentId={establishmentId}
       compactOnLg
+      appearance={isExecution ? 'plan' : 'default'}
       attachEnabled={isExecution && attachEnabled}
       attachTrigger={attachTrigger}
       executionId={isExecution ? targetId : null}
@@ -403,6 +459,7 @@ export function CommentSection({
         composer={composer}
         documentFlow={documentFlow}
         pinComposer={pinComposer}
+        executionPanel={isExecution}
       />
       {isExecution ? (
         <ExecutionPlanInfoSheet

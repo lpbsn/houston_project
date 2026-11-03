@@ -1,4 +1,14 @@
 import {
+  DictationButton,
+  DictationNotice,
+  IDLE_DICTATION,
+  type DictationActivity,
+} from '@/features/chat/components/dictation-button'
+import {
+  appendDictationText,
+  DICTATION_TOO_LONG_MESSAGE,
+} from '@/features/chat/lib/append-dictation-text'
+import {
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -6,7 +16,7 @@ import {
   useState,
   type ChangeEvent,
 } from 'react'
-import { Paperclip, SendHorizonal, X } from 'lucide-react'
+import { Paperclip, Send, SendHorizonal, X } from 'lucide-react'
 
 import { commentThread, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -50,6 +60,7 @@ type CommentComposerProps = {
   placeholder?: string
   variant?: 'default' | 'reply'
   compactOnLg?: boolean
+  appearance?: 'default' | 'plan'
   attachEnabled?: boolean
   attachTrigger?: 'label' | 'icon'
   executionId?: string | null
@@ -69,6 +80,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       placeholder = 'Ajouter un commentaire...',
       variant = 'default',
       compactOnLg = false,
+      appearance = 'default',
       attachEnabled = false,
       attachTrigger = 'label',
       executionId = null,
@@ -78,6 +90,8 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const [draft, setDraft] = useState('')
+    const draftRef = useRef(draft)
+    const [dictation, setDictation] = useState<DictationActivity>(IDLE_DICTATION)
     const [selectedMentions, setSelectedMentions] = useState<SelectedMention[]>([])
     const [cursorPosition, setCursorPosition] = useState(0)
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
@@ -107,6 +121,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
 
     useImperativeHandle(ref, () => ({
       reset() {
+        draftRef.current = ''
         setDraft('')
         setSelectedMentions([])
         setCursorPosition(0)
@@ -132,8 +147,12 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       }
 
       const mentionText = `@${user.display_name} `
-      const nextDraft = `${beforeCursor.slice(0, atIndex)}${mentionText}${afterCursor}`
-      setDraft(nextDraft.slice(0, MAX_COMMENT_LENGTH))
+      const nextDraft = `${beforeCursor.slice(0, atIndex)}${mentionText}${afterCursor}`.slice(
+        0,
+        MAX_COMMENT_LENGTH,
+      )
+      draftRef.current = nextDraft
+      setDraft(nextDraft)
       setSelectedMentions((current) => {
         if (current.some((mention) => mention.membershipId === user.membership_id)) {
           return current
@@ -165,7 +184,9 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         current.filter((item) => item.membershipId !== membershipId),
       )
       if (mention) {
-        setDraft((current) => stripFirstMentionText(current, mention.displayName))
+        const next = stripFirstMentionText(draftRef.current, mention.displayName)
+        draftRef.current = next
+        setDraft(next)
       }
     }
 
@@ -228,9 +249,11 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       }
     }
 
+    const dictationBusy = dictation.phase === 'recording' || dictation.phase === 'transcribing'
+
     function handleSubmit() {
       const trimmed = draft.trim()
-      if (!trimmed || disabled) {
+      if (!trimmed || disabled || dictationBusy) {
         return
       }
       if (pendingAttachments.some((item) => item.status === 'uploading')) {
@@ -250,7 +273,9 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       ref: textareaRef,
       value: draft,
       onChange: (event: ChangeEvent<HTMLTextAreaElement>) => {
-        setDraft(event.target.value.slice(0, MAX_COMMENT_LENGTH))
+        const next = event.target.value.slice(0, MAX_COMMENT_LENGTH)
+        draftRef.current = next
+        setDraft(next)
         setCursorPosition(event.target.selectionStart)
       },
       onClick: updateCursorPosition,
@@ -275,22 +300,51 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         }}
       />
     ) : null
+    const planAppearance = appearance === 'plan' && !isReply
+    const sendDisabled =
+      disabled ||
+      dictationBusy ||
+      !draft.trim() ||
+      pendingAttachments.some((item) => item.status === 'uploading')
     const attachIconButton = attachEnabled && attachTrigger === 'icon' ? (
       <button
         type="button"
         className={cn(
-          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#5F5A52]',
-          'hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
-          'disabled:opacity-40',
+          planAppearance
+            ? 'inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[#6a726c] focus-visible:ring-2 focus-visible:ring-[#245d4a]/30 focus-visible:outline-none disabled:opacity-40'
+            : 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#5F5A52] hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none disabled:opacity-40',
         )}
         disabled={attachDisabled}
         title={COMMENT_ATTACHMENT_LIMITS_LABEL}
         aria-label="Joindre un fichier"
         onClick={() => fileInputRef.current?.click()}
       >
-        <Paperclip className="h-5 w-5" />
+        <Paperclip className={planAppearance ? 'size-4' : 'h-5 w-5'} />
       </button>
     ) : null
+
+    const dictationButton = (
+      <DictationButton
+        key={`${establishmentId}-${executionId}`}
+        establishmentId={establishmentId}
+        disabled={disabled}
+        className={
+          planAppearance
+            ? 'size-8 rounded-full border border-[#e3e3e0] bg-[#f9f9f7] text-[#6a726c] hover:bg-white'
+            : undefined
+        }
+        onActivityChange={setDictation}
+        onAppend={(text) => {
+          const result = appendDictationText(draftRef.current, text, MAX_COMMENT_LENGTH)
+          if (result.status === 'too_long') return DICTATION_TOO_LONG_MESSAGE
+          if (result.status === 'appended') {
+            draftRef.current = result.value
+            setDraft(result.value)
+          }
+          return null
+        }}
+      />
+    )
 
     return (
       <div className={isReply || compactOnLg ? undefined : 'mt-4'}>
@@ -305,6 +359,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
               commentThread.replyPillFocusShadow,
             )}
           >
+            {dictationButton}
             <textarea
               {...textareaProps}
               rows={1}
@@ -323,16 +378,52 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
                 'disabled:opacity-40',
               )}
-              disabled={
-                disabled ||
-                !draft.trim() ||
-                pendingAttachments.some((item) => item.status === 'uploading')
-              }
+              disabled={sendDisabled}
               onClick={handleSubmit}
               aria-label="Publier le commentaire"
             >
               <SendHorizonal className="h-5 w-5" />
             </button>
+          </div>
+        ) : planAppearance ? (
+          <div>
+            <div
+              className={cn(
+                'flex min-h-14 items-center gap-1.5 rounded-full border border-[#e1e2df] bg-[#f6f5f2] py-1.5 pr-1.5 pl-4',
+                'focus-within:border-[#245d4a]/35',
+              )}
+            >
+              <textarea
+                {...textareaProps}
+                rows={1}
+                className={cn(
+                  'max-h-28 min-h-6 min-w-0 flex-1 resize-none border-0 bg-transparent py-1',
+                  'text-base leading-snug text-[#202421] placeholder:text-[#6e7471]',
+                  'focus-visible:outline-none',
+                )}
+              />
+              <div className="flex shrink-0 items-center gap-0.5">
+                {dictationButton}
+                {attachIconButton}
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-9 shrink-0 items-center justify-center rounded-full text-white',
+                    'bg-[#245d4a] hover:bg-[#1e4e3e]',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#245d4a]/30',
+                    'disabled:bg-[#a5b7ad] disabled:opacity-100',
+                  )}
+                  disabled={sendDisabled}
+                  onClick={handleSubmit}
+                  aria-label="Publier le commentaire"
+                >
+                  <Send className="size-4" />
+                </button>
+              </div>
+            </div>
+            <p className="mt-1.5 px-1 text-right text-xs tabular-nums text-[#aaaead]">
+              {draft.length}/{MAX_COMMENT_LENGTH}
+            </p>
           </div>
         ) : (
           <div className="relative">
@@ -352,6 +443,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                   compactOnLg ? 'lg:min-h-9 lg:py-1.5' : null,
                 )}
               />
+              {dictationButton}
               {attachIconButton}
               <button
                 type="button"
@@ -362,11 +454,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
                   'disabled:opacity-40',
                 )}
-                disabled={
-                  disabled ||
-                  !draft.trim() ||
-                  pendingAttachments.some((item) => item.status === 'uploading')
-                }
+                disabled={sendDisabled}
                 onClick={handleSubmit}
                 aria-label="Publier le commentaire"
               >
@@ -479,6 +567,12 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             selectedMembershipIds={selectedMembershipIds}
             onSelect={handleSelectMention}
           />
+        ) : null}
+
+        {dictation.phase === 'transcribing' || dictation.error ? (
+          <div className="mt-2">
+            <DictationNotice activity={dictation} />
+          </div>
         ) : null}
 
         {errorMessage ? (

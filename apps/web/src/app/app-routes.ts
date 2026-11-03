@@ -22,6 +22,7 @@ import {
 export type { ScopedTerrainPage, ScopedTerrainRoute, TerrainScope } from '@/app/scoped-terrain'
 
 export type AppPath =
+  | '/my-day'
   | '/'
   | '/login'
   | '/forgot-password'
@@ -336,6 +337,7 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/team' ||
     pathname === '/team/invite' ||
     pathname === '/action-plans' ||
+    pathname === '/my-day' ||
     pathname === '/notifications-center'
   ) {
     return { kind: 'static', path: pathname as AppPath }
@@ -402,6 +404,7 @@ export function serializeAppRoute(route: AppRoute): string {
 }
 
 const PRIMARY_STATIC_PATHS = new Set<AppPath>([
+  '/my-day',
   '/reporting',
   '/signals',
   '/execution',
@@ -411,6 +414,7 @@ const PRIMARY_STATIC_PATHS = new Set<AppPath>([
 ])
 
 const PRIMARY_SCOPED_PAGES = new Set<ScopedTerrainPage>([
+  'my-day',
   'dashboard',
   'reporting',
   'signals',

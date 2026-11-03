@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.db.models import prefetch_related_objects
 from houston.chat.constants import (
     CHAT_ATTACHMENT_PREVIEW_TOKEN_SALT,
     CHAT_GROUP_TITLE_MAX_LENGTH,
@@ -100,6 +101,9 @@ class ChatConversationListResponseSerializer(serializers.Serializer):
 
 
 class ChatConversationDetailSerializer(serializers.Serializer):
+    notification_mode = serializers.ChoiceField(
+        choices=["all", "mentions", "silent"], required=False
+    )
     id = serializers.UUIDField()
     type = serializers.CharField()
     title = serializers.CharField(allow_blank=True)
@@ -113,6 +117,9 @@ class ChatConversationDetailSerializer(serializers.Serializer):
 
 
 class ChatMessageSerializer(serializers.Serializer):
+    acknowledgement_count = serializers.IntegerField(required=False)
+    acknowledged = serializers.BooleanField(required=False)
+    observation_created = serializers.BooleanField(required=False)
     id = serializers.UUIDField()
     author_membership_id = serializers.UUIDField()
     author_display_name = serializers.CharField()
@@ -386,7 +393,14 @@ def serialize_message(
         resolved_parent,
         history_cutoff_at=history_cutoff_at,
     )
+    acknowledgement_count, acknowledged, observation_created = _message_activity(
+        message,
+        viewer_membership_id=viewer_membership_id,
+    )
     return {
+        "acknowledgement_count": acknowledgement_count,
+        "acknowledged": acknowledged,
+        "observation_created": observation_created,
         "id": message.id,
         "author_membership_id": message.author_membership_id,
         "author_display_name": membership_display_name(message.author_membership),
@@ -403,6 +417,39 @@ def serialize_message(
     }
 
 
+_ACTIVITY_FIELDS = ("acknowledgement_count", "acknowledged", "observation_created")
+
+
+def _message_activity_annotated(message: ChatMessage) -> bool:
+    return all(field in message.__dict__ for field in _ACTIVITY_FIELDS)
+
+
+def _message_activity(
+    message: ChatMessage,
+    *,
+    viewer_membership_id: uuid.UUID | None,
+) -> tuple[int, bool, bool]:
+    if _message_activity_annotated(message):
+        return (
+            int(message.acknowledgement_count),
+            bool(message.acknowledged),
+            bool(message.observation_created),
+        )
+    cached = getattr(message, "_prefetched_objects_cache", {})
+    acknowledgements = cached.get("acknowledgements")
+    if acknowledgements is None:
+        acknowledgements = list(message.acknowledgements.all())
+    if "observation_source" in cached:
+        observation_created = cached.get("observation_source") is not None
+    else:
+        observation_created = hasattr(message, "observation_source")
+    return (
+        len(acknowledgements),
+        any(item.membership_id == viewer_membership_id for item in acknowledgements),
+        observation_created,
+    )
+
+
 def serialize_messages(
     messages: list[ChatMessage],
     *,
@@ -410,6 +457,8 @@ def serialize_messages(
     history_cutoffs_by_conversation_id: dict | None = None,
     viewer_membership_id: uuid.UUID | None = None,
 ) -> list[dict]:
+    if any(not _message_activity_annotated(message) for message in messages):
+        prefetch_related_objects(messages, "acknowledgements", "observation_source")
     parent_ids = [
         message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)
     ]
@@ -483,6 +532,14 @@ def serialize_conversation_detail(
         "participants": [
             serialize_participant_summary(participant) for participant in active_participants
         ],
+        "notification_mode": next(
+            (
+                p.notification_mode
+                for p in active_participants
+                if p.membership_id == viewer_membership_id
+            ),
+            "all",
+        ),
         "can_manage": can_manage,
         "can_delete": can_delete,
         "pinned": pinned,

@@ -1446,7 +1446,6 @@ describe('ActionPlanExecutionDetailPage desktop composition', () => {
         targetId: 'exec-1',
         attachTrigger: 'icon',
         pinComposer: false,
-        documentFlowTitle: expect.anything(),
       }),
       undefined,
     )
