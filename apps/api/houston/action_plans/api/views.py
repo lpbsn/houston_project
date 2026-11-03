@@ -470,8 +470,8 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
             409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
-            "Creates an action plan. Reusable catalog entries may omit tasks; "
-            "execution or schedule flows require at least one task or assignee. "
+            "Creates an action plan. Reusable catalog entries may omit tasks and assignees; "
+            "execution and schedule flows require at least one assignee, with or without tasks. "
             "With submission_id + items, creates a non-reusable plan and planning "
             "resources atomically."
         ),

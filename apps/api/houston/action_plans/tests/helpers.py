@@ -387,7 +387,14 @@ def create_execution(
 ):
     from houston.action_plans.services import create_action_plan_with_execution
 
-    resolved_assignees = assignees or []
+    if assignees is None:
+        resolved_assignees = [
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ]
+        use_shared_chronology = True
+    else:
+        resolved_assignees = assignees
+        use_shared_chronology = len(resolved_assignees) != 1
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
@@ -397,7 +404,7 @@ def create_execution(
         tasks=tasks or [build_task_payload(task=f"{title} task", business_unit=business_unit)],
         assignees=resolved_assignees,
         visible_from=visible_from,
-        use_shared_chronology=len(resolved_assignees) != 1,
+        use_shared_chronology=use_shared_chronology,
     )
     update_fields = ["status"]
     execution.status = status

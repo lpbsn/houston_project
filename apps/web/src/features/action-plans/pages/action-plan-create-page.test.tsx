@@ -254,6 +254,26 @@ vi.mock('@/features/signals/hooks', () => ({
   useSignalDetailQuery: () => signalDetailQueryMock(),
 }))
 
+vi.mock('@/features/users/hooks', () => ({
+  useEstablishmentUserSearchQuery: () => ({
+    data: [
+      {
+        id: 'user-manager',
+        membership_id: 'member-manager',
+        display_name: 'Manager',
+        username: 'manager_user',
+        role: 'manager',
+        email: null,
+        business_unit_ids: ['bu-1'],
+      },
+    ],
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    error: null,
+  }),
+}))
+
 vi.mock('@/features/signals/components/signal-classification-badges', () => ({
   SignalClassificationBadges: () => null,
 }))
@@ -294,6 +314,12 @@ function selectPilot(label: string) {
 
 function addTask() {
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter une tâche' }))
+}
+
+function assignSelf() {
+  fireEvent.click(screen.getByRole('button', { name: /Assignés/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Moi' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
 }
 
 function openTaskAdvanced(taskIndex: number) {
@@ -735,6 +761,7 @@ describe('ActionPlanCreatePage', () => {
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche signal' } })
     selectTaskBusinessUnit(0, 'Rooftop')
+    assignSelf()
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
@@ -797,6 +824,7 @@ describe('ActionPlanCreatePage', () => {
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
     selectTaskBusinessUnit(0, 'Maintenance')
+    assignSelf()
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
@@ -853,6 +881,7 @@ describe('ActionPlanCreatePage', () => {
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
     selectTaskBusinessUnit(0, 'Rooftop')
+    assignSelf()
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
@@ -936,6 +965,7 @@ describe('ActionPlanCreatePage', () => {
     addTask()
     fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
     selectTaskBusinessUnit(0, 'Maintenance')
+    assignSelf()
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
@@ -1000,6 +1030,7 @@ describe('ActionPlanCreatePage', () => {
       target: { value: 'Tâche Food Court' },
     })
     selectTaskBusinessUnit(0, 'Food Court')
+    assignSelf()
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
 
     await waitFor(() => {
@@ -1210,6 +1241,22 @@ describe('ActionPlanCreatePage', () => {
         }),
       )
     })
+  })
+
+  it('refuses an execution that has tasks but no assignee', async () => {
+    renderPage({ mode: 'execution', backPath: '/execution' })
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan sans assigné' } })
+    selectPilot('Rooftop')
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
+    selectTaskBusinessUnit(0, 'Rooftop')
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Ajoutez au moins un assigné pour lancer le plan.')).toBeTruthy()
+    })
+    expect(createMutateAsync).not.toHaveBeenCalled()
   })
 
   it('starts an execution from the execution route on desktop web', async () => {

@@ -70,19 +70,18 @@ def test_create_ponctuel_with_tasks_and_assignees(
     assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 1
 
 
-def test_create_ponctuel_with_tasks_only(owner_membership, business_unit):
-    _, execution = create_action_plan_with_execution(
-        establishment_id=owner_membership.establishment_id,
-        created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
-        title="Task-only plan",
-        tasks=[build_task_payload(task="Sanitize tables", business_unit=business_unit)],
-        assignees=[],
-    )
+def test_create_ponctuel_rejects_tasks_without_assignee(owner_membership, business_unit):
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Task-only plan",
+            tasks=[build_task_payload(task="Sanitize tables", business_unit=business_unit)],
+            assignees=[],
+        )
 
-    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
-    assert ActionPlanAssignee.objects.filter(action_plan_execution=execution).count() == 0
-    assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 1
+    assert ActionPlanExecution.objects.count() == 0
 
 
 def test_create_task_without_business_unit_defaults_to_pilot(owner_membership, business_unit):
@@ -92,7 +91,9 @@ def test_create_task_without_business_unit_defaults_to_pilot(owner_membership, b
         pilot_business_unit_id=business_unit.id,
         title="Pilot default task plan",
         tasks=[{"task": "Implicit pilot task", "position": 1}],
-        assignees=[],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
     )
 
     task = ActionPlanTask.objects.get(action_plan=plan)
@@ -120,7 +121,7 @@ def test_create_ponctuel_with_assignees_only(
 
 
 def test_create_ponctuel_rejects_empty_execution(owner_membership, business_unit):
-    with pytest.raises(ActionPlanValidationError, match="At least one task or assignee"):
+    with pytest.raises(ActionPlanValidationError, match="At least one assignee is required"):
         create_action_plan_with_execution(
             establishment_id=owner_membership.establishment_id,
             created_by=owner_membership,
