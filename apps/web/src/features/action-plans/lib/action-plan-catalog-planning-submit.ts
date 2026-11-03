@@ -32,6 +32,7 @@ export type CatalogPlanningOptions = {
   canSchedule: boolean
   staffMode?: boolean
   requiresValidation?: boolean
+  pilotBusinessUnitId?: string
 }
 
 export type CatalogPlanningPrimaryKind = 'planning'
@@ -50,6 +51,7 @@ export function validateCatalogPlanningDraft(
     return validatePerAssigneePlanningDraft(draft, {
       allowRepeat: options.canSchedule,
       requireCompatibleRepeats: false,
+      pilotBusinessUnitId: options.pilotBusinessUnitId,
     })
   }
 
@@ -61,7 +63,7 @@ export function validateCatalogPlanningDraft(
 
 function buildSharedPlanningItems(
   draft: ActionPlanEventPlanningDraft,
-  options: { staffMode?: boolean },
+  options: { staffMode?: boolean; pilotBusinessUnitId?: string },
 ): ActionPlanPlanningSubmitRequest['items'] {
   if (hasGlobalRepeat(draft)) {
     const scheduleBodies = buildScheduleRequestsFromDraft(draft, options)
@@ -100,12 +102,14 @@ function buildSharedPlanningItems(
 
 function buildIndividualPlanningItems(
   draft: ActionPlanEventPlanningDraft,
-  options: { staffMode?: boolean },
+  options: { staffMode?: boolean; pilotBusinessUnitId?: string },
 ): ActionPlanPlanningSubmitRequest['items'] {
   const items: ActionPlanPlanningSubmitRequest['items'] = []
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
 
   for (const assignee of draft.assignees) {
-    if (!assignee.membershipId || !assignee.businessUnitId) {
+    const businessUnitId = assignee.businessUnitId || pilotBusinessUnitId
+    if (!assignee.membershipId || !businessUnitId) {
       continue
     }
     if (assignee.repeatEnabled) {
@@ -115,7 +119,7 @@ function buildIndividualPlanningItems(
         item_id: newItemId(),
         kind: 'schedule',
         primary_membership_id: assignee.membershipId,
-        business_unit_id: assignee.businessUnitId,
+        business_unit_id: businessUnitId,
         start_date: startParts.date.trim() || null,
         end_date: assignee.recurrenceEndDate.trim(),
         start_at: assignee.allDay ? '00:00' : startParts.time,
@@ -130,7 +134,7 @@ function buildIndividualPlanningItems(
       item_id: newItemId(),
       kind: 'execution',
       primary_membership_id: assignee.membershipId,
-      business_unit_id: assignee.businessUnitId,
+      business_unit_id: businessUnitId,
       start_at: assignee.startAt.trim() || null,
       end_at: assignee.endAt.trim() || null,
       visible_from: assignee.visibleFrom.trim() || null,
@@ -159,8 +163,8 @@ export function resolveCatalogPlanningSubmit(
   options: CatalogPlanningOptions,
 ): CatalogPlanningSubmit | undefined {
   const items = draft.usePerAssigneeChronology
-    ? buildIndividualPlanningItems(draft, { staffMode: options.staffMode })
-    : buildSharedPlanningItems(draft, { staffMode: options.staffMode })
+    ? buildIndividualPlanningItems(draft, options)
+    : buildSharedPlanningItems(draft, options)
 
   if (items.length === 0) {
     return undefined
@@ -202,7 +206,7 @@ export function isCatalogPlanningPrimaryDisabled(
     options.canSchedule &&
     buildOneShotAssigneesFromDraft(draft).length === 0
   ) {
-    return buildScheduleRequestsFromDraft(draft, { staffMode: options.staffMode }).length === 0
+    return buildScheduleRequestsFromDraft(draft, options).length === 0
   }
 
   return false

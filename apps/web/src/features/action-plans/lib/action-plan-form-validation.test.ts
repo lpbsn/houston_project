@@ -14,6 +14,61 @@ import { createActionPlanScheduleDraft } from '@/features/action-plans/lib/actio
 const emptySchedule = createActionPlanScheduleDraft()
 
 describe('validateActionPlanCreateForm', () => {
+  it('places an assignee on the pilot pole when the draft has no personal pole', () => {
+    const errors = validateActionPlanCreateForm(
+      {
+        title: 'Plan',
+        description: '',
+        pilotBusinessUnitId: 'bu-pilot',
+        requiresValidation: false,
+        saveToLibrary: false,
+        useSharedChronology: false,
+        sharedStartAt: '',
+        sharedEndAt: '',
+        sharedVisibleFrom: '',
+        tasks: [],
+        assignees: [
+          createActionPlanAssigneeDraft({
+            membershipId: 'member-1',
+            businessUnitId: '',
+            displayName: 'Director',
+          }),
+        ],
+        schedule: emptySchedule,
+      },
+      { canDefineCrossPoleTasks: true },
+    )
+
+    expect(errors.assignees).toBeUndefined()
+  })
+
+  it('still requires a pole when the assignee and the pilot pole are both empty', () => {
+    const errors = validateActionPlanCreateForm(
+      {
+        title: 'Plan',
+        description: '',
+        pilotBusinessUnitId: '',
+        requiresValidation: false,
+        saveToLibrary: false,
+        useSharedChronology: false,
+        sharedStartAt: '',
+        sharedEndAt: '',
+        sharedVisibleFrom: '',
+        tasks: [],
+        assignees: [
+          createActionPlanAssigneeDraft({
+            membershipId: 'member-1',
+            businessUnitId: '',
+          }),
+        ],
+        schedule: emptySchedule,
+      },
+      { canDefineCrossPoleTasks: true },
+    )
+
+    expect(errors.assignees).toBe('Chaque assigné doit être rattaché à un pôle.')
+  })
+
   it('requires title and pilot business unit', () => {
     const errors = validateActionPlanCreateForm(
       {
@@ -288,6 +343,27 @@ describe('validateActionPlanCreatePlanningErrors', () => {
     expect(errors[`assignee.${assignee.id}.recurrenceDays`]).toBeTruthy()
   })
 
+  it('accepts per-assignee chronology when the draft pole falls back to the pilot', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: '',
+      repeatEnabled: false,
+      startAt: '2026-07-12T03:00:00.000Z',
+      endAt: '2026-07-12T14:05:00.000Z',
+    })
+    const errors = validateActionPlanCreatePlanningErrors(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [assignee],
+      },
+      { saveToLibrary: false, pilotBusinessUnitId: 'bu-pilot' },
+    )
+
+    expect(errors.assignees).toBeUndefined()
+    expect(errors[`assignee.${assignee.id}.assignee`]).toBeUndefined()
+  })
+
   it('requires at least one assignee for a one-shot execution without tasks', () => {
     const errors = validateActionPlanCreatePlanningErrors(
       createActionPlanEventPlanningDraft(),
@@ -514,6 +590,30 @@ describe('validateActionPlanCreateForm staff execution filet', () => {
       { canDefineCrossPoleTasks: false, staffExecutionMode: staffMode },
     )
     expect(errors.assignees).toBeTruthy()
+  })
+
+  it('accepts a staff self-assignee whose draft pole falls back to the pilot', () => {
+    const errors = validateActionPlanCreateForm(
+      {
+        ...staffValues,
+        assignees: [{ ...staffValues.assignees[0], businessUnitId: '' }],
+      },
+      { canDefineCrossPoleTasks: false, staffExecutionMode: staffMode },
+    )
+
+    expect(errors.assignees).toBeUndefined()
+  })
+
+  it('rejects a staff assignee explicitly placed on another pole', () => {
+    const errors = validateActionPlanCreateForm(
+      {
+        ...staffValues,
+        assignees: [{ ...staffValues.assignees[0], businessUnitId: 'bu-other' }],
+      },
+      { canDefineCrossPoleTasks: false, staffExecutionMode: staffMode },
+    )
+
+    expect(errors.assignees).toBe('L’assigné staff doit être sur le pôle pilote.')
   })
 
   it('rejects staff plan with cross-pole task', () => {

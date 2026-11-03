@@ -167,6 +167,45 @@ describe('buildActionPlanCreateRequest', () => {
     expect(request).not.toHaveProperty('schedule')
     expect(request.assignees).toHaveLength(1)
   })
+
+  it('keeps an explicit assignee pole and falls back to the pilot otherwise', () => {
+    const request = buildActionPlanCreateRequest({
+      title: 'Plan mixed poles',
+      description: '',
+      pilotBusinessUnitId: 'bu-pilot',
+      requiresValidation: false,
+      saveToLibrary: false,
+      useSharedChronology: false,
+      sharedStartAt: '',
+      sharedEndAt: '',
+      sharedVisibleFrom: '',
+      tasks: [],
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'member-director',
+          businessUnitId: '',
+          displayName: 'Director',
+        }),
+        createActionPlanAssigneeDraft({
+          membershipId: 'member-manager',
+          businessUnitId: 'bu-other',
+          displayName: 'Manager',
+        }),
+      ],
+      schedule: createActionPlanScheduleDraft(),
+    })
+
+    expect(request.assignees).toEqual([
+      expect.objectContaining({
+        membership_id: 'member-director',
+        business_unit_id: 'bu-pilot',
+      }),
+      expect.objectContaining({
+        membership_id: 'member-manager',
+        business_unit_id: 'bu-other',
+      }),
+    ])
+  })
 })
 
 describe('buildDirectPlanningCreateRequest', () => {

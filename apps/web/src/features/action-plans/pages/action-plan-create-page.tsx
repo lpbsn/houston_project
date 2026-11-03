@@ -653,6 +653,7 @@ export function ActionPlanCreatePage({
     const launchOutcome = summarizeDirectCreateLaunch(planningDraft, {
       saveToLibrary: persistedToLibrary,
       staffMode: modeConfig.showStaffSelfAssignee,
+      pilotBusinessUnitId: resolvedPilotBusinessUnitId,
     })
     const desktopPrimaryLabel =
       mode === 'catalog' || isTemplateEdit

@@ -351,7 +351,7 @@ function resolveAssigneeSlotTimes(assignee: ActionPlanAssigneeDraft): {
 export function buildScheduleRequestForAssignee(
   _draft: ActionPlanEventPlanningDraft,
   assignee: ActionPlanAssigneeDraft,
-  options: { staffMode?: boolean } = {},
+  options: { staffMode?: boolean; pilotBusinessUnitId?: string } = {},
 ): ActionPlanScheduleCreateRequest | undefined {
   const startParts = splitIsoToDateAndTime(assignee.startAt)
   const { endTime } = resolveAssigneeSlotTimes(assignee)
@@ -368,12 +368,13 @@ export function buildScheduleRequestForAssignee(
     assignees: options.staffMode ? [] : [assignee],
     useSharedChronology: false,
     allDay: assignee.allDay || isAllDayPlanningTimes(startParts.time, endTime),
+    pilotBusinessUnitId: options.pilotBusinessUnitId,
   })
 }
 
 export function buildScheduleRequestsFromDraft(
   draft: ActionPlanEventPlanningDraft,
-  options: { staffMode?: boolean } = {},
+  options: { staffMode?: boolean; pilotBusinessUnitId?: string } = {},
 ): ActionPlanScheduleCreateRequest[] {
   if (hasGlobalRepeat(draft)) {
     const body = buildActionPlanScheduleCreateRequest({
@@ -381,6 +382,7 @@ export function buildScheduleRequestsFromDraft(
       assignees: options.staffMode ? [] : draft.assignees,
       useSharedChronology: true,
       allDay: isAllDayPlanningDraft(draft),
+      pilotBusinessUnitId: options.pilotBusinessUnitId,
     })
     return body ? [body] : []
   }
@@ -389,8 +391,14 @@ export function buildScheduleRequestsFromDraft(
     return []
   }
 
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
   return draft.assignees
-    .filter((assignee) => assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId)
+    .filter(
+      (assignee) =>
+        assignee.repeatEnabled &&
+        assignee.membershipId &&
+        (assignee.businessUnitId || pilotBusinessUnitId),
+    )
     .map((assignee) => buildScheduleRequestForAssignee(draft, assignee, options))
     .filter((body): body is ActionPlanScheduleCreateRequest => body !== undefined)
 }
@@ -406,7 +414,7 @@ export function buildOneShotAssigneesFromDraft(
 
 export function buildUseRequestFromDraft(
   draft: ActionPlanEventPlanningDraft,
-  options: { staffMode?: boolean } = {},
+  options: { staffMode?: boolean; pilotBusinessUnitId?: string } = {},
 ): ActionPlanUseRequest {
   const oneShotAssignees = options.staffMode
     ? draft.assignees.filter((assignee) => assignee.membershipId)
@@ -419,14 +427,17 @@ export function buildUseRequestFromDraft(
     sharedEndAt,
     sharedVisibleFrom: '',
     allDay: isAllDayPlanningDraft(draft),
+    pilotBusinessUnitId: options.pilotBusinessUnitId,
   })
 }
 
 export function buildUseRequestForAssignee(
   _draft: ActionPlanEventPlanningDraft,
   assignee: ActionPlanAssigneeDraft,
+  options: { pilotBusinessUnitId?: string } = {},
 ): ActionPlanUseRequest | undefined {
-  if (!assignee.membershipId || !assignee.businessUnitId) {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (!assignee.membershipId || !(assignee.businessUnitId || pilotBusinessUnitId)) {
     return undefined
   }
   const startAt = assignee.startAt.trim()
@@ -441,13 +452,18 @@ export function buildUseRequestForAssignee(
     sharedEndAt: endAt,
     sharedVisibleFrom: '',
     allDay: assignee.allDay,
+    pilotBusinessUnitId,
   })
 }
 
 export function validateAssigneePlanningAction(
   draft: ActionPlanEventPlanningDraft,
   assigneeId: string,
-  options: { allowRepeat?: boolean; action: 'schedule' | 'launch' } = { action: 'launch' },
+  options: {
+    allowRepeat?: boolean
+    action: 'schedule' | 'launch'
+    pilotBusinessUnitId?: string
+  } = { action: 'launch' },
 ): Record<string, string> {
   const assignee = draft.assignees.find((candidate) => candidate.id === assigneeId)
   if (!assignee) {
@@ -457,7 +473,8 @@ export function validateAssigneePlanningAction(
   const errors: Record<string, string> = {}
   const key = (field: string) => `assignee.${assigneeId}.${field}`
 
-  if (!assignee.membershipId || !assignee.businessUnitId) {
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
+  if (!assignee.membershipId || !(assignee.businessUnitId || pilotBusinessUnitId)) {
     errors[key('assignee')] = 'Assigné incomplet.'
     return errors
   }
@@ -537,11 +554,16 @@ function recurringPlanningSignature(assignee: ActionPlanAssigneeDraft): string {
 
 export function validatePerAssigneePlanningDraft(
   draft: ActionPlanEventPlanningDraft,
-  options: { allowRepeat?: boolean; requireCompatibleRepeats?: boolean } = {},
+  options: {
+    allowRepeat?: boolean
+    requireCompatibleRepeats?: boolean
+    pilotBusinessUnitId?: string
+  } = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {}
+  const pilotBusinessUnitId = options.pilotBusinessUnitId ?? ''
   const validAssignees = draft.assignees.filter(
-    (assignee) => assignee.membershipId && assignee.businessUnitId,
+    (assignee) => assignee.membershipId && (assignee.businessUnitId || pilotBusinessUnitId),
   )
 
   if (validAssignees.length === 0) {
@@ -552,6 +574,7 @@ export function validatePerAssigneePlanningDraft(
     const assigneeErrors = validateAssigneePlanningAction(draft, assignee.id, {
       allowRepeat: options.allowRepeat,
       action: assignee.repeatEnabled ? 'schedule' : 'launch',
+      pilotBusinessUnitId,
     })
     Object.assign(errors, assigneeErrors)
   }
