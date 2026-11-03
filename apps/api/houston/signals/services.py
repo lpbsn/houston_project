@@ -303,20 +303,25 @@ def create_signal_from_candidate(
         observation=observation,
     )
 
-    signal = Signal.objects.create(
-        establishment=establishment,
-        operational_unit=resolved.operational_unit,
-        affected_business_unit=resolved.affected_business_unit,
-        responsible_business_unit=resolved.responsible_business_unit,
-        activity_subject=resolved.activity_subject,
-        status=Signal.Status.OPEN,
-        routing_status=routing_status,
-        title=title.strip(),
-        structured_summary=structured_summary.strip(),
-        location_text=location_text,
-        issue_focus=require_normalized_issue_focus(candidate.issue_focus),
-        expected_action=candidate.expected_action,
-        last_activity_at=now,
+    from houston.signals.record_intake import adopt_intake
+
+    signal = adopt_intake(
+        observation,
+        dict(
+            establishment=establishment,
+            operational_unit=resolved.operational_unit,
+            affected_business_unit=resolved.affected_business_unit,
+            responsible_business_unit=resolved.responsible_business_unit,
+            activity_subject=resolved.activity_subject,
+            status=Signal.Status.OPEN,
+            routing_status=routing_status,
+            title=title.strip(),
+            structured_summary=structured_summary.strip(),
+            location_text=location_text,
+            issue_focus=require_normalized_issue_focus(candidate.issue_focus),
+            expected_action=candidate.expected_action,
+            last_activity_at=now,
+        ),
     )
     record_source_observation_link(
         signal=signal,
@@ -351,15 +356,7 @@ def aggregate_candidate_into_signal(
     )
     if created:
         touch_signal_activity(signal=signal, at=now)
-    from houston.observations.media_services import delete_all_observation_media
-
-    has_active_created_from = Signal.objects.filter(
-        source_observation_links__observation_id=observation.id,
-        source_observation_links__link_type=SignalSourceObservation.LinkType.CREATED_FROM,
-        status__in=ACTIVE_SIGNAL_STATUSES,
-    ).exists()
-    if not has_active_created_from:
-        delete_all_observation_media(observation_id=observation.id)
+    # Keep every testimony and its media until the normal retention policy expires.
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     return signal
 
@@ -709,8 +706,11 @@ def apply_pipeline_output(
     observation: Observation,
     output: ObservationPipelineOutput,
 ) -> PipelineApplyResult:
+    from houston.signals.record_intake import finish_intake
+
     candidates = output.candidates[:MAX_CANDIDATES_PER_OBSERVATION]
     if not candidates:
+        finish_intake(observation)
         return PipelineApplyResult(
             outcome=ObservationProcessing.Outcome.NO_SIGNAL_CREATED,
             created_count=0,
@@ -783,6 +783,7 @@ def apply_pipeline_output(
         aggregated_count += aggregated_delta
 
     if created_count == 0 and aggregated_count == 0:
+        finish_intake(observation)
         return PipelineApplyResult(
             outcome=ObservationProcessing.Outcome.NO_SIGNAL_CREATED,
             created_count=0,
@@ -795,6 +796,7 @@ def apply_pipeline_output(
         outcome = ObservationProcessing.Outcome.SIGNAL_AGGREGATED
     else:
         outcome = ObservationProcessing.Outcome.SIGNALS_CREATED
+    finish_intake(observation)
     return PipelineApplyResult(
         outcome=outcome,
         created_count=created_count,
@@ -2061,6 +2063,9 @@ def merge_signal_into_resolved(
     if source.id == target.id:
         return target
 
+    from houston.signals.record_merge import prepare_record_merge
+
+    prepare_record_merge(source, target)
     from houston.action_plans.models import ActionPlanExecution
     from houston.analytics.models import PatternIssueReport
     from houston.comments.models import Comment
@@ -2106,7 +2111,7 @@ def merge_signal_into_resolved(
     Notification.objects.filter(
         subject_type=Notification.SubjectType.SIGNAL,
         subject_id=source.id,
-    ).delete()
+    ).update(subject_id=target.id)
     for tx in PointTransaction.objects.filter(
         source_type=SOURCE_TYPE_SIGNAL,
         source_id=str(source.id),
@@ -2130,34 +2135,19 @@ def merge_signal_into_resolved(
     ]
     if associated_times:
         target.first_action_plan_associated_at = min(associated_times)
-    birth = min(source.created_at, target.created_at)
-    created_at_rewound = birth < target.created_at
-    if created_at_rewound:
-        target.created_at = birth
-    if not target.lifecycle_events.filter(
-        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
-        occurred_at__lte=birth,
-    ).exists():
-        record_signal_lifecycle_event(
-            signal=target,
-            event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
-            occurred_at=birth,
-            metadata_safe={
-                "to_status": Signal.Status.OPEN,
-                "origin": "qualify_merge",
-            },
-        )
     now = timezone.now()
     target.last_activity_at = max(target.last_activity_at, now)
     target_update_fields = ["last_activity_at", "updated_at"]
     if associated_times:
         target_update_fields.append("first_action_plan_associated_at")
-    if created_at_rewound:
-        target_update_fields.append("created_at")
     target.save(update_fields=target_update_fields)
     _schedule_signal_invalidation(signal=source, reason="signal.updated")
     _schedule_signal_invalidation(signal=target, reason="signal.updated")
-    source.delete()
+    # Preserve the original evidence, decisions and lifecycle; aliases keep old links usable.
+    source.status = Signal.Status.CANCELED
+    source.canceled_at = timezone.now()
+    source.merged_into = target
+    source.save(update_fields=["status", "canceled_at", "merged_into", "updated_at"])
     return target
 
 

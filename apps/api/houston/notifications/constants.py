@@ -32,6 +32,9 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "signal.created",
         "signal.created.unassigned_global",
         "signal.pinned",
+        "signal.record.updated",
+        "signal.record.due",
+        "signal.record.overdue",
         "signal.resolved",
         "signal.canceled",
         "signal.resolution_request.created",
@@ -44,6 +47,18 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
 
 # Generic copy only — never inject subject title, comment body, or observation text.
 NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
+    "signal.record.updated": (
+        "Votre fiche évolue",
+        "Une fiche que vous suivez a changé. Consultez son suivi.",
+    ),
+    "signal.record.due": (
+        "Échéance demain",
+        "Une fiche dont vous êtes responsable arrive à échéance demain.",
+    ),
+    "signal.record.overdue": (
+        "Échéance dépassée",
+        "Une fiche dont vous êtes responsable a dépassé son échéance.",
+    ),
     "action_plan.execution.created": (
         "Nouveau plan d'action",
         "Une exécution de plan d'action vous a été assignée.",
@@ -104,7 +119,6 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
         "Observation sans pôle couvert",
         "Une observation nécessite une attention globale.",
     ),
-
     "signal.pinned": (
         "Observation épinglée",
         "Une observation a été épinglée.",

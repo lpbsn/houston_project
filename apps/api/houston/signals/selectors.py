@@ -263,7 +263,7 @@ def signal_feed_visibility_q(
 
 def _operational_signal_feed_queryset(*, visibility: Q) -> QuerySet[Signal]:
     return (
-        Signal.objects.filter(visibility)
+        Signal.objects.filter(visibility, record_kind="observation", merged_into__isnull=True)
         .annotate(**_signal_list_annotations())
         .select_related(*_SIGNAL_LIST_SELECT_RELATED)
         .prefetch_related(*_SIGNAL_LIST_PREFETCH)
@@ -388,6 +388,13 @@ def get_signal_for_detail(
     membership: EstablishmentMembership,
     signal_id: uuid.UUID,
 ) -> Signal | None:
+    from houston.signals.models import SignalAlias
+
+    alias = SignalAlias.objects.filter(
+        former_signal_id=signal_id, target__establishment_id=membership.establishment_id
+    ).first()
+    if alias:
+        signal_id = alias.target_id
     signal = (
         annotate_has_eligible_resolution_reviewers(
             feed_signals_for_establishment(establishment_id=membership.establishment_id),
@@ -442,7 +449,9 @@ def cross_signal_feed_queryset(
     visibility = Q()
     for membership in memberships:
         visibility |= signal_feed_visibility_q(membership=membership, view_mode="general")
-    queryset = Signal.objects.filter(visibility)
+    queryset = Signal.objects.filter(
+        visibility, record_kind="observation", merged_into__isnull=True
+    )
     return apply_signal_feed_context_filters(queryset, filters=filters)
 
 

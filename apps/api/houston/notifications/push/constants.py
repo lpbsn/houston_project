@@ -4,6 +4,9 @@ from houston.notifications.models import Notification
 
 PUSH_V1_EVENT_KEYS: frozenset[str] = frozenset(
     {
+        "signal.record.updated",
+        "signal.record.due",
+        "signal.record.overdue",
         Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
         Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL,
         Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION,

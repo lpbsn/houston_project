@@ -213,6 +213,9 @@ def submit_observation(
             action_plan_execution_task_id=task_id,
         )
 
+    from houston.signals.record_intake import create_intake
+
+    create_intake(observation)
     schedule_observation_processing_invalidation(observation=observation)
     observation_id = observation.id
     transaction.on_commit(

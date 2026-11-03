@@ -121,6 +121,10 @@ def can_view_signal_detail(
         return False
     if not can_view_signal_feed(membership):
         return False
+    if signal.record_kind in ("project", "intake"):
+        from houston.signals.record_selectors import record_queryset
+
+        return record_queryset(membership).filter(pk=signal.id).exists()
     # Staff never sees totally unclassified signals (Lot 8 H5 A4).
     if (
         membership.role == EstablishmentMembership.Role.STAFF
