@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+import redis.exceptions
 from django.core.cache import cache
 from django.test import override_settings
 from houston.chat.tests.conftest import (
@@ -207,3 +208,71 @@ def test_ws_ticket_rejects_when_no_selected_establishment(api_client):
 
     assert response.status_code == 403
     assert response.json()["code"] == "permission_denied"
+
+
+def _assert_realtime_unavailable(response) -> None:
+    assert response.status_code == 503
+    assert response["Retry-After"] == "2"
+    body = response.json()
+    assert body["code"] == "realtime_unavailable"
+    assert body["detail"] == "Realtime is temporarily unavailable."
+
+
+def _issued_chat_ticket_client(api_client, username: str):
+    establishment = create_establishment()
+    user = create_user(username=username)
+    create_membership(user=user, establishment=establishment)
+    token = login(api_client, user=user)
+    return establishment, token
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
+)
+@override_settings(HOUSTON_CHAT_RATE_LIMIT_ENABLED=False)
+def test_ws_ticket_returns_503_when_cache_set_fails(api_client, error_type):
+    establishment, token = _issued_chat_ticket_client(
+        api_client,
+        username=f"chat_ticket_cache_{error_type.__name__}",
+    )
+
+    with patch(
+        "houston.chat.ws_ticket.cache.set",
+        side_effect=error_type("redis down"),
+    ):
+        response = api_client.post(
+            ws_ticket_url(establishment.id),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    _assert_realtime_unavailable(response)
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
+)
+@override_settings(HOUSTON_CHAT_RATE_LIMIT_ENABLED=True)
+def test_ws_ticket_returns_503_when_throttle_fails(api_client, error_type):
+    establishment, token = _issued_chat_ticket_client(
+        api_client,
+        username=f"chat_ticket_throttle_{error_type.__name__}",
+    )
+
+    with (
+        patch(
+            "houston.chat.api.views.ScopedRateThrottle.allow_request",
+            side_effect=error_type("redis down"),
+        ),
+        patch(
+            "houston.chat.ws_ticket.cache.set",
+            side_effect=AssertionError("ticket issued"),
+        ),
+    ):
+        response = api_client.post(
+            ws_ticket_url(establishment.id),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    _assert_realtime_unavailable(response)

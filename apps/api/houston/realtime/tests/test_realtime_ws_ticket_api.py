@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
+import redis.exceptions
+from houston.realtime.api.views import RealtimeWsTicketView
 from houston.realtime.tests.conftest import (
     create_establishment,
     create_membership,
@@ -9,6 +13,7 @@ from houston.realtime.tests.conftest import (
     ws_realtime_ticket_url,
 )
 from houston.realtime.ws_ticket import WsTicketError, consume_ws_ticket, issue_ws_ticket
+from rest_framework.throttling import BaseThrottle
 
 pytestmark = pytest.mark.django_db
 
@@ -103,3 +108,74 @@ def test_issue_ws_ticket_binds_membership(api_client):
     assert payload.membership_id == membership.id
     assert payload.establishment_id == establishment.id
     assert payload.user_id == user.id
+
+
+def _assert_realtime_unavailable(response) -> None:
+    assert response.status_code == 503
+    assert response["Retry-After"] == "2"
+    body = response.json()
+    assert body["code"] == "realtime_unavailable"
+    assert body["detail"] == "Realtime is temporarily unavailable."
+
+
+def _issued_realtime_ticket_client(api_client, username: str):
+    establishment = create_establishment()
+    user = create_user(username=username)
+    create_membership(user=user, establishment=establishment)
+    token = login(api_client, user=user)
+    return establishment, token
+
+
+class _RaisingThrottle(BaseThrottle):
+    error_type: type[Exception] = redis.exceptions.ConnectionError
+
+    def allow_request(self, request, view):
+        raise self.error_type("redis down")
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
+)
+def test_realtime_ws_ticket_returns_503_when_cache_set_fails(api_client, error_type):
+    establishment, token = _issued_realtime_ticket_client(
+        api_client,
+        username=f"realtime_ticket_cache_{error_type.__name__}",
+    )
+
+    with patch(
+        "houston.realtime.ws_ticket.cache.set",
+        side_effect=error_type("redis down"),
+    ):
+        response = api_client.post(
+            ws_realtime_ticket_url(establishment.id),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    _assert_realtime_unavailable(response)
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
+)
+def test_realtime_ws_ticket_returns_503_when_throttle_fails(api_client, error_type):
+    establishment, token = _issued_realtime_ticket_client(
+        api_client,
+        username=f"realtime_ticket_throttle_{error_type.__name__}",
+    )
+    _RaisingThrottle.error_type = error_type
+
+    with (
+        patch.object(RealtimeWsTicketView, "get_throttles", lambda self: [_RaisingThrottle()]),
+        patch(
+            "houston.realtime.ws_ticket.cache.set",
+            side_effect=AssertionError("ticket issued"),
+        ),
+    ):
+        response = api_client.post(
+            ws_realtime_ticket_url(establishment.id),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    _assert_realtime_unavailable(response)
