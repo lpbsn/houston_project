@@ -180,6 +180,15 @@ class Signal(BaseModel):
         blank=True,
     )
     due_on = models.DateField(null=True, blank=True)
+    planned_start_on = models.DateField(null=True, blank=True)
+    is_project = models.BooleanField(default=False)
+    is_milestone = models.BooleanField(default=False)
+    parent_project = models.ForeignKey(
+        "self", on_delete=models.RESTRICT, null=True, blank=True, related_name="project_records"
+    )
+    planning_predecessor = models.ForeignKey(
+        "self", on_delete=models.RESTRICT, null=True, blank=True, related_name="planning_successors"
+    )
     due_revision = models.PositiveIntegerField(default=1)
     review_requested_at = models.DateTimeField(null=True, blank=True)
     closure_reason = models.CharField(
@@ -241,6 +250,21 @@ class Signal(BaseModel):
             ),
         ]
         constraints = [
+            models.CheckConstraint(
+                condition=~Q(parent_project=models.F("id")), name="record_not_own_project"
+            ),
+            models.CheckConstraint(
+                condition=~Q(planning_predecessor=models.F("id")), name="record_not_own_predecessor"
+            ),
+            models.CheckConstraint(
+                condition=Q(planned_start_on__isnull=True)
+                | Q(due_on__isnull=False, due_on__gte=models.F("planned_start_on")),
+                name="record_planned_dates_order",
+            ),
+            models.CheckConstraint(
+                condition=~Q(is_project=True, is_milestone=True),
+                name="record_project_not_milestone",
+            ),
             models.UniqueConstraint(
                 fields=[
                     "establishment",
@@ -250,8 +274,7 @@ class Signal(BaseModel):
                     "operational_unit",
                     "issue_focus",
                 ],
-                condition=Q(status__in=ACTIVE_SIGNAL_STATUSES)
-                & Q(routing_status="resolved"),
+                condition=Q(status__in=ACTIVE_SIGNAL_STATUSES) & Q(routing_status="resolved"),
                 name="signal_unique_active_aggregation_key",
                 nulls_distinct=False,
             ),

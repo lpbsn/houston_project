@@ -578,9 +578,7 @@ def _persist_pending_candidate(
         proposed_responsible_business_unit_routing_key=(
             candidate.responsible_business_unit_routing_key or ""
         ),
-        proposed_activity_subject_routing_key=(
-            candidate.activity_subject_routing_key or ""
-        ),
+        proposed_activity_subject_routing_key=(candidate.activity_subject_routing_key or ""),
         routing_status=resolution.routing_status,
         resolution_audit=resolution.resolution_audit,
         outcome=CandidateSignal.Outcome.PENDING,
@@ -1508,6 +1506,12 @@ def cancel_signal(
     signal: Signal,
     actor_membership: EstablishmentMembership | None = None,
 ) -> Signal:
+    if signal.is_project:
+        from houston.establishments.models import Establishment
+        from houston.signals.project_services import require_project_closeable
+
+        Establishment.objects.select_for_update().get(pk=signal.establishment_id)
+        require_project_closeable(signal)
     locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
     if locked_self.status == Signal.Status.IN_PROGRESS:
         raise SignalStateError(SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL)
@@ -1543,6 +1547,12 @@ def resolve_signal(
 ) -> Signal:
     """Manual resolve (API). Refuses in_progress — use action-plan sync instead."""
     original_signal = signal
+    if signal.is_project:
+        from houston.establishments.models import Establishment
+        from houston.signals.project_services import require_project_closeable
+
+        Establishment.objects.select_for_update().get(pk=signal.establishment_id)
+        require_project_closeable(signal)
     locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
     if locked_self.status == Signal.Status.IN_PROGRESS:
         raise SignalStateError(SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL)
@@ -1567,6 +1577,12 @@ def resolve_signal(
 def resolve_signal_from_execution_sync(*, signal: Signal) -> Signal:
     """Automatic resolve from action-plan execution sync (allows in_progress)."""
     original_signal = signal
+    if signal.is_project:
+        from houston.establishments.models import Establishment
+        from houston.signals.project_services import require_project_closeable
+
+        Establishment.objects.select_for_update().get(pk=signal.establishment_id)
+        require_project_closeable(signal)
     locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
     from houston.signals.resolution_request_services import (
         enforce_requester_engagement_or_cancel_pending_on_resolve,
@@ -1736,9 +1752,7 @@ def _transition_active_signal_to_terminal(
         locked_self.resolved_by_membership = actor_membership
         locked_self.resolved_at = now
         locked_self.resolution_origin = resolution_origin
-        update_fields.extend(
-            ["resolved_by_membership", "resolved_at", "resolution_origin"]
-        )
+        update_fields.extend(["resolved_by_membership", "resolved_at", "resolution_origin"])
         if resolution_origin in SIGNAL_RESOLUTION_ORIGIN_VALUES:
             metadata_safe["resolution_origin"] = resolution_origin
     elif target_status == Signal.Status.CANCELED:
@@ -2341,10 +2355,8 @@ def qualify_signal_routing(
             != getattr(resolution.affected_business_unit, "id", None),
             locked_source.responsible_business_unit_id
             != getattr(resolution.responsible_business_unit, "id", None),
-            locked_source.activity_subject_id
-            != getattr(resolution.activity_subject, "id", None),
-            locked_source.operational_unit_id
-            != getattr(resolution.operational_unit, "id", None),
+            locked_source.activity_subject_id != getattr(resolution.activity_subject, "id", None),
+            locked_source.operational_unit_id != getattr(resolution.operational_unit, "id", None),
             locked_source.routing_status != resolution.routing_status,
             locked_source.issue_focus != normalized_issue_focus,
             (locked_source.expected_action or None) != effective_expected_action,
@@ -2373,9 +2385,7 @@ def qualify_signal_routing(
                     timezone.now(),
                 )
                 update_fields.append("last_activity_at")
-            locked_source.save(
-                update_fields=update_fields
-            )
+            locked_source.save(update_fields=update_fields)
     except IntegrityError as exc:
         if not _is_active_aggregation_unique_violation(exc):
             raise

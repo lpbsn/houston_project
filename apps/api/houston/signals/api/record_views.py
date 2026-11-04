@@ -94,6 +94,8 @@ class FieldRecordListView(RecordView):
             OpenApiParameter("mine", bool),
             OpenApiParameter("q", str),
             OpenApiParameter("pole", str),
+            OpenApiParameter("project", str),
+            OpenApiParameter("projects", bool),
             OpenApiParameter("from", str),
             OpenApiParameter("to", str),
         ],
@@ -101,6 +103,19 @@ class FieldRecordListView(RecordView):
     def get(self, request, establishment_id):
         actor = self.actor(request)
         rows = record_queryset(actor)
+        if request.query_params.get("projects") == "true":
+            rows = rows.filter(is_project=True)
+        if request.query_params.get("project"):
+            import uuid
+
+            try:
+                project_id = uuid.UUID(request.query_params["project"])
+            except ValueError as exc:
+                raise ValidationError("Projet invalide.") from exc
+            project = self.record(actor, project_id)
+            if not project.is_project:
+                raise ValidationError("Cette fiche n’est pas un projet.")
+            rows = rows.filter(parent_project_id=project.id)
         stage = request.query_params.get("stage")
         if stage and stage not in {"todo", "doing", "review", "closed"}:
             raise ValidationError("Étape invalide.")
@@ -278,6 +293,23 @@ class FieldRecordOptionsView(RecordView):
             for e in executions.order_by("-created_at", "id")[:50]
             if can_update_action_plan_execution_content(actor, e)
         ]
+        from houston.signals.record_permissions import can_manage_record
+
+        available_records = record_queryset(actor)
+        if query:
+            available_records = available_records.filter(title__icontains=query)
+        selectable = [
+            r
+            for r in available_records.filter(due_on__isnull=False).order_by("title", "id")[:100]
+            if can_manage_record(actor, r)
+        ]
+        projects = [
+            r
+            for r in available_records.filter(is_project=True)
+            .exclude(status__in=["resolved", "canceled"])
+            .order_by("title", "id")[:100]
+            if can_manage_record(actor, r)
+        ]
         return Response(
             FieldRecordOptionsSerializer(
                 {
@@ -288,6 +320,8 @@ class FieldRecordOptionsView(RecordView):
                     "members": [person(m) for m in people[:50]],
                     "more_members": len(people) > 50,
                     "executions": [{"id": e.id, "name": e.title} for e in choices],
+                    "projects": [{"id": r.id, "name": r.title} for r in projects],
+                    "records": [{"id": r.id, "name": r.title} for r in selectable if r.due_on],
                     "objectives": [
                         {"id": o.id, "name": o.current_revision.indicator} for o in objectives[:50]
                     ],

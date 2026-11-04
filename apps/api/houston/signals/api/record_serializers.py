@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from houston.accounts.display import membership_display_name
+from houston.comments.api.serializers import CommentAttachmentSerializer
 from houston.signals.record_permissions import can_manage_record, can_progress_record
 from houston.signals.record_selectors import calendar_dates, record_stage
 
@@ -31,6 +32,13 @@ class FieldRecordSerializer(serializers.Serializer):
     owner = RecordPersonSerializer(allow_null=True)
     waiting_for = RecordPersonSerializer(allow_null=True)
     due_on = serializers.DateField(allow_null=True)
+    planned_start_on = serializers.DateField(allow_null=True)
+    is_project = serializers.BooleanField()
+    is_milestone = serializers.BooleanField()
+    parent_project = RecordPersonSerializer(allow_null=True)
+    planning_predecessor = RecordPersonSerializer(allow_null=True)
+    visible_child_count = serializers.IntegerField()
+    visible_closed_child_count = serializers.IntegerField()
     blocked_reason = serializers.CharField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
@@ -53,6 +61,59 @@ class FieldRecordCreateSerializer(serializers.Serializer):
     business_unit_id = serializers.UUIDField()
     owner_membership_id = serializers.UUIDField(allow_null=True, required=False)
     due_on = serializers.DateField(allow_null=True, required=False)
+    is_project = serializers.BooleanField(default=False)
+    is_milestone = serializers.BooleanField(default=False)
+    parent_project_id = serializers.UUIDField(allow_null=True, required=False)
+
+
+class RecordOrganizationSerializer(serializers.Serializer):
+    expected_updated_at = serializers.DateTimeField()
+    parent_project_id = serializers.UUIDField(allow_null=True)
+    is_project = serializers.BooleanField()
+    is_milestone = serializers.BooleanField()
+
+
+class RecordPredecessorSerializer(serializers.Serializer):
+    expected_updated_at = serializers.DateTimeField()
+    predecessor_id = serializers.UUIDField(allow_null=True)
+
+
+class PlanningVersionSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    updated_at = serializers.DateTimeField()
+
+
+class RecordPlanningRequestSerializer(serializers.Serializer):
+    expected_updated_at = serializers.DateTimeField()
+    start_on = serializers.DateField()
+    due_on = serializers.DateField()
+    apply = serializers.BooleanField(default=False)
+    expected_versions = PlanningVersionSerializer(many=True, required=False, max_length=200)
+
+
+class PlanningChangeSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    before_start = serializers.DateField()
+    before_due = serializers.DateField(allow_null=True)
+    start_on = serializers.DateField()
+    due_on = serializers.DateField()
+
+
+class RecordPlanningResponseSerializer(serializers.Serializer):
+    changes = PlanningChangeSerializer(many=True)
+    versions = PlanningVersionSerializer(many=True)
+    applied = serializers.BooleanField()
+
+
+class RecordDocumentSerializer(CommentAttachmentSerializer):
+    execution_id = serializers.UUIDField()
+    execution_title = serializers.CharField()
+
+
+class RecordDocumentPageSerializer(serializers.Serializer):
+    items = RecordDocumentSerializer(many=True)
+    next_offset = serializers.IntegerField(allow_null=True)
 
 
 class FieldRecordUpdateSerializer(serializers.Serializer):
@@ -62,6 +123,7 @@ class FieldRecordUpdateSerializer(serializers.Serializer):
     owner_membership_id = serializers.UUIDField(allow_null=True, required=False)
     waiting_for_membership_id = serializers.UUIDField(allow_null=True, required=False)
     due_on = serializers.DateField(allow_null=True, required=False)
+    planned_start_on = serializers.DateField(allow_null=True, required=False)
     blocked_reason = serializers.CharField(max_length=500, allow_blank=True, required=False)
     stage = serializers.ChoiceField(choices=["todo", "doing", "review", "closed"], required=False)
     closure_reason = serializers.ChoiceField(
@@ -111,6 +173,8 @@ class FieldRecordOptionsSerializer(serializers.Serializer):
     more_members = serializers.BooleanField()
     objectives = RecordPersonSerializer(many=True)
     executions = RecordPersonSerializer(many=True)
+    projects = RecordPersonSerializer(many=True)
+    records = RecordPersonSerializer(many=True)
 
 
 def person(member):
@@ -133,6 +197,20 @@ def serialize_record(record, actor):
         "owner": person(record.owner_membership),
         "waiting_for": person(record.waiting_for_membership),
         "due_on": record.due_on,
+        "planned_start_on": record.planned_start_on,
+        "is_project": record.is_project,
+        "is_milestone": record.is_milestone,
+        "parent_project": {"id": record.parent_project_id, "name": record.parent_project.title}
+        if getattr(record, "parent_visible", False)
+        else None,
+        "planning_predecessor": {
+            "id": record.planning_predecessor_id,
+            "name": record.planning_predecessor.title,
+        }
+        if getattr(record, "predecessor_visible", False)
+        else None,
+        "visible_child_count": getattr(record, "visible_child_count", 0),
+        "visible_closed_child_count": getattr(record, "visible_closed_child_count", 0),
         "blocked_reason": record.blocked_reason,
         "created_at": record.created_at,
         "updated_at": record.updated_at,

@@ -41,6 +41,7 @@ import {
 } from './shared'
 import { monthWindow, RecordCalendar } from './calendar'
 import { RecordGantt } from './gantt'
+import { PlanningDialog, type PlanningDraft } from './planning-dialog'
 import { ganttWindow, shiftGanttMonth, type GanttZoom } from './gantt-layout'
 
 function RecordCard({
@@ -80,6 +81,18 @@ function RecordCard({
       >
         {record.title}
       </button>
+      {(record.is_project || record.is_milestone) && (
+        <span className="mt-2 inline-flex rounded-md bg-[#E3F0E7] px-2 py-1 text-xs font-semibold text-[#075940]">
+          {record.is_project
+            ? `Projet · ${record.visible_closed_child_count}/${record.visible_child_count} fiches accessibles closes`
+            : 'Jalon'}
+        </span>
+      )}
+      {record.parent_project && (
+        <p className="mt-2 truncate text-xs text-[#344A3D]">
+          Dans {record.parent_project.name}
+        </p>
+      )}
       <p className="mt-2 text-xs text-[#45564A]">
         {record.owner?.name ?? 'Responsable à définir'} ·{' '}
         {record.observation_count} observation
@@ -122,29 +135,45 @@ function RecordCard({
     </article>
   )
 }
-function CreateRecord({
+export function CreateRecord({
   site,
   onClose,
   onCreated,
+  parentProject,
 }: {
   site: string
   onClose: () => void
   onCreated: (id: string) => void
+  parentProject?: FieldRecord
 }) {
   const [title, setTitle] = useState('')
-  const [pole, setPole] = useState('')
+  const [pole, setPole] = useState(parentProject?.pole_id ?? '')
+  const [format, setFormat] = useState('record')
+  const [due, setDue] = useState('')
   const options = useQuery({
     queryKey: ['field-record-options', site],
     queryFn: () => recordOptions(site),
   })
   const mutation = useMutation({
-    mutationFn: () => createRecord(site, { title, business_unit_id: pole }),
+    mutationFn: () =>
+      createRecord(site, {
+        title,
+        business_unit_id: pole,
+        is_project: format === 'project',
+        is_milestone: format === 'milestone',
+        ...(parentProject ? { parent_project_id: parentProject.id } : {}),
+        ...(due ? { due_on: due } : {}),
+      }),
     onSuccess: (record) => onCreated(record.id),
   })
   return (
     <TerrainDialog
       title="Créer une fiche"
-      description="Un sujet à organiser, même sans observation ni tâche."
+      description={
+        parentProject
+          ? `Dans le projet ${parentProject.title}`
+          : 'Un sujet à organiser, même sans observation ni tâche.'
+      }
       open
       onClose={onClose}
     >
@@ -181,6 +210,30 @@ function CreateRecord({
             ))}
           </select>
         </label>
+        <label className="grid gap-2 text-sm">
+          Format
+          <select
+            className={inputClass}
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+          >
+            <option value="record">Fiche simple</option>
+            <option value="project">Projet · regrouper plusieurs fiches</option>
+            <option value="milestone">Jalon · une date clé</option>
+          </select>
+        </label>
+        {format === 'milestone' && (
+          <label className="grid gap-2 text-sm">
+            Date du jalon
+            <input
+              required
+              type="date"
+              className={inputClass}
+              value={due}
+              onChange={(e) => setDue(e.target.value)}
+            />
+          </label>
+        )}
         <ErrorNote error={mutation.error ?? options.error} />
         <Button
           disabled={mutation.isPending || !pole || !title.trim()}
@@ -216,6 +269,7 @@ function RecordsPane({
     getNextPageParam: (page) => page.next_offset ?? undefined,
   })
   const records = query.data?.pages.flatMap((p) => p.items) ?? []
+  const [planning, setPlanning] = useState<PlanningDraft | null>(null)
   return (
     <div className="grid gap-3">
       {query.isPending && (
@@ -225,13 +279,15 @@ function RecordsPane({
       )}
       <ErrorNote error={query.error} />
       {view === 'gantt' ? (
-        !query.isPending && (!query.isError || records.length > 0) && (
+        !query.isPending &&
+        (!query.isError || records.length > 0) && (
           <RecordGantt
             records={records}
             month={month}
             zoom={ganttZoom}
             timeZone={query.data?.pages[0]?.timezone ?? 'UTC'}
             onOpen={onOpen}
+            onPlan={setPlanning}
           />
         )
       ) : view === 'calendar' ? (
@@ -246,15 +302,25 @@ function RecordsPane({
           />
         ))
       )}
-      {view !== 'gantt' && !query.isPending && !query.isError && !records.length && (
-        <p className="rounded-xl border border-dashed border-[#C9D2C7] p-5 text-sm text-[#45564A]">
-          Aucune fiche ici.
-        </p>
-      )}
+      {view !== 'gantt' &&
+        !query.isPending &&
+        !query.isError &&
+        !records.length && (
+          <p className="rounded-xl border border-dashed border-[#C9D2C7] p-5 text-sm text-[#45564A]">
+            Aucune fiche ici.
+          </p>
+        )}
       {view !== 'list' && query.hasNextPage && (
         <p role="status" className="text-sm font-semibold text-[#633900]">
           Vue partielle : d’autres fiches restent à charger.
         </p>
+      )}
+      {planning && (
+        <PlanningDialog
+          site={site}
+          draft={planning}
+          onClose={() => setPlanning(null)}
+        />
       )}
       {query.hasNextPage && (
         <Button
@@ -285,11 +351,16 @@ export function RecordFeedPage({
       ?.role ?? '',
   )
   const desktop = isDesktopWebLanding(useLgViewport())
-  const [mode, setMode] = useState<'list' | 'board' | 'calendar' | 'gantt'>('list')
-  const view = !desktop && (mode === 'board' || mode === 'gantt') ? 'list' : mode
+  const [mode, setMode] = useState<'list' | 'board' | 'calendar' | 'gantt'>(
+    'list',
+  )
+  const view =
+    !desktop && (mode === 'board' || mode === 'gantt') ? 'list' : mode
   const [ganttZoom, setGanttZoom] = useState<GanttZoom>('month')
   const [mine, setMine] = useState(dayOnly || !manager)
   const [search, setSearch] = useState('')
+  const [projectsOnly, setProjectsOnly] = useState(false)
+  const [project, setProject] = useState('')
   const [pole, setPole] = useState('')
   const options = useQuery({
     queryKey: ['field-record-options', establishmentId],
@@ -330,13 +401,14 @@ export function RecordFeedPage({
   const filters: RecordFilters = {
     mine,
     q: search,
+    ...(projectsOnly ? { projects: true } : {}),
+    ...(project ? { project } : {}),
     ...(pole ? { pole } : {}),
     ...(stage ? { stage } : {}),
   }
   const dated = view === 'calendar' || view === 'gantt'
-  const { from, to } = view === 'gantt'
-    ? ganttWindow(month, ganttZoom)
-    : monthWindow(month)
+  const { from, to } =
+    view === 'gantt' ? ganttWindow(month, ganttZoom) : monthWindow(month)
   return (
     <main className="mx-auto h-full overflow-y-auto w-full max-w-[1500px] space-y-5 p-4 pb-24 text-[#17251F] md:p-7">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -399,6 +471,32 @@ export function RecordFeedPage({
             </option>
           ))}
         </select>
+        <Button
+          variant={projectsOnly ? 'default' : 'outline'}
+          aria-pressed={projectsOnly}
+          onClick={() => {
+            setProjectsOnly(!projectsOnly)
+            setProject('')
+          }}
+        >
+          Projets
+        </Button>
+        <select
+          aria-label="Filtrer par projet"
+          value={project}
+          className={`${inputClass} max-w-52`}
+          onChange={(e) => {
+            setProject(e.target.value)
+            setProjectsOnly(false)
+          }}
+        >
+          <option value="">Tous les projets et fiches</option>
+          {options.data?.projects?.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -453,7 +551,11 @@ export function RecordFeedPage({
             <Button
               variant="outline"
               aria-label="Période précédente"
-              onClick={() => setMonth(shiftGanttMonth(month, ganttZoom === 'quarter' ? -3 : -1))}
+              onClick={() =>
+                setMonth(
+                  shiftGanttMonth(month, ganttZoom === 'quarter' ? -3 : -1),
+                )
+              }
             >
               <ChevronLeft size={16} />
             </Button>
@@ -474,7 +576,11 @@ export function RecordFeedPage({
               <Button
                 variant="outline"
                 aria-label="Période suivante"
-                onClick={() => setMonth(shiftGanttMonth(month, ganttZoom === 'quarter' ? 3 : 1))}
+                onClick={() =>
+                  setMonth(
+                    shiftGanttMonth(month, ganttZoom === 'quarter' ? 3 : 1),
+                  )
+                }
               >
                 <ChevronRight size={16} />
               </Button>
@@ -493,60 +599,63 @@ export function RecordFeedPage({
             </>
           )}
           <span className="text-sm text-[#45564A]">
-            De la création à la fin · ◆ échéance · seules les fiches datées
-            apparaissent.
+            {view === 'gantt'
+              ? 'Début planifié ou création · déplacez une barre pour proposer un décalage.'
+              : 'De la création à la fin · seules les fiches datées apparaissent.'}
           </span>
         </div>
       )}
       {view === 'board' ? (
-        <div className="grid min-w-[850px] grid-cols-4 gap-4 overflow-x-auto">
-          {stages
-            .filter((s) => !stage || stage === s.id)
-            .map((s) => (
-              <section
-                key={s.id}
-                className="min-h-48 rounded-2xl bg-[#EDF1E9] p-3"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  try {
-                    const drag = JSON.parse(
-                      e.dataTransfer.getData('application/spore-record'),
-                    ) as { id: string; updated_at: string }
-                    if (
-                      typeof drag.id !== 'string' ||
-                      typeof drag.updated_at !== 'string'
-                    )
-                      return
-                    if (s.id === 'closed') {
-                      void getRecord(establishmentId, drag.id)
-                        .then(setClosing)
-                        .catch((error) =>
-                          setDropError(
-                            error instanceof Error
-                              ? error
-                              : new Error('Impossible de charger la fiche.'),
-                          ),
-                        )
-                    } else mutation.mutate({ ...drag, stage: s.id })
-                  } catch {
-                    /* Ignore unrelated external drops. */
-                  }
-                }}
-              >
-                <h2 className="mb-3 flex items-center gap-2 px-1 font-semibold">
-                  <ArrowRight size={15} />
-                  {s.label}
-                </h2>
-                <RecordsPane
-                  site={establishmentId}
-                  filters={{ ...filters, stage: s.id }}
-                  onOpen={open}
-                  onMove={move}
-                  month={month}
-                />
-              </section>
-            ))}
+        <div className="overflow-x-auto pb-3">
+          <div className="grid min-w-[850px] grid-cols-4 gap-4">
+            {stages
+              .filter((s) => !stage || stage === s.id)
+              .map((s) => (
+                <section
+                  key={s.id}
+                  className="min-h-48 rounded-2xl bg-[#EDF1E9] p-3"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    try {
+                      const drag = JSON.parse(
+                        e.dataTransfer.getData('application/spore-record'),
+                      ) as { id: string; updated_at: string }
+                      if (
+                        typeof drag.id !== 'string' ||
+                        typeof drag.updated_at !== 'string'
+                      )
+                        return
+                      if (s.id === 'closed') {
+                        void getRecord(establishmentId, drag.id)
+                          .then(setClosing)
+                          .catch((error) =>
+                            setDropError(
+                              error instanceof Error
+                                ? error
+                                : new Error('Impossible de charger la fiche.'),
+                            ),
+                          )
+                      } else mutation.mutate({ ...drag, stage: s.id })
+                    } catch {
+                      /* Ignore unrelated external drops. */
+                    }
+                  }}
+                >
+                  <h2 className="mb-3 flex items-center gap-2 px-1 font-semibold">
+                    <ArrowRight size={15} />
+                    {s.label}
+                  </h2>
+                  <RecordsPane
+                    site={establishmentId}
+                    filters={{ ...filters, stage: s.id }}
+                    onOpen={open}
+                    onMove={move}
+                    month={month}
+                  />
+                </section>
+              ))}
+          </div>
         </div>
       ) : (
         <RecordsPane

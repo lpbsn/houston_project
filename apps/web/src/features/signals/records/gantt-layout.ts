@@ -18,7 +18,8 @@ export function dateInZone(timeZone: string, date = new Date()) {
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(date)
-  const value = (type: string) => parts.find((part) => part.type === type)!.value
+  const value = (type: string) =>
+    parts.find((part) => part.type === type)!.value
   return `${value('year')}-${value('month')}-${value('day')}`
 }
 
@@ -35,10 +36,18 @@ export function ganttWindow(month: string, zoom: GanttZoom) {
 }
 
 export function ganttSpan(record: FieldRecord, from: string, to: string) {
-  const calendar = record.calendar
+  const calendar = record.calendar ? { ...record.calendar } : null
+  if (calendar) {
+    const plannedStart =
+      record.planned_start_on ??
+      (record.is_milestone ? record.due_on! : calendar.start)
+    // A record closed early still shows its actual closure, not a negative duration.
+    calendar.start = plannedStart > calendar.end ? calendar.end : plannedStart
+  }
   if (!record.due_on || !calendar || calendar.start > to || calendar.end < from)
     return null
-  const index = (day: string) => Math.round((Date.parse(day) - Date.parse(from)) / DAY)
+  const index = (day: string) =>
+    Math.round((Date.parse(day) - Date.parse(from)) / DAY)
   const last = index(to)
   const start = Math.max(0, index(calendar.start))
   const end = Math.min(last, index(calendar.end))
@@ -52,4 +61,8 @@ export function ganttSpan(record: FieldRecord, from: string, to: string) {
     continuesBefore: calendar.start < from,
     continuesAfter: calendar.end > to,
   }
+}
+
+export function shiftDay(day: string, amount: number) {
+  return iso(new Date(Date.parse(`${day}T12:00:00Z`) + amount * DAY))
 }

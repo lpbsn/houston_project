@@ -8978,6 +8978,14 @@ paths:
         schema:
           type: string
       - in: query
+        name: project
+        schema:
+          type: string
+      - in: query
+        name: projects
+        schema:
+          type: boolean
+      - in: query
         name: q
         schema:
           type: string
@@ -9130,6 +9138,158 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/FieldRecordCommand'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecord'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/documents/:
+    get:
+      operationId: v1_establishments_records_documents_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordDocumentPage'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/organization/:
+    post:
+      operationId: v1_establishments_records_organization_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordOrganization'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordOrganization'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordOrganization'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecord'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/planning/:
+    post:
+      operationId: v1_establishments_records_planning_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordPlanningRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordPlanningRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordPlanningRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordPlanningResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/predecessor/:
+    post:
+      operationId: v1_establishments_records_predecessor_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordPredecessor'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordPredecessor'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordPredecessor'
         required: true
       security:
       - BearerAccessToken: []
@@ -15826,7 +15986,7 @@ components:
           type: string
           format: uuid
         kind:
-          $ref: '#/components/schemas/CommentAttachmentKindEnum'
+          $ref: '#/components/schemas/KindDc9Enum'
         content_type:
           type: string
         size_bytes:
@@ -15857,14 +16017,6 @@ components:
       - preview_url
       - size_bytes
       - thumbnail_url
-    CommentAttachmentKindEnum:
-      enum:
-      - image
-      - document
-      type: string
-      description: |-
-        * `image` - image
-        * `document` - document
     CommentAuthor:
       type: object
       properties:
@@ -16958,6 +17110,26 @@ components:
           type: string
           format: date
           nullable: true
+        planned_start_on:
+          type: string
+          format: date
+          nullable: true
+        is_project:
+          type: boolean
+        is_milestone:
+          type: boolean
+        parent_project:
+          allOf:
+          - $ref: '#/components/schemas/RecordPerson'
+          nullable: true
+        planning_predecessor:
+          allOf:
+          - $ref: '#/components/schemas/RecordPerson'
+          nullable: true
+        visible_child_count:
+          type: integer
+        visible_closed_child_count:
+          type: integer
         blocked_reason:
           type: string
         created_at:
@@ -16993,16 +17165,23 @@ components:
       - created_at
       - due_on
       - id
+      - is_milestone
       - is_pinned
+      - is_project
       - kind
       - observation_count
       - owner
+      - parent_project
+      - planned_start_on
+      - planning_predecessor
       - pole
       - pole_id
       - stage
       - summary
       - title
       - updated_at
+      - visible_child_count
+      - visible_closed_child_count
       - waiting_for
     FieldRecordCommand:
       type: object
@@ -17072,6 +17251,16 @@ components:
           type: string
           format: date
           nullable: true
+        is_project:
+          type: boolean
+          default: false
+        is_milestone:
+          type: boolean
+          default: false
+        parent_project_id:
+          type: string
+          format: uuid
+          nullable: true
       required:
       - business_unit_id
       - title
@@ -17106,12 +17295,22 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecordPerson'
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
       required:
       - executions
       - members
       - more_members
       - objectives
       - poles
+      - projects
+      - records
     FieldRecordPage:
       type: object
       properties:
@@ -17415,6 +17614,14 @@ components:
       required:
       - establishment_name
       - requires_password
+    KindDc9Enum:
+      enum:
+      - image
+      - document
+      type: string
+      description: |-
+        * `image` - image
+        * `document` - document
     LegalVersionRequest:
       type: object
       properties:
@@ -18460,6 +18667,10 @@ components:
           type: string
           format: date
           nullable: true
+        planned_start_on:
+          type: string
+          format: date
+          nullable: true
         blocked_reason:
           type: string
           maxLength: 500
@@ -18564,6 +18775,46 @@ components:
       - can_reject_resolution_request
       - can_request_resolution
       - can_resolve
+    PlanningChange:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        before_start:
+          type: string
+          format: date
+        before_due:
+          type: string
+          format: date
+          nullable: true
+        start_on:
+          type: string
+          format: date
+        due_on:
+          type: string
+          format: date
+      required:
+      - before_due
+      - before_start
+      - due_on
+      - id
+      - start_on
+      - title
+    PlanningVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - updated_at
     PlatformDeleteRequest:
       type: object
       properties:
@@ -19162,6 +19413,83 @@ components:
       - end
       - overdue
       - start
+    RecordDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/KindDc9Enum'
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        original_filename:
+          type: string
+        preview_url:
+          type: string
+        thumbnail_url:
+          type: string
+          nullable: true
+        comment_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        author_display_name:
+          type: string
+        execution_id:
+          type: string
+          format: uuid
+        execution_title:
+          type: string
+      required:
+      - author_display_name
+      - comment_id
+      - content_type
+      - created_at
+      - execution_id
+      - execution_title
+      - id
+      - kind
+      - original_filename
+      - preview_url
+      - size_bytes
+      - thumbnail_url
+    RecordDocumentPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordDocument'
+        next_offset:
+          type: integer
+          nullable: true
+      required:
+      - items
+      - next_offset
+    RecordOrganization:
+      type: object
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+        parent_project_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_project:
+          type: boolean
+        is_milestone:
+          type: boolean
+      required:
+      - expected_updated_at
+      - is_milestone
+      - is_project
+      - parent_project_id
     RecordPerson:
       type: object
       properties:
@@ -19173,6 +19501,59 @@ components:
       required:
       - id
       - name
+    RecordPlanningRequest:
+      type: object
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+        start_on:
+          type: string
+          format: date
+        due_on:
+          type: string
+          format: date
+        apply:
+          type: boolean
+          default: false
+        expected_versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningVersion'
+      required:
+      - due_on
+      - expected_updated_at
+      - start_on
+    RecordPlanningResponse:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningChange'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningVersion'
+        applied:
+          type: boolean
+      required:
+      - applied
+      - changes
+      - versions
+    RecordPredecessor:
+      type: object
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+        predecessor_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - expected_updated_at
+      - predecessor_id
     RefreshRequest:
       type: object
       properties:

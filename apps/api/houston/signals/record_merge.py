@@ -3,6 +3,26 @@ from houston.signals.models import SignalAlias, SignalExecutionLink, SignalParti
 
 
 def prepare_record_merge(source, target):
+    if any(
+        (
+            source.is_project,
+            target.is_project,
+            source.parent_project_id,
+            target.parent_project_id,
+            source.planning_predecessor_id,
+            target.planning_predecessor_id,
+            source.planning_successors.exists(),
+            target.planning_successors.exists(),
+            source.planned_start_on,
+            target.planned_start_on,
+            source.is_milestone,
+            target.is_milestone,
+        )
+    ):
+        raise SignalStateError(
+            "Ces fiches portent une organisation de projet ou une planification. "
+            "Conservez leurs liens et traitez le rapprochement explicitement."
+        )
     # A routing operation must never silently choose between two human decisions.
     fields = ("owner_membership_id", "due_on", "blocked_reason", "waiting_for_membership_id")
     for field in fields:

@@ -35,6 +35,10 @@ import {
 import { RecordWorkPanel } from './work-panel'
 import { RecordForm } from './forms'
 import { RecordPinning } from './pinning'
+import { OrganizationDialog, ProjectContents } from './organization'
+import { PlanningDialog, type PlanningDraft } from './planning-dialog'
+import { RecordDocuments } from './documents'
+import { CreateRecord } from './feed'
 
 function RecordSection({
   site,
@@ -165,12 +169,24 @@ export function RecordDetailPage({
   })
   const update = useRecordUpdate(site, recordId)
   const [closing, setClosing] = useState(false)
+  const [organizing, setOrganizing] = useState<'project' | 'dependency' | null>(
+    null,
+  )
+  const [planning, setPlanning] = useState<PlanningDraft | null>(null)
+  const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<
     'details' | 'work' | 'participants' | 'objective' | 'link' | null
   >(null)
   const [tab, setTab] = useState<
-    'work' | 'sources' | 'chat' | 'history' | 'objectives'
-  >(() => (deepLink.tab ? 'chat' : 'work'))
+    | 'work'
+    | 'sources'
+    | 'chat'
+    | 'history'
+    | 'objectives'
+    | 'documents'
+    | 'children'
+    | null
+  >(() => (deepLink.tab ? 'chat' : null))
   const follow = useMutation({
     mutationFn: (enabled: boolean) =>
       commandRecord(site, recordId, {
@@ -193,6 +209,7 @@ export function RecordDetailPage({
         </Button>
       </div>
     )
+  const activeTab = tab ?? (record.is_project ? 'children' : 'work')
   return (
     <main className="mx-auto h-full w-full overflow-y-auto max-w-6xl space-y-5 p-4 pb-24 text-[#17251F] md:p-7">
       <button
@@ -202,11 +219,26 @@ export function RecordDetailPage({
         <ArrowLeft size={16} />
         Toutes les fiches
       </button>
+      {record.parent_project && (
+        <button
+          className="text-sm font-semibold text-[#075940] hover:underline"
+          onClick={() =>
+            onNavigate(`/e/${site}/signals/${record.parent_project!.id}`)
+          }
+        >
+          Projet · {record.parent_project.name}
+        </button>
+      )}
       <header className={`${panelClass} space-y-4`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="mb-2 text-sm font-semibold text-[#075940]">
               {record.pole}
+              {record.is_project
+                ? ' · Projet'
+                : record.is_milestone
+                  ? ' · Jalon'
+                  : ''}
             </p>
             <h1 className="max-w-3xl text-2xl font-semibold leading-snug">
               {record.title}
@@ -254,6 +286,9 @@ export function RecordDetailPage({
           </span>
           <span className="flex items-center gap-2">
             <CalendarDays size={16} />
+            {record.planned_start_on
+              ? `${dateLabel(record.planned_start_on)} → `
+              : ''}
             {record.due_on ? dateLabel(record.due_on) : 'Sans échéance'}
           </span>
           <span>
@@ -287,37 +322,46 @@ export function RecordDetailPage({
               : ''}
           </p>
         )}
-        <div className="flex flex-wrap gap-2">
-          {original.data && (
-            <RecordPinning site={site} signal={original.data} />
-          )}
-          {record.can_manage && (
+        {record.planning_predecessor && (
+          <p className="text-sm text-[#45564A]">
+            À planifier après{' '}
+            <button
+              className="font-semibold text-[#075940] underline"
+              onClick={() =>
+                onNavigate(
+                  `/e/${site}/signals/${record.planning_predecessor!.id}`,
+                )
+              }
+            >
+              {record.planning_predecessor.name}
+            </button>
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {record.can_manage && record.stage !== 'closed' && (
             <>
-              <Button variant="outline" onClick={() => setForm('details')}>
-                Responsable, date et blocage
+              <Button
+                onClick={() =>
+                  record.is_project ? setCreating(true) : setForm('work')
+                }
+              >
+                <Plus size={15} />
+                {record.is_project ? 'Ajouter une fiche' : 'Ajouter du travail'}
               </Button>
-              <Button variant="outline" onClick={() => setForm('participants')}>
-                Participants
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setPlanning({
+                    record,
+                    start:
+                      record.planned_start_on ?? record.calendar?.start ?? '',
+                    due: record.due_on ?? '',
+                  })
+                }
+              >
+                <CalendarDays size={15} />
+                Planifier
               </Button>
-              {original.data?.permission_hints.can_qualify_routing && (
-                <Button
-                  variant="outline"
-                  onClick={() => void qualification.openForSignal(record.id)}
-                >
-                  Pôle et sujet
-                </Button>
-              )}
-              {record.stage !== 'closed' && (
-                <>
-                  <Button onClick={() => setForm('work')}>
-                    <Plus size={15} />
-                    Ajouter du travail
-                  </Button>
-                  <Button variant="outline" onClick={() => setForm('link')}>
-                    Rattacher un plan
-                  </Button>
-                </>
-              )}
             </>
           )}
           <Button
@@ -328,13 +372,93 @@ export function RecordDetailPage({
             <Bell size={15} />
             Suivre
           </Button>
-          <Button
-            variant="ghost"
-            disabled={follow.isPending}
-            onClick={() => follow.mutate(false)}
-          >
-            Couper les alertes
-          </Button>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-xl border border-[#C9D2C7] bg-white px-4 py-2 text-sm font-semibold hover:bg-[#F2F7F0] focus-visible:outline-2 focus-visible:outline-[#075940]">
+              Plus d’options
+            </summary>
+            <div
+              className="absolute left-0 top-full z-30 mt-2 grid min-w-64 gap-1 rounded-xl border border-[#C9D2C7] bg-white p-2 shadow-lg"
+              onClick={(e) => {
+                const details = e.currentTarget.closest('details')
+                if (details) details.open = false
+              }}
+            >
+              {record.can_manage && (
+                <>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setForm('details')}
+                  >
+                    Responsable et blocage
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setForm('participants')}
+                  >
+                    Participants
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setOrganizing('project')}
+                  >
+                    Organiser dans un projet
+                  </Button>
+                  {record.stage !== 'closed' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        className="justify-start"
+                        onClick={() => setOrganizing('dependency')}
+                      >
+                        Définir un préalable
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="justify-start"
+                        onClick={() => setForm('link')}
+                      >
+                        Rattacher un plan
+                      </Button>
+                      {record.is_project && (
+                        <Button
+                          variant="ghost"
+                          className="justify-start"
+                          onClick={() => setForm('work')}
+                        >
+                          Ajouter du travail au projet
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {original.data?.permission_hints.can_qualify_routing && (
+                    <Button
+                      variant="ghost"
+                      className="justify-start"
+                      onClick={() =>
+                        void qualification.openForSignal(record.id)
+                      }
+                    >
+                      Pôle et sujet
+                    </Button>
+                  )}
+                </>
+              )}
+              {original.data && (
+                <RecordPinning site={site} signal={original.data} />
+              )}
+              <Button
+                variant="ghost"
+                className="justify-start"
+                disabled={follow.isPending}
+                onClick={() => follow.mutate(false)}
+              >
+                Couper les alertes
+              </Button>
+            </div>
+          </details>
         </div>
         {follow.isSuccess && (
           <p role="status" className="text-sm text-[#075940]">
@@ -350,7 +474,11 @@ export function RecordDetailPage({
         >
           {(
             [
+              ...(record.is_project
+                ? [{ id: 'children' as const, label: 'Fiches du projet' }]
+                : []),
               { id: 'work', label: 'Travail' },
+              { id: 'documents', label: 'Documents' },
               { id: 'sources', label: 'Observations' },
               { id: 'chat', label: 'Discussion' },
               { id: 'history', label: 'Historique' },
@@ -361,20 +489,21 @@ export function RecordDetailPage({
             .map((t) => (
               <Button
                 key={t.id}
-                variant={tab === t.id ? 'default' : 'outline'}
+                variant={activeTab === t.id ? 'default' : 'outline'}
+                aria-pressed={activeTab === t.id}
                 onClick={() => setTab(t.id)}
               >
                 {t.label}
               </Button>
             ))}
         </nav>
-        {tab === 'sources' && original.data && (
+        {activeTab === 'sources' && original.data && (
           <div className="mb-4 space-y-3">
             <SignalDetailPhotoSection mediaItems={original.data.media_items} />
             <OriginalObservation signal={original.data} />
           </div>
         )}
-        {tab === 'objectives' && record.can_use_brain && (
+        {activeTab === 'objectives' && record.can_use_brain && (
           <Button
             variant="outline"
             className="mb-4"
@@ -383,7 +512,31 @@ export function RecordDetailPage({
             Rattacher un objectif Brain
           </Button>
         )}
-        {tab === 'chat' ? (
+        {activeTab === 'children' ? (
+          <ProjectContents
+            site={site}
+            record={record}
+            onOpen={(id) => onNavigate(`/e/${site}/signals/${id}`)}
+            onCreate={() => setCreating(true)}
+          />
+        ) : activeTab === 'documents' ? (
+          <>
+            <RecordDocuments
+              site={site}
+              record={record}
+              onNavigate={onNavigate}
+              onWork={() => setTab('work')}
+            />
+            {original.data && original.data.media_items.length > 0 && (
+              <div className="mt-6 border-t border-[#DADFD8] pt-5">
+                <h3 className="mb-3 font-semibold">Photos des observations</h3>
+                <SignalDetailPhotoSection
+                  mediaItems={original.data.media_items}
+                />
+              </div>
+            )}
+          </>
+        ) : activeTab === 'chat' ? (
           <CommentSection
             establishmentId={site}
             targetType="signal"
@@ -394,10 +547,10 @@ export function RecordDetailPage({
           />
         ) : (
           <RecordSection
-            key={tab}
+            key={activeTab}
             site={site}
             record={record}
-            section={tab}
+            section={activeTab}
             onNavigate={onNavigate}
           />
         )}
@@ -413,6 +566,33 @@ export function RecordDetailPage({
           onSubmit={async (body) => {
             await qualification.submit(body)
             await client.invalidateQueries({ queryKey: recordKeys.all(site) })
+          }}
+        />
+      )}
+      {organizing && (
+        <OrganizationDialog
+          site={site}
+          record={record}
+          dependency={organizing === 'dependency'}
+          onClose={() => setOrganizing(null)}
+        />
+      )}
+      {planning && (
+        <PlanningDialog
+          site={site}
+          draft={planning}
+          onClose={() => setPlanning(null)}
+        />
+      )}
+      {creating && (
+        <CreateRecord
+          site={site}
+          parentProject={record}
+          onClose={() => setCreating(false)}
+          onCreated={(id) => {
+            setCreating(false)
+            void client.invalidateQueries({ queryKey: recordKeys.all(site) })
+            onNavigate(`/e/${site}/signals/${id}`)
           }}
         />
       )}

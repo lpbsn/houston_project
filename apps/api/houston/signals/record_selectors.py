@@ -3,7 +3,8 @@
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from houston.action_plans.models import ActionPlanExecution
@@ -40,7 +41,7 @@ def stage_filter(stage):
     return Q()
 
 
-def record_queryset(membership):
+def _visible_record_queryset(membership):
     if membership.status != EstablishmentMembership.Status.ACTIVE:
         return Signal.objects.none()
     base = Signal.objects.filter(
@@ -94,6 +95,30 @@ def record_queryset(membership):
             observation_count=Count("source_observation_links__observation_id", distinct=True)
         )
         .distinct()
+    )
+
+
+def record_queryset(membership):
+    visible = _visible_record_queryset(membership)
+    # Correlated aggregate subqueries avoid count multiplication and N+1 detail reads.
+    children = (
+        Signal.objects.filter(pk__in=visible.values("pk"), parent_project_id=OuterRef("pk"))
+        .order_by()
+        .values("parent_project_id")
+    )
+    child_count = children.annotate(total=Count("id", distinct=True)).values("total")[:1]
+    closed_count = (
+        children.filter(status__in=["resolved", "canceled"])
+        .annotate(total=Count("id", distinct=True))
+        .values("total")[:1]
+    )
+    return visible.select_related("parent_project", "planning_predecessor").annotate(
+        parent_visible=Exists(visible.filter(pk=OuterRef("parent_project_id"))),
+        predecessor_visible=Exists(visible.filter(pk=OuterRef("planning_predecessor_id"))),
+        visible_child_count=Coalesce(Subquery(child_count, output_field=IntegerField()), Value(0)),
+        visible_closed_child_count=Coalesce(
+            Subquery(closed_count, output_field=IntegerField()), Value(0)
+        ),
     )
 
 

@@ -39,6 +39,15 @@ def record_context(signal):
     links = getattr(signal, "brain_work_links", [])
     return {
         "record_kind": signal.record_kind,
+        "is_project": signal.is_project,
+        "is_milestone": signal.is_milestone,
+        "parent_project_id": str(signal.parent_project_id) if signal.parent_project_id else None,
+        "planning_predecessor_id": str(signal.planning_predecessor_id)
+        if signal.planning_predecessor_id
+        else None,
+        "planned_start_on": signal.planned_start_on.isoformat()
+        if signal.planned_start_on
+        else None,
         "merged_into_id": str(signal.merged_into_id) if signal.merged_into_id else None,
         "operational_status": signal.status,
         "owner": {

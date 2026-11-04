@@ -15,6 +15,8 @@ export type RecordFilters = {
   mine?: boolean
   q?: string
   pole?: string
+  project?: string
+  projects?: boolean
   from?: string
   to?: string
 }
@@ -152,6 +154,93 @@ export async function recordSection(
             params: {
               path: { establishment_id: site, record_id: id },
               query: { section, offset },
+            },
+            headers: headers(token),
+          },
+        ),
+      { refreshable: true },
+    ),
+  )
+}
+
+export type PlanningRequest = components['schemas']['RecordPlanningRequest']
+export type PlanningResponse = components['schemas']['RecordPlanningResponse']
+export type RecordOrganization = components['schemas']['RecordOrganization']
+export async function planRecord(
+  site: string,
+  id: string,
+  body: PlanningRequest,
+) {
+  return result(
+    await withAuthRetry(
+      (token) =>
+        apiClient.POST(
+          '/api/v1/establishments/{establishment_id}/records/{record_id}/planning/',
+          {
+            params: { path: { establishment_id: site, record_id: id } },
+            body,
+            headers: headers(token),
+          },
+        ),
+      { refreshable: true },
+    ),
+  )
+}
+export async function organizeRecord(
+  site: string,
+  id: string,
+  body: RecordOrganization,
+) {
+  return result(
+    await withAuthRetry(
+      (token) =>
+        apiClient.POST(
+          '/api/v1/establishments/{establishment_id}/records/{record_id}/organization/',
+          {
+            params: { path: { establishment_id: site, record_id: id } },
+            body,
+            headers: headers(token),
+          },
+        ),
+      { refreshable: true },
+    ),
+  )
+}
+export async function setPredecessor(
+  site: string,
+  id: string,
+  body: components['schemas']['RecordPredecessor'],
+) {
+  return result(
+    await withAuthRetry(
+      (token) =>
+        apiClient.POST(
+          '/api/v1/establishments/{establishment_id}/records/{record_id}/predecessor/',
+          {
+            params: { path: { establishment_id: site, record_id: id } },
+            body,
+            headers: headers(token),
+          },
+        ),
+      { refreshable: true },
+    ),
+  )
+}
+export async function listRecordDocuments(
+  site: string,
+  id: string,
+  offset = 0,
+  q = '',
+) {
+  return result(
+    await withAuthRetry(
+      (token) =>
+        apiClient.GET(
+          '/api/v1/establishments/{establishment_id}/records/{record_id}/documents/',
+          {
+            params: {
+              path: { establishment_id: site, record_id: id },
+              query: { offset, q },
             },
             headers: headers(token),
           },

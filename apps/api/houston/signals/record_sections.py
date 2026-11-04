@@ -10,6 +10,9 @@ from houston.signals.record_selectors import linked_executions
 
 LABELS = {
     "created": "Fiche créée",
+    "project_changed": "Organisation du projet modifiée",
+    "planning_changed": "Planification modifiée",
+    "planning_dependency_changed": "Préalable de planification modifié",
     "updated": "Fiche mise à jour",
     "assigned": "Responsable modifié",
     "closed": "Fiche close",
@@ -164,6 +167,7 @@ def history_page(record, offset):
         notes = []
         for key, label in (
             ("due_on", "Échéance"),
+            ("planned_start_on", "Début planifié"),
             ("blocked_reason", "Blocage"),
             ("title", "Titre"),
         ):

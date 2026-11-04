@@ -529,6 +529,8 @@ def _copy_capacity_signals_and_assignments(
         "closure_reason",
         "due_revision",
         "content_edited_by_user",
+        "is_project",
+        "is_milestone",
     )
     assignment_columns = (
         "id",
@@ -630,6 +632,8 @@ def _copy_capacity_signals_and_assignments(
                         "",
                         "resolved" if resolved_at else "abandoned" if canceled_at else "",
                         1,
+                        False,
+                        False,
                         False,
                     )
                 )
