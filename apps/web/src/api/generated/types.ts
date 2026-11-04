@@ -2633,6 +2633,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/documents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_records_documents_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/organization/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_records_organization_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/planning/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_records_planning_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/predecessor/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_records_predecessor_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/records/{record_id}/sections/": {
         parameters: {
             query?: never;
@@ -5261,7 +5325,7 @@ export interface components {
         CommentAttachment: {
             /** Format: uuid */
             id: string;
-            kind: components["schemas"]["CommentAttachmentKindEnum"];
+            kind: components["schemas"]["KindDc9Enum"];
             content_type: string;
             size_bytes: number;
             original_filename: string;
@@ -5273,12 +5337,6 @@ export interface components {
             created_at: string;
             author_display_name: string;
         };
-        /**
-         * @description * `image` - image
-         *     * `document` - document
-         * @enum {string}
-         */
-        CommentAttachmentKindEnum: "image" | "document";
         CommentAuthor: {
             /** Format: uuid */
             membership_id: string;
@@ -5738,6 +5796,14 @@ export interface components {
             waiting_for: components["schemas"]["RecordPerson"] | null;
             /** Format: date */
             due_on: string | null;
+            /** Format: date */
+            planned_start_on: string | null;
+            is_project: boolean;
+            is_milestone: boolean;
+            parent_project: components["schemas"]["RecordPerson"] | null;
+            planning_predecessor: components["schemas"]["RecordPerson"] | null;
+            visible_child_count: number;
+            visible_closed_child_count: number;
             blocked_reason: string;
             /** Format: date-time */
             created_at: string;
@@ -5780,6 +5846,12 @@ export interface components {
             owner_membership_id?: string | null;
             /** Format: date */
             due_on?: string | null;
+            /** @default false */
+            is_project: boolean;
+            /** @default false */
+            is_milestone: boolean;
+            /** Format: uuid */
+            parent_project_id?: string | null;
         };
         /**
          * @description * `observation` - observation
@@ -5794,6 +5866,8 @@ export interface components {
             more_members: boolean;
             objectives: components["schemas"]["RecordPerson"][];
             executions: components["schemas"]["RecordPerson"][];
+            projects: components["schemas"]["RecordPerson"][];
+            records: components["schemas"]["RecordPerson"][];
         };
         FieldRecordPage: {
             items: components["schemas"]["FieldRecord"][];
@@ -5907,6 +5981,12 @@ export interface components {
             requires_password: boolean;
             establishment_name: string;
         };
+        /**
+         * @description * `image` - image
+         *     * `document` - document
+         * @enum {string}
+         */
+        KindDc9Enum: "image" | "document";
         LegalVersionRequest: {
             version: string;
         };
@@ -6344,6 +6424,8 @@ export interface components {
             waiting_for_membership_id?: string | null;
             /** Format: date */
             due_on?: string | null;
+            /** Format: date */
+            planned_start_on?: string | null;
             blocked_reason?: string;
             stage?: components["schemas"]["StageEnum"];
             closure_reason?: components["schemas"]["ClosureReasonEnum"];
@@ -6388,6 +6470,25 @@ export interface components {
             can_approve_resolution_request: boolean;
             can_reject_resolution_request: boolean;
             can_cancel_resolution_request: boolean;
+        };
+        PlanningChange: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date */
+            before_start: string;
+            /** Format: date */
+            before_due: string | null;
+            /** Format: date */
+            start_on: string;
+            /** Format: date */
+            due_on: string;
+        };
+        PlanningVersion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         PlatformDeleteRequest: {
             justification: string;
@@ -6642,10 +6743,62 @@ export interface components {
             due: string;
             overdue: boolean;
         };
+        RecordDocument: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["KindDc9Enum"];
+            content_type: string;
+            size_bytes: number;
+            original_filename: string;
+            preview_url: string;
+            thumbnail_url: string | null;
+            /** Format: uuid */
+            comment_id: string;
+            /** Format: date-time */
+            created_at: string;
+            author_display_name: string;
+            /** Format: uuid */
+            execution_id: string;
+            execution_title: string;
+        };
+        RecordDocumentPage: {
+            items: components["schemas"]["RecordDocument"][];
+            next_offset: number | null;
+        };
+        RecordOrganization: {
+            /** Format: date-time */
+            expected_updated_at: string;
+            /** Format: uuid */
+            parent_project_id: string | null;
+            is_project: boolean;
+            is_milestone: boolean;
+        };
         RecordPerson: {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        RecordPlanningRequest: {
+            /** Format: date-time */
+            expected_updated_at: string;
+            /** Format: date */
+            start_on: string;
+            /** Format: date */
+            due_on: string;
+            /** @default false */
+            apply: boolean;
+            expected_versions?: components["schemas"]["PlanningVersion"][];
+        };
+        RecordPlanningResponse: {
+            changes: components["schemas"]["PlanningChange"][];
+            versions: components["schemas"]["PlanningVersion"][];
+            applied: boolean;
+        };
+        RecordPredecessor: {
+            /** Format: date-time */
+            expected_updated_at: string;
+            /** Format: uuid */
+            predecessor_id: string | null;
         };
         RefreshRequest: {
             refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
@@ -15743,6 +15896,8 @@ export interface operations {
                 mine?: boolean;
                 offset?: number;
                 pole?: string;
+                project?: string;
+                projects?: boolean;
                 q?: string;
                 stage?: "closed" | "doing" | "review" | "todo";
                 to?: string;
@@ -15857,6 +16012,115 @@ export interface operations {
                 "application/json": components["schemas"]["FieldRecordCommand"];
                 "application/x-www-form-urlencoded": components["schemas"]["FieldRecordCommand"];
                 "multipart/form-data": components["schemas"]["FieldRecordCommand"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecord"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_documents_retrieve: {
+        parameters: {
+            query?: {
+                offset?: number;
+                q?: string;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordDocumentPage"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_organization_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordOrganization"];
+                "application/x-www-form-urlencoded": components["schemas"]["RecordOrganization"];
+                "multipart/form-data": components["schemas"]["RecordOrganization"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecord"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_planning_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPlanningRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RecordPlanningRequest"];
+                "multipart/form-data": components["schemas"]["RecordPlanningRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordPlanningResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_predecessor_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPredecessor"];
+                "application/x-www-form-urlencoded": components["schemas"]["RecordPredecessor"];
+                "multipart/form-data": components["schemas"]["RecordPredecessor"];
             };
         };
         responses: {

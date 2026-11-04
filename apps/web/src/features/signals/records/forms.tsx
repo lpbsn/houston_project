@@ -91,7 +91,6 @@ export function RecordForm({
                 expected_updated_at: record.updated_at,
                 title,
                 owner_membership_id: owner || null,
-                due_on: due || null,
                 blocked_reason: blocked,
                 waiting_for_membership_id: waiting || null,
               },
@@ -124,7 +123,11 @@ export function RecordForm({
             className={inputClass}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Prénom ou nom…"
+            placeholder={
+              kind === 'objective' || kind === 'link'
+                ? 'Titre…'
+                : 'Prénom ou nom…'
+            }
           />
         </label>
         {options.data?.more_members && (
@@ -205,15 +208,17 @@ export function RecordForm({
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-sm">
-              Échéance
-              <input
-                className={inputClass}
-                type="date"
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-              />
-            </label>
+            {kind === 'work' && (
+              <label className="grid gap-2 text-sm">
+                Échéance
+                <input
+                  className={inputClass}
+                  type="date"
+                  value={due}
+                  onChange={(e) => setDue(e.target.value)}
+                />
+              </label>
+            )}
             {kind === 'details' ? (
               <>
                 <label className="grid gap-2 text-sm">

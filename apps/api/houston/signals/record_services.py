@@ -25,6 +25,9 @@ from houston.signals.record_selectors import get_record, linked_executions, reco
 
 
 def _lock(actor, record_id, expected_updated_at=None):
+    from houston.signals.project_services import lock_workspace
+
+    lock_workspace(actor)
     visible = get_record(actor, record_id)
     if visible is None:
         raise SignalPermissionError("Cette fiche n’est pas accessible.")
@@ -92,7 +95,20 @@ def _event(signal, actor, kind, changes):
 
 
 @transaction.atomic
-def create_record(*, actor, title, business_unit_id, owner_membership_id=None, due_on=None):
+def create_record(
+    *,
+    actor,
+    title,
+    business_unit_id,
+    owner_membership_id=None,
+    due_on=None,
+    is_project=False,
+    is_milestone=False,
+    parent_project_id=None,
+):
+    from houston.signals.project_services import lock_workspace, validate_hierarchy
+
+    lock_workspace(actor)
     require_current_terms(user=actor.user)
     unit = BusinessUnit.objects.filter(
         pk=business_unit_id,
@@ -111,6 +127,9 @@ def create_record(*, actor, title, business_unit_id, owner_membership_id=None, d
         record_kind=Signal.RecordKind.PROJECT,
         last_activity_at=timezone.now(),
         due_on=due_on,
+        is_project=is_project,
+        is_milestone=is_milestone,
+        parent_project_id=parent_project_id,
     )
     _require_manager(actor, signal)
     if not signal.title or len(signal.title) > 200:
@@ -118,6 +137,11 @@ def create_record(*, actor, title, business_unit_id, owner_membership_id=None, d
     if due_on and due_on < timezone.now().astimezone(ZoneInfo(actor.establishment.timezone)).date():
         raise SignalValidationError("L’échéance ne peut pas précéder la création.")
     signal.owner_membership = _member(signal, owner_membership_id) if owner_membership_id else actor
+    validate_hierarchy(
+        actor, signal, parent_project_id, is_project=is_project, is_milestone=is_milestone
+    )
+    if is_milestone and not due_on:
+        raise SignalValidationError("Un jalon doit avoir une échéance.")
     signal.save()
     _event(signal, actor, "created", {"record_kind": "project"})
     return signal
@@ -130,10 +154,13 @@ def update_record(*, actor, record_id, expected_updated_at, **data):
         raise SignalPermissionError("Vous ne pouvez pas modifier cette fiche.")
     if not can_manage_record(actor, signal) and set(data) - {"stage", "blocked_reason"}:
         raise SignalPermissionError("Seul le manager peut modifier ces éléments.")
+    from houston.signals.planning_services import require_date_edit
+
+    require_date_edit(signal, data)
     before = record_stage(signal)
     changes = {}
     kind = "updated"
-    for field in ("title", "structured_summary", "due_on", "blocked_reason"):
+    for field in ("title", "structured_summary", "due_on", "planned_start_on", "blocked_reason"):
         if field in data and data[field] != getattr(signal, field):
             old, new = getattr(signal, field), data[field]
             if (
@@ -169,6 +196,9 @@ def update_record(*, actor, record_id, expected_updated_at, **data):
         if stage in {"todo", "closed"} or before == "closed":
             _require_manager(actor, signal)
         if stage == "closed":
+            from houston.signals.project_services import require_project_closeable
+
+            require_project_closeable(signal)
             from houston.signals.permissions import get_pending_resolution_request_for_signal
 
             if get_pending_resolution_request_for_signal(signal):
