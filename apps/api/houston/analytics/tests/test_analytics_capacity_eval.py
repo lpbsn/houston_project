@@ -65,6 +65,14 @@ def test_small_capacity_dataset_and_benchmark_do_not_call_openai(monkeypatch, se
     assert Signal.objects.filter(
         establishment__organization_id=dataset.organization_id
     ).count() == 120
+    assert not Signal.objects.filter(
+        establishment__organization_id=dataset.organization_id,
+        is_project=True,
+    ).exists()
+    assert not Signal.objects.filter(
+        establishment__organization_id=dataset.organization_id,
+        is_milestone=True,
+    ).exists()
     assert OperationalPattern.objects.filter(
         organization_id=dataset.organization_id
     ).count() == 10
