@@ -18,6 +18,7 @@ L’interface commune ne fusionne pas les preuves avec les décisions : `Observa
 - Une action peut être rattachée à plusieurs fiches. L’action demeure unique et garde ses permissions.
 - Terminer le travail conduit à « À vérifier » : la résolution du problème exige une décision distincte. L’atteinte d’un objectif KPI reste une troisième vérification, dans Brain.
 - Calendrier : fiches avec échéance uniquement, bande de la création à l’échéance, prolongée jusqu’à aujourd’hui si en retard ; arrêt à la clôture effective ; échéance originale conservée.
+- Gantt sur ordinateur : une ligne par fiche datée, avec responsable, pôle, étape et blocage éventuel. Échelles de 1 ou 3 mois ; barre continue, repère d’échéance et zone de retard. Le titre ou la barre ouvre la même fiche. Les filtres et la pagination sont communs aux autres vues.
 - Ma journée complète les tâches existantes par les fiches dont on est responsable sans tâche personnelle en cours et les résultats à vérifier dans son périmètre.
 
 ## Architecture
@@ -29,6 +30,8 @@ L’interface commune ne fusionne pas les preuves avec les décisions : `Observa
 Les nouveaux endpoints `records/` sont dans le domaine signals : sélecteurs pour lire, services pour écrire, permissions côté serveur, pagination bornée. Les commandes exigent `expected_updated_at` pour ne pas écraser une modification simultanée.
 
 Les tâches ont un préalable facultatif, dans le même groupe de travail : pas de cycle, pas de validation avant le préalable. Cette première version ne crée pas un moteur de dépendances entre établissements, ni une vue de charge.
+
+Le Gantt réutilise `records/` et les dates `calendar` calculées par le serveur. Il n’ajoute ni modèle, ni migration, ni dépendance npm, ni requête de détail par ligne. Sa fenêtre de trois mois reste sous la limite serveur de 94 jours. Les jours sont calculés sans décalage d’heure ; le repère « aujourd’hui » suit le fuseau de l’établissement. La couleur représente l’étape de la fiche, pas un pourcentage d’exécution. Les dates se modifient dans le détail ; les barres ne se déplacent pas à la souris. Les dépendances de tâches restent dans le travail de la fiche, sans flèches inventées entre les fiches. Une vue paginée annonce explicitement les fiches restant à charger. Sur le runtime natif, les vues liste et calendrier sont conservées.
 
 Brain reçoit les décisions, dates, blocages, liens d’exécution et objectifs rattachés dans son dossier figé. Les projets ne doivent pas devenir des observations dans les métriques. Les anciennes analyses ne sont pas recalculées. La PR #361 est indépendante et n’est pas présumée intégrée.
 
@@ -60,6 +63,7 @@ Ne pas supprimer les nouvelles tables après usage : elles portent des décision
 - Ajout de tâches, modification et réordonnancement sans perdre les dépendances ; refus des cycles ; discussion générale et discussion de plan distinctes.
 - Plan partagé entre deux fiches ; validation du travail sans résolution automatique ; clôture et réouverture explicites ; réapparition d’un sujet sans effacer l’épisode précédent.
 - Calendrier à cheval sur deux semaines, retard, clôture avant/après échéance, fiche sans date.
+- Gantt : même fiche et mêmes dates que le calendrier ; filtres conservés ; passage 1/3 mois et changement d’année ; chargement de la suite ; ouverture du détail par la barre ou le titre ; échéance d’origine visible même après clôture anticipée ; colonne des fiches et en-tête fixes pendant le défilement.
 - Anciennes notifications et liens après rapprochement ; médias conservés selon les règles de rétention existantes.
 - Brain : capture datée, action partagée identifiée par le même ID, projet sans témoignage artificiel, objectifs indépendants de la clôture.
 - Rappels dans le fuseau du site, absence de doublons, notifications coupées, modification d’échéance et membre désactivé.

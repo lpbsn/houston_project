@@ -8,6 +8,8 @@ import { useState } from 'react'
 import {
   ArrowRight,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   Plus,
   RefreshCw,
@@ -38,6 +40,8 @@ import {
   stages,
 } from './shared'
 import { monthWindow, RecordCalendar } from './calendar'
+import { RecordGantt } from './gantt'
+import { ganttWindow, shiftGanttMonth, type GanttZoom } from './gantt-layout'
 
 function RecordCard({
   record,
@@ -194,14 +198,16 @@ function RecordsPane({
   onOpen,
   onMove,
   month,
-  calendar = false,
+  view = 'list',
+  ganttZoom = 'month',
 }: {
   site: string
   filters: RecordFilters
   onOpen: (id: string) => void
   onMove: (record: FieldRecord, stage: RecordStage) => void
   month: string
-  calendar?: boolean
+  view?: 'list' | 'calendar' | 'gantt'
+  ganttZoom?: GanttZoom
 }) {
   const query = useInfiniteQuery({
     queryKey: [...recordKeys.all(site), 'feed', filters],
@@ -218,7 +224,17 @@ function RecordsPane({
         </p>
       )}
       <ErrorNote error={query.error} />
-      {calendar ? (
+      {view === 'gantt' ? (
+        !query.isPending && (!query.isError || records.length > 0) && (
+          <RecordGantt
+            records={records}
+            month={month}
+            zoom={ganttZoom}
+            timeZone={query.data?.pages[0]?.timezone ?? 'UTC'}
+            onOpen={onOpen}
+          />
+        )
+      ) : view === 'calendar' ? (
         <RecordCalendar records={records} month={month} onOpen={onOpen} />
       ) : (
         records.map((record) => (
@@ -230,12 +246,12 @@ function RecordsPane({
           />
         ))
       )}
-      {!query.isPending && !query.isError && !records.length && (
+      {view !== 'gantt' && !query.isPending && !query.isError && !records.length && (
         <p className="rounded-xl border border-dashed border-[#C9D2C7] p-5 text-sm text-[#45564A]">
           Aucune fiche ici.
         </p>
       )}
-      {calendar && query.hasNextPage && (
+      {view !== 'list' && query.hasNextPage && (
         <p role="status" className="text-sm font-semibold text-[#633900]">
           Vue partielle : d’autres fiches restent à charger.
         </p>
@@ -246,9 +262,9 @@ function RecordsPane({
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
         >
-          {calendar
-            ? 'Afficher davantage de fiches dans le calendrier'
-            : 'Afficher la suite'}
+          {view === 'list'
+            ? 'Afficher la suite'
+            : `Afficher davantage de fiches dans le ${view === 'gantt' ? 'Gantt' : 'calendrier'}`}
         </Button>
       )}
     </div>
@@ -269,7 +285,9 @@ export function RecordFeedPage({
       ?.role ?? '',
   )
   const desktop = isDesktopWebLanding(useLgViewport())
-  const [mode, setMode] = useState<'list' | 'board' | 'calendar'>('list')
+  const [mode, setMode] = useState<'list' | 'board' | 'calendar' | 'gantt'>('list')
+  const view = !desktop && (mode === 'board' || mode === 'gantt') ? 'list' : mode
+  const [ganttZoom, setGanttZoom] = useState<GanttZoom>('month')
   const [mine, setMine] = useState(dayOnly || !manager)
   const [search, setSearch] = useState('')
   const [pole, setPole] = useState('')
@@ -315,7 +333,10 @@ export function RecordFeedPage({
     ...(pole ? { pole } : {}),
     ...(stage ? { stage } : {}),
   }
-  const { from, to } = monthWindow(month)
+  const dated = view === 'calendar' || view === 'gantt'
+  const { from, to } = view === 'gantt'
+    ? ganttWindow(month, ganttZoom)
+    : monthWindow(month)
   return (
     <main className="mx-auto h-full overflow-y-auto w-full max-w-[1500px] space-y-5 p-4 pb-24 text-[#17251F] md:p-7">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -405,25 +426,38 @@ export function RecordFeedPage({
               'list',
               ...(desktop ? (['board'] as const) : []),
               'calendar',
+              ...(desktop ? (['gantt'] as const) : []),
             ] as const
-          ).map((view) => (
+          ).map((presentation) => (
             <Button
-              key={view}
-              variant={mode === view ? 'default' : 'outline'}
-              onClick={() => setMode(view)}
+              key={presentation}
+              variant={view === presentation ? 'default' : 'outline'}
+              aria-pressed={view === presentation}
+              onClick={() => setMode(presentation)}
             >
-              {view === 'list'
+              {presentation === 'list'
                 ? 'Liste'
-                : view === 'board'
+                : presentation === 'board'
                   ? 'Kanban'
-                  : 'Calendrier'}
+                  : presentation === 'gantt'
+                    ? 'Gantt'
+                    : 'Calendrier'}
             </Button>
           ))}
         </div>
       </div>
       <ErrorNote error={mutation.error ?? dropError ?? options.error} />
-      {mode === 'calendar' && (
+      {dated && (
         <div className="flex flex-wrap items-center gap-3">
+          {view === 'gantt' && (
+            <Button
+              variant="outline"
+              aria-label="Période précédente"
+              onClick={() => setMonth(shiftGanttMonth(month, ganttZoom === 'quarter' ? -3 : -1))}
+            >
+              <ChevronLeft size={16} />
+            </Button>
+          )}
           <label className="text-sm">
             Mois{' '}
             <input
@@ -435,13 +469,36 @@ export function RecordFeedPage({
               }}
             />
           </label>
+          {view === 'gantt' && (
+            <>
+              <Button
+                variant="outline"
+                aria-label="Période suivante"
+                onClick={() => setMonth(shiftGanttMonth(month, ganttZoom === 'quarter' ? 3 : 1))}
+              >
+                <ChevronRight size={16} />
+              </Button>
+              <div className="flex gap-1" aria-label="Échelle du Gantt">
+                {(['month', 'quarter'] as const).map((zoom) => (
+                  <Button
+                    key={zoom}
+                    variant={ganttZoom === zoom ? 'default' : 'outline'}
+                    aria-pressed={ganttZoom === zoom}
+                    onClick={() => setGanttZoom(zoom)}
+                  >
+                    {zoom === 'month' ? '1 mois' : '3 mois'}
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
           <span className="text-sm text-[#45564A]">
             De la création à la fin · ◆ échéance · seules les fiches datées
             apparaissent.
           </span>
         </div>
       )}
-      {mode === 'board' && desktop ? (
+      {view === 'board' ? (
         <div className="grid min-w-[850px] grid-cols-4 gap-4 overflow-x-auto">
           {stages
             .filter((s) => !stage || stage === s.id)
@@ -494,11 +551,12 @@ export function RecordFeedPage({
       ) : (
         <RecordsPane
           site={establishmentId}
-          filters={mode === 'calendar' ? { ...filters, from, to } : filters}
+          filters={dated ? { ...filters, from, to } : filters}
           onOpen={open}
           onMove={move}
           month={month}
-          calendar={mode === 'calendar'}
+          view={view}
+          ganttZoom={ganttZoom}
         />
       )}
       {closing && (
