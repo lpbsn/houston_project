@@ -362,12 +362,29 @@ def signal_feed_counts(
     return counts
 
 
+def resolve_signal_alias_id(*, establishment_id: uuid.UUID, signal_id: uuid.UUID) -> uuid.UUID:
+    """Resolve retained links within one tenant; callers still apply target permissions."""
+    from houston.signals.models import SignalAlias
+
+    target_id = (
+        SignalAlias.objects.filter(
+            former_signal_id=signal_id, target__establishment_id=establishment_id
+        )
+        .values_list("target_id", flat=True)
+        .first()
+    )
+    return target_id or signal_id
+
+
 def get_signal_for_qualify_routing(
     *,
     membership: EstablishmentMembership,
     signal_id: uuid.UUID,
 ) -> Signal | None:
-    """Load a signal for qualify."""
+    """Load the current record for qualify, preserving old links after a merge."""
+    signal_id = resolve_signal_alias_id(
+        establishment_id=membership.establishment_id, signal_id=signal_id
+    )
     return (
         Signal.objects.filter(
             establishment_id=membership.establishment_id,
@@ -388,13 +405,9 @@ def get_signal_for_detail(
     membership: EstablishmentMembership,
     signal_id: uuid.UUID,
 ) -> Signal | None:
-    from houston.signals.models import SignalAlias
-
-    alias = SignalAlias.objects.filter(
-        former_signal_id=signal_id, target__establishment_id=membership.establishment_id
-    ).first()
-    if alias:
-        signal_id = alias.target_id
+    signal_id = resolve_signal_alias_id(
+        establishment_id=membership.establishment_id, signal_id=signal_id
+    )
     signal = (
         annotate_has_eligible_resolution_reviewers(
             feed_signals_for_establishment(establishment_id=membership.establishment_id),

@@ -8,10 +8,10 @@ from django.utils import timezone
 
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.selectors import action_plan_execution_feed_queryset
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import EstablishmentMembership, MembershipScope
 from houston.signals.constants import FEED_SIGNAL_STATUSES
-from houston.signals.models import Signal, SignalAlias, SignalSourceObservation
-from houston.signals.selectors import signal_read_visibility_q
+from houston.signals.models import Signal, SignalSourceObservation
+from houston.signals.selectors import resolve_signal_alias_id, signal_read_visibility_q
 
 
 def record_stage(signal):
@@ -64,9 +64,12 @@ def record_queryset(membership):
     if membership.role in ("owner", "director"):
         project_access = Q()
     else:
-        from houston.establishments.membership_scope import membership_business_unit_scope_ids
-
-        scoped_units = membership_business_unit_scope_ids(membership)
+        # Ownership alone must not retain a revoked scope through a cached membership.
+        scoped_units = MembershipScope.objects.filter(
+            membership_id=membership.id,
+            business_unit__establishment_id=membership.establishment_id,
+            business_unit__active=True,
+        ).values("business_unit_id")
         owner_scope = Q(responsible_business_unit_id__in=scoped_units) | Q(
             affected_business_unit_id__in=scoped_units
         )
@@ -95,15 +98,10 @@ def record_queryset(membership):
 
 
 def get_record(membership, record_id):
-    alias = (
-        SignalAlias.objects.filter(
-            former_signal_id=record_id,
-            target__establishment_id=membership.establishment_id,
-        )
-        .values_list("target_id", flat=True)
-        .first()
+    canonical_id = resolve_signal_alias_id(
+        establishment_id=membership.establishment_id, signal_id=record_id
     )
-    return record_queryset(membership).filter(pk=alias or record_id).first()
+    return record_queryset(membership).filter(pk=canonical_id).first()
 
 
 def linked_executions(signal):

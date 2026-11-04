@@ -19,6 +19,7 @@ from houston.signals.models import (
     CandidateSignal,
     ExpectedAction,
     Signal,
+    SignalAlias,
     SignalSourceObservation,
 )
 from houston.signals.permissions import can_qualify_routing
@@ -37,6 +38,7 @@ from houston.signals.tests.conftest import (
     login,
     signal_detail_url,
 )
+from houston.testing.auth import build_api_membership_on_establishment
 from houston.testing.factories import build_membership
 from houston.testing.taxonomy import create_v3_signal
 
@@ -510,6 +512,53 @@ def test_collision_merges_without_third_signal_or_duplicate_links(api_client):
     )
     assert retry.status_code == 200
     assert retry.json()["id"] == str(survivor.id)
+
+
+@pytest.mark.parametrize("role", ["staff", "manager"])
+def test_qualify_alias_enforces_target_permissions(api_client, role):
+    owner = build_api_membership(role="owner")
+    actor = build_api_membership_on_establishment(owner, role=role)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    target = create_v3_signal(
+        owner.establishment,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        issue_focus="alias target permissions",
+    )
+    former_id = uuid.uuid4()
+    SignalAlias.objects.create(
+        former_signal_id=former_id, target=target, original_created_at=target.created_at
+    )
+    token = login(api_client, user=actor.user)
+    response = api_client.post(
+        _qualify_url(actor.establishment_id, former_id),
+        data=_full_patch(taxonomy),
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+    target.refresh_from_db()
+    assert target.issue_focus == "alias target permissions"
+
+
+def test_qualify_alias_cannot_cross_establishments(api_client):
+    owner = build_api_membership(role="owner")
+    outsider = build_api_membership(role="owner")
+    target = _unassigned_signal(owner)
+    former_id = uuid.uuid4()
+    SignalAlias.objects.create(
+        former_signal_id=former_id, target=target, original_created_at=target.created_at
+    )
+    token = login(api_client, user=outsider.user)
+    response = api_client.post(
+        _qualify_url(outsider.establishment_id, former_id),
+        data={},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 404
 
 
 def test_qualify_deleted_merged_source_returns_404(api_client):
