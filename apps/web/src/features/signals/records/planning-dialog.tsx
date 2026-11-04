@@ -70,6 +70,7 @@ export function PlanningDialog({
               <input
                 required
                 type="date"
+                disabled={mutation.isPending}
                 className={inputClass}
                 value={start}
                 onChange={(e) => {
@@ -84,6 +85,7 @@ export function PlanningDialog({
             <input
               required
               type="date"
+              disabled={mutation.isPending}
               className={inputClass}
               value={due}
               onChange={(e) => {
@@ -115,13 +117,13 @@ export function PlanningDialog({
                 >
                   <strong className="block">{row.title}</strong>
                   <span className="mt-1 block text-[#45564A]">
-                    {dateLabel(row.before_start)} →{' '}
+                    Avant · {dateLabel(row.before_start)} →{' '}
                     {row.before_due
                       ? dateLabel(row.before_due)
                       : 'sans échéance'}
                   </span>
                   <span className="block font-medium">
-                    {dateLabel(row.start_on)} → {dateLabel(row.due_on)}
+                    Après · {dateLabel(row.start_on)} → {dateLabel(row.due_on)}
                   </span>
                 </li>
               ))}
@@ -132,6 +134,12 @@ export function PlanningDialog({
           </div>
         )}
         <ErrorNote error={mutation.error} />
+        {mutation.error && (
+          <p className="text-sm text-[#45564A]">
+            Si une fiche a changé, fermez ce panneau puis rouvrez Planifier pour
+            relire ses dates actuelles.
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <Button
             variant="outline"

@@ -36,14 +36,14 @@ export function ganttWindow(month: string, zoom: GanttZoom) {
 }
 
 export function ganttSpan(record: FieldRecord, from: string, to: string) {
-  const calendar = record.calendar
-    ? {
-        ...record.calendar,
-        start:
-          record.planned_start_on ??
-          (record.is_milestone ? record.due_on! : record.calendar.start),
-      }
-    : null
+  const calendar = record.calendar ? { ...record.calendar } : null
+  if (calendar) {
+    const plannedStart =
+      record.planned_start_on ??
+      (record.is_milestone ? record.due_on! : calendar.start)
+    // A record closed early still shows its actual closure, not a negative duration.
+    calendar.start = plannedStart > calendar.end ? calendar.end : plannedStart
+  }
   if (!record.due_on || !calendar || calendar.start > to || calendar.end < from)
     return null
   const index = (day: string) =>

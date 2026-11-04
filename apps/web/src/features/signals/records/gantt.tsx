@@ -260,6 +260,7 @@ export function RecordGantt({
                       ? record.due_on!
                       : record.calendar!.start),
                 }
+                if (calendar.start > calendar.end) calendar.start = calendar.end
                 const editable = Boolean(
                   onPlan && record.can_manage && record.stage !== 'closed',
                 )
@@ -396,12 +397,12 @@ export function RecordGantt({
                           </span>
                         )}
                       </button>
-                      {editable && !record.is_milestone && !continuesAfter && (
+                      {editable && !record.is_milestone && due !== null && (
                         <button
                           aria-label={`Ajuster l’échéance de ${record.title}`}
                           title="Glisser pour ajuster la fin"
                           className="absolute top-9 z-20 h-10 w-3 touch-none cursor-ew-resize rounded-r-lg border-2 border-white bg-[#17251F] focus-visible:outline-2 focus-visible:outline-[#075940]"
-                          style={{ left: (end + 1 + offset) * dayWidth - 13 }}
+                          style={{ left: (due! + 1 + offset) * dayWidth - 13 }}
                           onPointerDown={(e) => begin(e, record, 'resize')}
                           onPointerMove={previewMove}
                           onPointerUp={(e) => finish(e, record)}

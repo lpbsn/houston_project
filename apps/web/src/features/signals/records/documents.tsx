@@ -2,6 +2,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { FileText, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { CommentPreviewResignProvider } from '@/features/comments/components/comment-attachment-image'
 import { CommentAttachmentTiles } from '@/features/comments/components/comment-attachment-tiles'
 import { CommentAttachmentPreviewDialog } from '@/features/comments/components/comment-attachment-preview-dialog'
 import { isCommentPdfAttachment } from '@/features/comments/lib/comment-media'
@@ -68,79 +69,81 @@ export function RecordDocuments({
     } else setPreview(attachment)
   }
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 font-semibold">
-            <FileText size={18} /> Documents des plans
-          </h2>
-          <p className="mt-1 max-w-xl text-sm leading-relaxed text-[#45564A]">
-            Les photos et PDF partagés dans les plans rattachés, avec leur
-            discussion d’origine. Les règles de conservation restent celles des
-            plans.
-          </p>
-        </div>
-        <Button variant="outline" onClick={onWork}>
-          Partager dans un plan
-        </Button>
-      </div>
-      <input
-        className={`${inputClass} max-w-sm`}
-        aria-label="Rechercher un document"
-        placeholder="Nom du document…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-      <ErrorNote error={error ?? query.error} />
-      {query.isPending && <p role="status">Chargement des documents…</p>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {rows.map((file) => (
-          <article
-            key={file.id}
-            className="rounded-xl border border-[#DADFD8] bg-white p-4 text-[#17251F]"
-          >
-            <CommentAttachmentTiles attachments={[file]} onOpen={open} />
-            <p className="mt-3 text-xs text-[#45564A]">
-              {file.author_display_name} ·{' '}
-              {new Date(file.created_at).toLocaleDateString('fr-FR')}
+    <CommentPreviewResignProvider onResign={() => query.refetch()}>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 font-semibold">
+              <FileText size={18} /> Documents des plans
+            </h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-[#45564A]">
+              Les photos et PDF des plans et sous-projets accessibles, avec leur
+              discussion d’origine. Les règles de conservation restent celles
+              des plans.
             </p>
-            <button
-              className="mt-2 flex items-start gap-2 text-left text-sm font-medium text-[#075940] underline underline-offset-2"
-              onClick={() =>
-                onNavigate(
-                  buildCommentDeepLinkPath(
-                    `/e/${site}/execution/${file.execution_id}`,
-                    file.comment_id,
-                  ),
-                )
-              }
+          </div>
+          <Button variant="outline" onClick={onWork}>
+            Partager dans un plan
+          </Button>
+        </div>
+        <input
+          className={`${inputClass} max-w-sm`}
+          aria-label="Rechercher un document"
+          placeholder="Nom du document…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <ErrorNote error={error ?? query.error} />
+        {query.isPending && <p role="status">Chargement des documents…</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {rows.map((file) => (
+            <article
+              key={file.id}
+              className="rounded-xl border border-[#DADFD8] bg-white p-4 text-[#17251F]"
             >
-              <MessageSquare size={15} className="mt-0.5 shrink-0" />
-              {file.execution_title} · voir le message
-            </button>
-          </article>
-        ))}
+              <CommentAttachmentTiles attachments={[file]} onOpen={open} />
+              <p className="mt-3 text-xs text-[#45564A]">
+                {file.author_display_name} ·{' '}
+                {new Date(file.created_at).toLocaleDateString('fr-FR')}
+              </p>
+              <button
+                className="mt-2 flex items-start gap-2 text-left text-sm font-medium text-[#075940] underline underline-offset-2"
+                onClick={() =>
+                  onNavigate(
+                    buildCommentDeepLinkPath(
+                      `/e/${site}/execution/${file.execution_id}`,
+                      file.comment_id,
+                    ),
+                  )
+                }
+              >
+                <MessageSquare size={15} className="mt-0.5 shrink-0" />
+                {file.execution_title} · voir le message
+              </button>
+            </article>
+          ))}
+        </div>
+        {!rows.length && !query.isPending && !query.isError && (
+          <p className="rounded-xl border border-dashed border-[#BCCDBD] p-5 text-sm text-[#45564A]">
+            {search
+              ? 'Aucun document ne correspond à cette recherche.'
+              : 'Aucun document disponible. Ouvrez la discussion d’un plan dans Travail pour joindre une photo ou un PDF.'}
+          </p>
+        )}
+        {query.hasNextPage && (
+          <Button
+            variant="outline"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            Afficher la suite
+          </Button>
+        )}
+        <CommentAttachmentPreviewDialog
+          attachment={rows.find((file) => file.id === preview?.id) ?? null}
+          onClose={() => setPreview(null)}
+        />
       </div>
-      {!rows.length && !query.isPending && !query.isError && (
-        <p className="rounded-xl border border-dashed border-[#BCCDBD] p-5 text-sm text-[#45564A]">
-          {search
-            ? 'Aucun document ne correspond à cette recherche.'
-            : 'Aucun document disponible. Ouvrez la discussion d’un plan dans Travail pour joindre une photo ou un PDF.'}
-        </p>
-      )}
-      {query.hasNextPage && (
-        <Button
-          variant="outline"
-          disabled={query.isFetchingNextPage}
-          onClick={() => void query.fetchNextPage()}
-        >
-          Afficher la suite
-        </Button>
-      )}
-      <CommentAttachmentPreviewDialog
-        attachment={preview}
-        onClose={() => setPreview(null)}
-      />
-    </div>
+    </CommentPreviewResignProvider>
   )
 }

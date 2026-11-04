@@ -183,3 +183,15 @@ it('ne propose aucune modification pour une fiche close', () => {
     screen.queryByRole('button', { name: 'Planifier Installation' }),
   ).toBeNull()
 })
+
+it('une clôture avant le début prévu reste une durée valide', () => {
+  const early = {
+    ...record,
+    stage: 'closed' as const,
+    calendar: { ...record.calendar!, end: '2026-11-06' },
+  }
+  expect(ganttSpan(early, '2026-11-01', '2026-11-30')).toMatchObject({
+    start: 5,
+    end: 5,
+  })
+})

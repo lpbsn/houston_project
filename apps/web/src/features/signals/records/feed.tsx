@@ -360,6 +360,7 @@ export function RecordFeedPage({
   const [mine, setMine] = useState(dayOnly || !manager)
   const [search, setSearch] = useState('')
   const [projectsOnly, setProjectsOnly] = useState(false)
+  const [project, setProject] = useState('')
   const [pole, setPole] = useState('')
   const options = useQuery({
     queryKey: ['field-record-options', establishmentId],
@@ -401,6 +402,7 @@ export function RecordFeedPage({
     mine,
     q: search,
     ...(projectsOnly ? { projects: true } : {}),
+    ...(project ? { project } : {}),
     ...(pole ? { pole } : {}),
     ...(stage ? { stage } : {}),
   }
@@ -472,10 +474,29 @@ export function RecordFeedPage({
         <Button
           variant={projectsOnly ? 'default' : 'outline'}
           aria-pressed={projectsOnly}
-          onClick={() => setProjectsOnly(!projectsOnly)}
+          onClick={() => {
+            setProjectsOnly(!projectsOnly)
+            setProject('')
+          }}
         >
           Projets
         </Button>
+        <select
+          aria-label="Filtrer par projet"
+          value={project}
+          className={`${inputClass} max-w-52`}
+          onChange={(e) => {
+            setProject(e.target.value)
+            setProjectsOnly(false)
+          }}
+        >
+          <option value="">Tous les projets et fiches</option>
+          {options.data?.projects?.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

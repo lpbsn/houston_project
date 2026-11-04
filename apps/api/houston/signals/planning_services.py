@@ -59,7 +59,7 @@ def require_date_edit(record, data):
         )
     if record.is_milestone and not due:
         raise SignalValidationError("Un jalon conserve une échéance.")
-    if start or record.planning_predecessor_id:
+    if start or record.planning_predecessor_id or record.is_milestone:
         effective_start = start or (
             due
             if record.is_milestone

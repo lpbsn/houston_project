@@ -354,9 +354,7 @@ export function RecordDetailPage({
                   setPlanning({
                     record,
                     start:
-                      record.planned_start_on ??
-                      record.calendar?.start ??
-                      record.created_at.slice(0, 10),
+                      record.planned_start_on ?? record.calendar?.start ?? '',
                     due: record.due_on ?? '',
                   })
                 }

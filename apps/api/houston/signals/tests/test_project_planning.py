@@ -233,6 +233,8 @@ def test_milestones_require_date_and_single_day(context):
         plan(owner, record, 3, 4)
     with pytest.raises(SignalValidationError):
         change(owner, record, due_on=None)
+    with pytest.raises(SignalValidationError):
+        change(owner, record, due_on=timezone.localdate() - timedelta(days=1))
     assert plan(owner, record, 8, 8)["changes"]
 
 
@@ -321,3 +323,40 @@ def test_api_preview_serialization_and_project_filter(api_client, context):
     assert response.status_code == 200, response.content
     assert response.json()["applied"]
     assert record_queryset(owner).filter(is_project=True).count() == 1
+
+
+@pytest.mark.parametrize("command", ["cancel_signal", "resolve_signal"])
+def test_legacy_commands_cannot_close_project_with_open_child(context, command):
+    from houston.signals import services
+
+    owner, _ = context
+    project = make(context, is_project=True)
+    make(context, parent_project_id=project.id)
+    with pytest.raises(SignalStateError):
+        getattr(services, command)(signal=project, actor_membership=owner)
+    project.refresh_from_db()
+    assert project.status == "open"
+
+
+def test_project_documents_include_accessible_descendants_once(context):
+    from houston.signals.models import SignalExecutionLink
+
+    owner, _ = context
+    project = make(context, is_project=True)
+    sub = make(context, is_project=True, parent_project_id=project.id)
+    child = make(context, parent_project_id=sub.id)
+    execution = work(owner, child)
+    attachment = attach(owner, execution)
+    SignalExecutionLink.objects.create(signal=project, execution=execution, added_by=owner)
+    assert [row["id"] for row in record_documents(actor=owner, record=project)["items"]] == [
+        attachment.id
+    ]
+
+
+def test_date_reset_cannot_bypass_predecessor(context):
+    owner, _ = context
+    first = dated(context, "Conception", 1, 2)
+    second = dated(context, "Installation", 3, 4)
+    depend(owner, second, first)
+    with pytest.raises(SignalValidationError):
+        change(owner, second, planned_start_on=None)
