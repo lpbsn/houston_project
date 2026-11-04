@@ -1,6 +1,13 @@
 from django.urls import path
 
 from houston.signals.api.history_views import SignalHistoryView
+from houston.signals.api.record_views import (
+    FieldRecordCommandView,
+    FieldRecordDetailView,
+    FieldRecordListView,
+    FieldRecordOptionsView,
+    FieldRecordSectionView,
+)
 from houston.signals.api.views import (
     SignalCancelView,
     SignalDetailView,
@@ -18,6 +25,22 @@ from houston.signals.api.views import (
 )
 
 urlpatterns = [
+    path("establishments/<uuid:establishment_id>/records/", FieldRecordListView.as_view()),
+    path(
+        "establishments/<uuid:establishment_id>/record-options/", FieldRecordOptionsView.as_view()
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/records/<uuid:record_id>/",
+        FieldRecordDetailView.as_view(),
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/records/<uuid:record_id>/commands/",
+        FieldRecordCommandView.as_view(),
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/records/<uuid:record_id>/sections/",
+        FieldRecordSectionView.as_view(),
+    ),
     path(
         "establishments/<uuid:establishment_id>/signal-feed/",
         SignalFeedView.as_view(),

@@ -146,7 +146,9 @@ def sync_signal_after_execution_change(
     from houston.signals.services import _lock_signals_by_uuid_order
 
     signal = _lock_signals_by_uuid_order(signal)[0]
-    linked = ActionPlanExecution.objects.filter(source_signal_id=signal.id)
+    from houston.signals.record_selectors import linked_executions
+
+    linked = linked_executions(signal)
     if linked.filter(status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES).exists():
         return signal
 
@@ -165,7 +167,8 @@ def sync_signal_after_execution_change(
         if from_status in CANCEL_RESOLVE_SIGNAL_STATUSES:
             now = timezone.now()
             signal.status = Signal.Status.OPEN
-            update_fields = ["status", "last_activity_at", "updated_at"]
+            signal.review_requested_at = None
+            update_fields = ["status", "review_requested_at", "last_activity_at", "updated_at"]
             # Returning from in progress does not restore a pin. An already open
             # pin stays in place.
             if from_status != Signal.Status.OPEN:
@@ -196,11 +199,19 @@ def sync_signal_after_execution_change(
         return signal
 
     if linked.exists() and linked.filter(status=EXECUTION_STATUS_DONE).exists():
-        from houston.signals.constants import CANCEL_RESOLVE_SIGNAL_STATUSES
-        from houston.signals.services import resolve_signal_from_execution_sync
+        if signal.status in (
+            Signal.Status.OPEN,
+            Signal.Status.INTERESTING,
+            Signal.Status.IN_PROGRESS,
+        ):
+            if signal.review_requested_at is None:
+                from houston.signals.record_services import _event
 
-        if signal.status in CANCEL_RESOLVE_SIGNAL_STATUSES:
-            return resolve_signal_from_execution_sync(signal=signal)
+                signal.status = Signal.Status.IN_PROGRESS
+                signal.review_requested_at = timezone.now()
+                signal.save(update_fields=["status", "review_requested_at", "updated_at"])
+                _event(signal, actor_membership, "review_requested", {"origin": "work_finished"})
+
     return signal
 
 
@@ -209,14 +220,18 @@ def _sync_linked_signal_after_execution_change(
     execution: ActionPlanExecution,
     actor_membership: EstablishmentMembership | None = None,
 ) -> None:
-    if execution.source_signal_id is None:
-        return
-    signal = Signal.objects.get(pk=execution.source_signal_id)
-    sync_signal_after_execution_change(
-        signal=signal,
-        actor_membership=actor_membership,
-        triggering_execution=execution,
-    )
+    from django.db.models import Q
+
+    for signal in (
+        Signal.objects.filter(Q(pk=execution.source_signal_id) | Q(work_links__execution=execution))
+        .distinct()
+        .order_by("id")
+    ):
+        sync_signal_after_execution_change(
+            signal=signal,
+            actor_membership=actor_membership,
+            triggering_execution=execution,
+        )
 
 
 def _lock_source_signal_created_from_set_if_any(*, execution_id: uuid.UUID) -> None:
@@ -226,21 +241,28 @@ def _lock_source_signal_created_from_set_if_any(*, execution_id: uuid.UUID) -> N
     - Signal lifecycle transitions (which lock CREATED_FROM siblings)
     - Action plan execution transitions (which hold row locks on executions)
     """
-    source_signal_id = (
-        ActionPlanExecution.objects.filter(id=execution_id)
-        .values_list("source_signal_id", flat=True)
-        .first()
-    )
-    if source_signal_id is None:
+    from django.db.models import Q
+
+    from houston.signals.models import SignalSourceObservation
+
+    execution = ActionPlanExecution.objects.filter(pk=execution_id).first()
+    if execution is None:
         return
-
-    signal = Signal.objects.filter(id=source_signal_id).first()
-    if signal is None:
-        return
-
-    from houston.signals.services import _lock_signal_created_from_set_or_self
-
-    _lock_signal_created_from_set_or_self(signal=signal)
+    linked_ids = Signal.objects.filter(
+        Q(pk=execution.source_signal_id) | Q(work_links__execution_id=execution_id)
+    ).values("id")
+    observations = SignalSourceObservation.objects.filter(
+        signal_id__in=linked_ids, link_type="created_from"
+    ).values("observation_id")
+    # Acquire the entire union once, not successively overlapping sibling sets.
+    ids = Signal.objects.filter(
+        Q(pk__in=linked_ids)
+        | Q(
+            source_observation_links__observation_id__in=observations,
+            source_observation_links__link_type="created_from",
+        )
+    ).values("id")
+    list(Signal.objects.filter(pk__in=ids).order_by("id").select_for_update(of=("self",)))
 
 
 def _cancel_linked_active_executions_for_signal_resolve(
@@ -312,44 +334,28 @@ def _reopen_linked_signal_after_execution_reopen(
     execution: ActionPlanExecution,
     actor_membership: EstablishmentMembership | None = None,
 ) -> None:
-    if execution.source_signal_id is None:
-        return
-    signal = Signal.objects.get(pk=execution.source_signal_id)
-    from_status = signal.status
-    if from_status != Signal.Status.RESOLVED:
-        return
-    from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
-    from houston.signals.lifecycle_events import record_signal_lifecycle_event
-    from houston.signals.services import _schedule_signal_invalidation
+    from django.db.models import Q
 
-    now = timezone.now()
-    signal.status = Signal.Status.IN_PROGRESS
-    signal.resolved_by_membership = None
-    signal.resolved_at = None
-    signal.resolution_origin = None
-    signal.last_activity_at = max(signal.last_activity_at, now)
-    signal.save(
-        update_fields=[
-            "status",
-            "resolved_by_membership",
-            "resolved_at",
-            "resolution_origin",
-            "last_activity_at",
-            "updated_at",
-        ]
+    from houston.signals.record_services import _event
+
+    records = (
+        Signal.objects.filter(
+            Q(pk=execution.source_signal_id) | Q(work_links__execution=execution),
+            merged_into__isnull=True,
+        )
+        .distinct()
+        .order_by("id")
     )
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
-        occurred_at=now,
-        actor_membership=actor_membership,
-        metadata_safe={
-            "from_status": from_status,
-            "to_status": Signal.Status.IN_PROGRESS,
-            "action_plan_execution_id": execution.id,
-        },
-    )
-    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+    for signal in records:
+        # Reopening work must not override a manager's explicit closure decision.
+        # The fiche itself is reopened explicitly, with its collision checks.
+        if signal.status in ("resolved", "canceled"):
+            raise ActionPlanValidationError("Rouvrez d’abord les fiches closes liées à ce travail.")
+        if signal.review_requested_at is not None:
+            signal.review_requested_at = None
+            signal.status = "in_progress"
+            signal.save(update_fields=["review_requested_at", "status", "updated_at"])
+            _event(signal, actor_membership, "taken_in_charge", {"origin": "work_reopened"})
 
 
 def _validate_linked_signal_active(*, signal: Signal) -> None:
@@ -1234,6 +1240,9 @@ def _create_execution_record(
         started_by_membership=started_by_membership,
         last_activity_at=now,
     )
+    from houston.signals.record_intake import attach_execution
+
+    attach_execution(execution)
     if source_signal_id is not None:
         from houston.signals.services import record_first_action_plan_associated_at
 
@@ -2314,6 +2323,9 @@ def mark_execution_task_done(
     if task_execution.status != TASK_STATUS_PENDING:
         raise ActionPlanValidationError("Task cannot be marked done in its current state.")
 
+    from houston.action_plans.dependencies import require_prerequisite_done
+
+    require_prerequisite_done(task_execution)
     now = timezone.now()
     task_execution.status = TASK_STATUS_DONE
     task_execution.completed_at = now
@@ -2345,6 +2357,8 @@ def mark_execution_task_pending(
     if task_execution.status != TASK_STATUS_DONE:
         raise ActionPlanValidationError("Task cannot be marked pending in its current state.")
 
+    if task_execution.dependent_tasks.exclude(status="pending").exists():
+        raise ActionPlanValidationError("Rouvrez d’abord les tâches qui dépendent de celle-ci.")
     now = timezone.now()
     task_execution.status = TASK_STATUS_PENDING
     task_execution.completed_at = None

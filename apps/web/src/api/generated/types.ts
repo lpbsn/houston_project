@@ -2569,6 +2569,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/record-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_record_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["field_records_list"];
+        put?: never;
+        post: operations["v1_establishments_records_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_records_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["v1_establishments_records_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/commands/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_records_commands_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/records/{record_id}/sections/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_records_sections_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/signal-feed/": {
         parameters: {
             query?: never;
@@ -3956,6 +4036,8 @@ export interface components {
         ActionPlanTaskExecution: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            depends_on_id: string | null;
             task: string;
             description: string;
             /** Format: date-time */
@@ -5159,6 +5241,23 @@ export interface components {
         ClientRequirementsResponse: {
             android_min_supported_version_code: number;
         };
+        /**
+         * @description * `resolved` - resolved
+         *     * `acknowledged` - acknowledged
+         *     * `abandoned` - abandoned
+         * @enum {string}
+         */
+        ClosureReasonEnum: "resolved" | "acknowledged" | "abandoned";
+        /**
+         * @description * `participants` - participants
+         *     * `work` - work
+         *     * `link_work` - link_work
+         *     * `dependency` - dependency
+         *     * `follow` - follow
+         *     * `link_objective` - link_objective
+         * @enum {string}
+         */
+        CommandEnum: "participants" | "work" | "link_work" | "dependency" | "follow" | "link_objective";
         CommentAttachment: {
             /** Format: uuid */
             id: string;
@@ -5621,6 +5720,99 @@ export interface components {
             next_cursor: string | null;
             has_more: boolean;
             undated_count?: number | null;
+        };
+        FieldRecord: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            summary: string;
+            kind: components["schemas"]["FieldRecordKindEnum"];
+            stage: components["schemas"]["StageEnum"];
+            closure_reason: string;
+            pole: string;
+            /** Format: uuid */
+            pole_id: string | null;
+            color_index: number | null;
+            is_pinned: boolean;
+            owner: components["schemas"]["RecordPerson"] | null;
+            waiting_for: components["schemas"]["RecordPerson"] | null;
+            /** Format: date */
+            due_on: string | null;
+            blocked_reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            observation_count: number;
+            calendar: components["schemas"]["RecordCalendar"] | null;
+            can_manage: boolean;
+            can_progress: boolean;
+            can_use_brain: boolean;
+            participants?: components["schemas"]["RecordPerson"][];
+        };
+        FieldRecordCommand: {
+            /** Format: date-time */
+            expected_updated_at: string;
+            command: components["schemas"]["CommandEnum"];
+            membership_ids?: string[];
+            title?: string;
+            tasks?: string[];
+            /** Format: uuid */
+            assignee_id?: string | null;
+            /** Format: date */
+            due_on?: string | null;
+            quick?: boolean;
+            /** Format: uuid */
+            execution_id?: string;
+            /** Format: uuid */
+            task_id?: string;
+            /** Format: uuid */
+            depends_on_id?: string | null;
+            enabled?: boolean;
+            /** Format: uuid */
+            objective_id?: string;
+        };
+        FieldRecordCreate: {
+            title: string;
+            /** Format: uuid */
+            business_unit_id: string;
+            /** Format: uuid */
+            owner_membership_id?: string | null;
+            /** Format: date */
+            due_on?: string | null;
+        };
+        /**
+         * @description * `observation` - observation
+         *     * `project` - project
+         *     * `intake` - intake
+         * @enum {string}
+         */
+        FieldRecordKindEnum: "observation" | "project" | "intake";
+        FieldRecordOptions: {
+            poles: components["schemas"]["RecordPerson"][];
+            members: components["schemas"]["RecordPerson"][];
+            more_members: boolean;
+            objectives: components["schemas"]["RecordPerson"][];
+            executions: components["schemas"]["RecordPerson"][];
+        };
+        FieldRecordPage: {
+            items: components["schemas"]["FieldRecord"][];
+            next_offset: number | null;
+            timezone: string;
+        };
+        FieldRecordSection: {
+            items: components["schemas"]["FieldRecordSectionItem"][];
+            next_offset: number | null;
+        };
+        FieldRecordSectionItem: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            text: string;
+            author: string;
+            /** Format: date-time */
+            date: string | null;
+            status: string;
         };
         GamificationCurrentSummary: {
             /** Format: uuid */
@@ -6141,6 +6333,21 @@ export interface components {
             role?: components["schemas"]["EstablishmentNonOwnerMembershipRoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
         };
+        PatchedFieldRecordUpdate: {
+            /** Format: date-time */
+            expected_updated_at?: string;
+            title?: string;
+            structured_summary?: string;
+            /** Format: uuid */
+            owner_membership_id?: string | null;
+            /** Format: uuid */
+            waiting_for_membership_id?: string | null;
+            /** Format: date */
+            due_on?: string | null;
+            blocked_reason?: string;
+            stage?: components["schemas"]["StageEnum"];
+            closure_reason?: components["schemas"]["ClosureReasonEnum"];
+        };
         PatchedMembershipUpdateRequest: {
             role?: components["schemas"]["EstablishmentMembershipRoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
@@ -6426,6 +6633,20 @@ export interface components {
         };
         /** @enum {string} */
         ReasonEnum: "wrong_pattern";
+        RecordCalendar: {
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: string;
+            /** Format: date */
+            due: string;
+            overdue: boolean;
+        };
+        RecordPerson: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         RefreshRequest: {
             refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             refresh_token?: string;
@@ -6822,6 +7043,14 @@ export interface components {
             reporter_display_name: string;
             media_count: number;
         };
+        /**
+         * @description * `todo` - todo
+         *     * `doing` - doing
+         *     * `review` - review
+         *     * `closed` - closed
+         * @enum {string}
+         */
+        StageEnum: "todo" | "doing" | "review" | "closed";
         /**
          * @description * `` -
          *     * `eq` - eq
@@ -15479,6 +15708,189 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_record_options_retrieve: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecordOptions"];
+                };
+            };
+        };
+    };
+    field_records_list: {
+        parameters: {
+            query?: {
+                day?: boolean;
+                from?: string;
+                mine?: boolean;
+                offset?: number;
+                pole?: string;
+                q?: string;
+                stage?: "closed" | "doing" | "review" | "todo";
+                to?: string;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecordPage"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldRecordCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["FieldRecordCreate"];
+                "multipart/form-data": components["schemas"]["FieldRecordCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecord"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecord"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFieldRecordUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFieldRecordUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedFieldRecordUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecord"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_commands_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldRecordCommand"];
+                "application/x-www-form-urlencoded": components["schemas"]["FieldRecordCommand"];
+                "multipart/form-data": components["schemas"]["FieldRecordCommand"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecord"];
+                };
+            };
+        };
+    };
+    v1_establishments_records_sections_retrieve: {
+        parameters: {
+            query: {
+                offset?: number;
+                section: "history" | "objectives" | "sources" | "work";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldRecordSection"];
                 };
             };
         };

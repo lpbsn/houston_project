@@ -126,7 +126,7 @@ describe('shared navigation', () => {
 
     expect(itemIds).toEqual([
       'observations',
-      'execution',
+      'my-day',
       'new-observation',
       'chat',
       'general',
@@ -148,7 +148,7 @@ describe('shared navigation', () => {
     expect(navigation.primaryAction?.path).toBe('/reporting')
     expect(navigation.navigationItems.map((item) => item.id)).toEqual([
       'observations',
-      'execution',
+      'my-day',
       'chat',
       'analytics',
       'general',

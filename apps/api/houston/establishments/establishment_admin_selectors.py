@@ -127,7 +127,9 @@ def derive_operational_config_status(*, counts: dict[str, int]) -> str:
 
 
 def _establishment_admin_metrics(*, establishment_id, moment=None) -> dict[str, Any]:
-    signal_counts = Signal.objects.filter(establishment_id=establishment_id).aggregate(
+    signal_counts = Signal.objects.filter(
+        establishment_id=establishment_id, record_kind="observation", merged_into__isnull=True
+    ).aggregate(
         signals_open=Count("id", filter=Q(status=Signal.Status.OPEN)),
         signals_in_progress=Count("id", filter=Q(status=Signal.Status.IN_PROGRESS)),
     )

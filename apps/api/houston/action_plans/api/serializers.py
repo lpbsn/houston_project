@@ -547,6 +547,7 @@ class ActionPlanInvolvedPoleSerializer(serializers.Serializer):
 
 class ActionPlanTaskExecutionSerializer(serializers.Serializer):
     id = serializers.UUIDField()
+    depends_on_id = serializers.UUIDField(allow_null=True)
     task = serializers.CharField()
     description = serializers.CharField()
     deadline_at = serializers.DateTimeField(allow_null=True)
@@ -791,6 +792,7 @@ def serialize_task_execution(
     return {
         "id": task_execution.id,
         "task": task_execution.task,
+        "depends_on_id": task_execution.depends_on_id,
         "description": task_execution.description,
         "deadline_at": task_execution.deadline_at,
         "assigned_membership_id": task_execution.assigned_membership_id,

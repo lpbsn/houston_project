@@ -35,7 +35,9 @@ class AnalyticsReadScope:
     execution_scope_q: Q
 
     def readable_signals_queryset(self) -> QuerySet[Signal]:
-        return Signal.objects.filter(self.signal_scope_q).distinct()
+        return Signal.objects.filter(
+            self.signal_scope_q, record_kind="observation", merged_into__isnull=True
+        ).distinct()
 
     def readable_executions_queryset(self) -> QuerySet[ActionPlanExecution]:
         return ActionPlanExecution.objects.filter(self.execution_scope_q).distinct()
@@ -53,7 +55,9 @@ class AnalyticsReadScope:
         return self._signals_for_status_q(resolution_time_signal_q())
 
     def _signals_for_status_q(self, status_q: Q) -> QuerySet[Signal]:
-        return Signal.objects.filter(self.signal_scope_q & status_q).distinct()
+        return Signal.objects.filter(
+            self.signal_scope_q & status_q, record_kind="observation", merged_into__isnull=True
+        ).distinct()
 
 
 def resolve_analytics_read_scope(

@@ -105,6 +105,7 @@ def is_observation_media_preview_authorized(
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
         signal__establishment_id=establishment_id,
         signal__status__in=FEED_SIGNAL_STATUSES,
+        signal__record_kind="observation",
     ).exists()
 
 

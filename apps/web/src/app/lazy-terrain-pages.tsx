@@ -147,3 +147,10 @@ export const LazyChatRealtimeProvider = lazy(() =>
 export const LazyMyDayPage = lazy(() =>
   import('@/features/my-day/my-day-page').then((module) => ({ default: module.MyDayPage })),
 )
+
+export const LazyRecordFeedPage = lazy(() =>
+  import('@/features/signals/records/feed').then(module => ({ default: module.RecordFeedPage })),
+)
+export const LazyRecordDetailPage = lazy(() =>
+  import('@/features/signals/records/detail').then(module => ({ default: module.RecordDetailPage })),
+)

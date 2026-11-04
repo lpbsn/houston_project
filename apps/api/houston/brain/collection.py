@@ -26,6 +26,7 @@ from houston.brain.errors import BrainWorkError, CaptureVolumeExceeded
 from houston.brain.mentions import first_period_mention
 from houston.brain.models import BrainExtraction, BrainObjective, BrainReporting
 from houston.brain.objectives import revision_overlaps_period
+from houston.brain.record_context import record_context, record_prefetches
 from houston.establishments.models import EstablishmentActivityDescription
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
@@ -175,6 +176,7 @@ def collect_capture(
         ),
         ceiling,
         SEARCH_SIGNAL_OVERLAP,
+        capture_at,
     )
     late = _load_signals(
         run,
@@ -182,6 +184,7 @@ def collect_capture(
         Q(created_at__gt=period.end, created_at__lte=capture_at),
         ceiling,
         SEARCH_LATE_DECLARATIONS,
+        capture_at,
     )
     n1_signals = _load_signals(
         run,
@@ -193,6 +196,7 @@ def collect_capture(
         ),
         ceiling,
         SEARCH_N1,
+        capture_at,
     )
     signal_ids = [row.id for row in (*overlap, *late, *n1_signals)]
     events = _signal_events(run, establishment.id, signal_ids, capture_at)
@@ -452,17 +456,21 @@ def _base_criteria(
     }
 
 
-def _load_signals(run, establishment_id, predicate: Q, ceiling: int, category: str) -> list[Signal]:
+def _load_signals(
+    run, establishment_id, predicate: Q, ceiling: int, category: str, capture_at
+) -> list[Signal]:
     def query():
         return list(
             Signal.objects.filter(establishment_id=establishment_id)
             .filter(predicate)
             .select_related(
+                "owner_membership__user",
                 "affected_business_unit",
                 "responsible_business_unit",
                 "activity_subject",
                 "operational_unit",
             )
+            .prefetch_related(*record_prefetches(capture_at))
             .order_by("created_at", "id")[: ceiling + 1]
         )
 
@@ -667,6 +675,7 @@ def _signal_item(
     ]
     payload = {
         "source_id": str(signal.id),
+        "field_record": record_context(signal),
         "recorded_at": _iso(signal.created_at),
         "title": signal.title,
         "structured_summary": signal.structured_summary,
@@ -856,8 +865,9 @@ def _plan_items(run, establishment_id, signal_ids, ceiling: int):
         lambda: list(
             ActionPlanExecution.objects.filter(
                 establishment_id=establishment_id,
-                source_signal_id__in=signal_ids,
             )
+            .filter(Q(source_signal_id__in=signal_ids) | Q(record_links__signal_id__in=signal_ids))
+            .distinct()
             .order_by("created_at", "id")
             .values(
                 "id",
@@ -890,7 +900,8 @@ def _plan_items(run, establishment_id, signal_ids, ceiling: int):
             },
         )
         bucket["execution_ids"].append(str(row["id"]))
-        bucket["source_signal_ids"].append(str(row["source_signal_id"]))
+        if row["source_signal_id"]:
+            bucket["source_signal_ids"].append(str(row["source_signal_id"]))
     items = []
     for key, bucket in grouped.items():
         kind, source = key

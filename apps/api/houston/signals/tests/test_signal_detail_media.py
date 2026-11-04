@@ -138,7 +138,7 @@ def test_signal_detail_returns_created_from_media_items(api_client):
     assert thumbnail["Cache-Control"] == "private, max-age=60, must-revalidate"
 
 
-def test_aggregated_observation_media_deleted_and_not_in_detail(api_client):
+def test_aggregated_observation_media_retained_separately_from_primary_detail(api_client):
     membership = build_api_membership()
     created_obs, token = _create_observation_with_photo(
         api_client=api_client,
@@ -154,7 +154,7 @@ def test_aggregated_observation_media_deleted_and_not_in_detail(api_client):
 
     aggregate_candidate_into_signal(signal=signal, observation=aggregated_obs)
 
-    assert not ObservationMedia.objects.filter(observation_id=aggregated_obs.id).exists()
+    assert ObservationMedia.objects.filter(observation_id=aggregated_obs.id).exists()
     storage = get_private_media_storage()
     for media in ObservationMedia.objects.filter(observation_id=created_obs.id):
         assert storage.exists(media.storage_key)
@@ -171,7 +171,7 @@ def test_aggregated_observation_media_deleted_and_not_in_detail(api_client):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_resolve_deletes_created_from_media(api_client):
+def test_resolve_retains_created_from_media_for_followup(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     observation, token = _create_observation_with_photo(
         api_client=api_client,
@@ -192,17 +192,17 @@ def test_resolve_deletes_created_from_media(api_client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == Signal.Status.RESOLVED
-    assert body["media_count"] == 0
-    assert body["media_items"] == []
-    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+    assert body["media_count"] == 1
+    assert len(body["media_items"]) == 1
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
     upload = TemporaryUpload.objects.get(id=upload_id)
-    assert upload.status == TemporaryUpload.Status.DELETED
+    assert upload.status != TemporaryUpload.Status.DELETED
     storage = get_private_media_storage()
-    assert not storage.exists(storage_key)
-    assert not storage.exists(thumbnail_key)
+    assert storage.exists(storage_key)
+    assert storage.exists(thumbnail_key)
 
 
-def test_cancel_deletes_created_from_media(api_client):
+def test_cancel_retains_created_from_media(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     observation, token = _create_observation_with_photo(
         api_client=api_client,
@@ -217,7 +217,7 @@ def test_cancel_deletes_created_from_media(api_client):
     )
 
     assert response.status_code == 200
-    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
 
 
 def test_preview_rejects_invalid_token(api_client):
@@ -308,7 +308,7 @@ def test_preview_404_expired_token(api_client):
         assert Client().get(preview_url).status_code == 404
 
 
-def test_golden_split_keeps_media_until_last_active_signal_resolved(api_client):
+def test_golden_split_retains_media_after_both_resolutions(api_client):
     membership = build_api_membership()
     taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
     observation, token = _create_observation_with_photo(
@@ -336,7 +336,7 @@ def test_golden_split_keeps_media_until_last_active_signal_resolved(api_client):
     assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
 
     resolve_signal(signal=second)
-    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
 
 
 def test_feed_media_count_uses_created_from_not_aggregated(api_client):
@@ -390,7 +390,7 @@ def test_aggregate_keeps_media_when_observation_has_active_created_from(api_clie
     assert body["media_items"][0]["observation_id"] == str(observation.id)
 
 
-def test_shared_created_from_resolve_first_keeps_media_second_deletes(api_client):
+def test_shared_created_from_keeps_media_after_both_resolutions(api_client):
     membership = build_api_membership()
     observation, _ = _create_observation_with_photo(
         api_client=api_client,
@@ -405,11 +405,11 @@ def test_shared_created_from_resolve_first_keeps_media_second_deletes(api_client
     assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
 
     resolve_signal(signal=second_signal)
-    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
 
 
 @pytest.mark.django_db(transaction=True)
-def test_concurrent_resolve_shared_created_from_deletes_media(api_client):
+def test_concurrent_resolve_shared_created_from_retains_media(api_client):
     membership = build_api_membership()
     observation, _ = _create_observation_with_photo(
         api_client=api_client,
@@ -432,7 +432,7 @@ def test_concurrent_resolve_shared_created_from_deletes_media(api_client):
     second_signal.refresh_from_db()
     assert first_signal.status == Signal.Status.RESOLVED
     assert second_signal.status == Signal.Status.RESOLVED
-    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
 
 
 def test_thumbnail_preview_404_when_missing_does_not_create_file(api_client):

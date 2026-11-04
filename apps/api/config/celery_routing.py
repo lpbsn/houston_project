@@ -30,10 +30,10 @@ CELERY_TASK_QUEUES = (
 )
 
 CELERY_TASK_ROUTES = {
+    "houston.signals.tasks.deliver_record_event_task": {"queue": QUEUE_OPERATIONAL},
+    "houston.signals.tasks.record_followup_task": {"queue": QUEUE_OPERATIONAL},
     "houston.signals.tasks.process_observation_task": {"queue": QUEUE_AI_INTERACTIVE},
-    "houston.signals.tasks.recover_stuck_observation_processing_task": {
-        "queue": QUEUE_OPERATIONAL
-    },
+    "houston.signals.tasks.recover_stuck_observation_processing_task": {"queue": QUEUE_OPERATIONAL},
     "houston.analytics.tasks.classify_signal_pattern_task": {"queue": QUEUE_AI_BACKGROUND},
     "houston.analytics.tasks.recover_due_signal_pattern_classifications_task": {
         "queue": QUEUE_OPERATIONAL
@@ -61,20 +61,14 @@ CELERY_TASK_ROUTES = {
     "houston.chat.tasks.purge_chat_messages_task": {"queue": QUEUE_MAINTENANCE},
     "houston.chat.tasks.cleanup_chat_upload_orphans_task": {"queue": QUEUE_MAINTENANCE},
     "houston.chat.tasks.generate_chat_upload_thumbnail_task": {"queue": QUEUE_MAINTENANCE},
-    "houston.comments.tasks.cleanup_action_plan_comment_media_task": {
-        "queue": QUEUE_MAINTENANCE
-    },
+    "houston.comments.tasks.cleanup_action_plan_comment_media_task": {"queue": QUEUE_MAINTENANCE},
     "houston.comments.tasks.generate_action_plan_comment_upload_thumbnail_task": {
         "queue": QUEUE_MAINTENANCE
     },
     "houston.uploads.tasks.cleanup_expired_uploads_task": {"queue": QUEUE_MAINTENANCE},
-    "houston.brain.tasks.cleanup_abandoned_reporting_drafts_task": {
-        "queue": QUEUE_MAINTENANCE
-    },
+    "houston.brain.tasks.cleanup_abandoned_reporting_drafts_task": {"queue": QUEUE_MAINTENANCE},
     "houston.brain.tasks.run_brain_analysis_task": {"queue": QUEUE_BRAIN_ANALYSIS},
     "houston.brain.tasks.run_brain_follow_up_task": {"queue": QUEUE_BRAIN_ANALYSIS},
     "houston.brain.tasks.recover_brain_analysis_task": {"queue": QUEUE_OPERATIONAL},
-    "houston.gamification.tasks.rollover_gamification_seasons_task": {
-        "queue": QUEUE_MAINTENANCE
-    },
+    "houston.gamification.tasks.rollover_gamification_seasons_task": {"queue": QUEUE_MAINTENANCE},
 }

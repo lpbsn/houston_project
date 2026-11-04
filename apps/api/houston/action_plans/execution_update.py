@@ -795,6 +795,17 @@ def _apply_pending_task_writes(
                 )
         return
 
+    # Reordering keeps task identities. Temporarily detach dependency FKs inside the
+    # transaction because the existing writer recreates pending rows to swap positions.
+    retained_ids = {spec["id"] for spec in final_pending_specs}
+    removed_ids = set(pending_by_id) - retained_ids
+    dependents = ActionPlanExecutionTask.objects.filter(depends_on_id__in=pending_by_id)
+    if dependents.filter(depends_on_id__in=removed_ids).exclude(pk__in=removed_ids).exists():
+        raise ActionPlanValidationError(
+            "Retirez d’abord la dépendance avant de supprimer une tâche préalable."
+        )
+    dependencies = list(dependents.exclude(pk__in=removed_ids).values_list("id", "depends_on_id"))
+    dependents.update(depends_on=None)
     ActionPlanExecutionTask.objects.filter(
         action_plan_execution_id=execution.id,
         status=TASK_STATUS_PENDING,
@@ -850,6 +861,13 @@ def _apply_pending_task_writes(
         )
     if to_create:
         ActionPlanExecutionTask.objects.bulk_create(to_create)
+        for task in to_create:
+            original = pending_by_id.get(task.id)
+            if original:
+                task.created_at = original.created_at
+        ActionPlanExecutionTask.objects.bulk_update(to_create, ["created_at"])
+    for task_id, predecessor_id in dependencies:
+        ActionPlanExecutionTask.objects.filter(pk=task_id).update(depends_on_id=predecessor_id)
 
 
 def _sync_execution_teams_after_update(*, execution: ActionPlanExecution) -> None:

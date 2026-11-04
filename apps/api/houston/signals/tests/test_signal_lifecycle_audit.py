@@ -23,7 +23,6 @@ from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
     SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-    SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
     SIGNAL_RESOLUTION_ORIGIN_MANUAL,
     SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
 )
@@ -97,7 +96,7 @@ def test_manual_resolve_sets_actor_origin_and_lifecycle_event():
     assert events[0].metadata_safe["resolution_origin"] == SIGNAL_RESOLUTION_ORIGIN_MANUAL
 
 
-def test_action_plan_resolve_null_actor_and_origin():
+def test_action_plan_completion_requests_review_without_claiming_resolution():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, title="AP resolve audit")
     execution = _create_linked_execution(owner_membership=membership, signal=signal)
@@ -110,21 +109,14 @@ def test_action_plan_resolve_null_actor_and_origin():
     )
     signal.refresh_from_db()
 
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
     assert signal.resolved_by_membership_id is None
-    assert signal.resolution_origin == SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN
-    resolved_events = [
-        e
-        for e in _lifecycle_events(signal=signal)
-        if e.event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED
-    ]
-    assert len(resolved_events) == 1
-    assert resolved_events[0].actor_membership_id is None
-    assert resolved_events[0].occurred_at == signal.resolved_at
-    assert (
-        resolved_events[0].metadata_safe["resolution_origin"]
-        == SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN
-    )
+    assert not SignalLifecycleEvent.objects.filter(
+        signal=signal, event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED
+    ).exists()
+    assert signal.record_events.filter(kind="review_requested").count() == 1
 
 
 def test_approve_resolution_request_sets_origin_without_rr_lifecycle_events():
@@ -215,7 +207,7 @@ def test_mark_interesting_and_cancel_record_actor_fields_and_events():
     assert events[-1].occurred_at == canceled.canceled_at
 
 
-def test_merge_hard_deletes_source():
+def test_merge_preserves_source_history():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     source = create_minimal_v3_signal(membership, title="Merge source")
     target = create_minimal_v3_signal(membership, title="Merge target")
@@ -228,11 +220,11 @@ def test_merge_hard_deletes_source():
         candidate_expected_action=None,
     )
 
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into_id=target.id).exists()
     assert Signal.objects.filter(id=target.id).exists()
 
 
-def test_merge_hard_deletes_source_transfers_or_cleans_related_rows():
+def test_merge_preserves_source_history_transfers_or_cleans_related_rows():
     from houston.analytics.models import PatternIssueReport
     from houston.analytics.services import create_operational_pattern
     from houston.comments.models import Comment
@@ -298,10 +290,11 @@ def test_merge_hard_deletes_source_transfers_or_cleans_related_rows():
         candidate_expected_action=None,
     )
 
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into_id=target.id).exists()
     comment.refresh_from_db()
     assert comment.signal_id == target_id
-    assert not Notification.objects.filter(id=notification.id).exists()
+    notification.refresh_from_db()
+    assert notification.subject_id == target_id
     tx.refresh_from_db()
     assert tx.source_id == str(target_id)
     assert tx.metadata_safe["signal_id"] == str(target_id)
@@ -337,6 +330,11 @@ def test_done_execution_cannot_reopen_keeps_resolved_signal_fields():
         execution_id=execution.id,
         actor_membership=membership,
     )
+    signal.refresh_from_db()
+    from houston.signals.record_services import update_record
+
+    update_record(actor=membership, record_id=signal.id, expected_updated_at=signal.updated_at,
+                  stage="closed", closure_reason="resolved")
     signal.refresh_from_db()
     first_resolved_at = signal.resolved_at
     assert first_resolved_at is not None
@@ -493,6 +491,16 @@ def test_append_only_resolve_keeps_prior_event_intact_after_failed_done_reopen()
         actor_membership=membership,
     )
     signal.refresh_from_db()
+    from houston.signals.record_services import update_record
+
+    update_record(
+        actor=membership,
+        record_id=signal.id,
+        expected_updated_at=signal.updated_at,
+        stage="closed",
+        closure_reason="resolved",
+    )
+    signal.refresh_from_db()
     first = SignalLifecycleEvent.objects.get(
         signal=signal,
         event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
@@ -514,7 +522,7 @@ def test_append_only_resolve_keeps_prior_event_intact_after_failed_done_reopen()
     prior = SignalLifecycleEvent.objects.get(id=first_id)
     assert prior.occurred_at == first_occurred_at
     assert prior.metadata_safe == first_metadata
-    assert prior.actor_membership_id is None
+    assert prior.actor_membership_id == membership.id
 
 
 def test_cancel_last_linked_execution_emits_moved_open_with_manual_actor():

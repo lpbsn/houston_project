@@ -38,6 +38,7 @@ from houston.brain.models import (
     BrainObjectiveRevision,
     BrainReporting,
 )
+from houston.brain.record_context import record_context, record_prefetches
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
@@ -153,10 +154,12 @@ def _signals(run, *, establishment_id, capture_at, ceiling: int):
         lambda: list(
             Signal.objects.filter(predicate)
             .select_related(
+                "owner_membership__user",
                 "affected_business_unit",
                 "responsible_business_unit",
                 "activity_subject",
             )
+            .prefetch_related(*record_prefetches(capture_at))
             .order_by("-created_at", "-id")[:ceiling]
         )
     )
@@ -174,6 +177,7 @@ def _signals(run, *, establishment_id, capture_at, ceiling: int):
                 "copie",
                 {
                     "source_id": str(signal.id),
+                    "field_record": record_context(signal),
                     "title": signal.title,
                     "structured_summary": signal.structured_summary,
                     "created_at": signal.created_at.isoformat(),

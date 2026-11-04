@@ -151,7 +151,9 @@ def test_execution_lifecycle_mark_done_validate_rejects_reopen(
     assert after_validate.json()["permission_hints"]["can_reopen"] is False
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
     signal_status_before = signal.status
     signal_resolved_at = signal.resolved_at
     event_count_before = ActionPlanExecutionLifecycleEvent.objects.filter(
@@ -255,7 +257,9 @@ def test_execution_lifecycle_done_without_validation_rejects_reopen(
     marked_done_at = mark_done.json()["marked_done_at"]
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
     signal_resolved_at = signal.resolved_at
     event_count_before = ActionPlanExecutionLifecycleEvent.objects.filter(
         action_plan_execution_id=execution.id,
@@ -304,7 +308,9 @@ def test_execution_lifecycle_done_without_validation_rejects_reopen(
         == notif_count_before
     )
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.review_requested_at is not None
+    assert signal.resolved_at is None
     assert signal.resolved_at == signal_resolved_at
 
 

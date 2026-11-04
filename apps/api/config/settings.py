@@ -344,6 +344,10 @@ HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS = env_int("HOUSTON_CELERY_PUBLISH_TIMEOUT
 # Celery Beat (first scheduled job in Houston). Requires a `celery-beat` process;
 # lazy action-plan schedule materialization on execution-feed read remains the primary safety net.
 CELERY_BEAT_SCHEDULE = {
+    "record-followup": {
+        "task": "houston.signals.tasks.record_followup_task",
+        "schedule": crontab(minute="*/15"),
+    },
     "materialize-action-plan-schedules-horizon": {
         "task": "houston.action_plans.tasks.materialize_action_plan_schedules_horizon_task",
         "schedule": crontab(

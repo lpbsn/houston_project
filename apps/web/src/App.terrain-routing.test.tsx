@@ -87,6 +87,8 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyReportPage: () => createElement(Page, { name: 'reporting' }),
     LazySignalDetailPage: () => createElement(Page, { name: 'signal-detail' }),
     LazySignalFeedPage: () => createElement(Page, { name: 'signals' }),
+    LazyRecordFeedPage: () => createElement(Page, { name: 'signals' }),
+    LazyRecordDetailPage: () => createElement(Page, { name: 'signal-detail' }),
     LazyTeamMemberDetailPage: () => createElement(Page, { name: 'team-member' }),
     LazyTeamPage: () => createElement(Page, { name: 'team' }),
   }

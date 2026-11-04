@@ -524,6 +524,11 @@ def _copy_capacity_signals_and_assignments(
         "canceled_at",
         "created_at",
         "updated_at",
+        "record_kind",
+        "blocked_reason",
+        "closure_reason",
+        "due_revision",
+        "content_edited_by_user",
     )
     assignment_columns = (
         "id",
@@ -621,6 +626,11 @@ def _copy_capacity_signals_and_assignments(
                         canceled_at,
                         created_at,
                         created_at,
+                        "observation",
+                        "",
+                        "resolved" if resolved_at else "abandoned" if canceled_at else "",
+                        1,
+                        False,
                     )
                 )
         with cursor.copy(assignment_copy_sql) as copy:

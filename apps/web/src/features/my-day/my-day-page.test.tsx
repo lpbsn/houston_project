@@ -16,6 +16,11 @@ const notifications = vi.hoisted(() => ({
   items: [] as NotificationItem[],
 }))
 
+vi.mock('@/features/signals/records/api', async (original) => ({
+  ...await original<typeof import('@/features/signals/records/api')>(),
+  listRecords: vi.fn().mockResolvedValue({ items: [], next_offset: null, timezone: 'Europe/Paris' }),
+}))
+
 vi.mock('./api', async (original) => ({
   ...await original<typeof import('./api')>(),
   fetchMyDay: vi.fn(),
@@ -316,7 +321,7 @@ describe('Ma journée', () => {
     vi.mocked(fetchMyDay).mockReturnValue(new Promise(() => {}))
     mount()
 
-    expect(screen.getByRole('status').textContent).toContain('Chargement de votre journée')
+    expect(screen.getByText('Chargement de votre journée…').textContent).toContain('Chargement de votre journée')
     expect(screen.queryByText('Aucune tâche à traiter pour le moment.')).toBeNull()
     expect(screen.queryByRole('heading', { name: 'En retard' })).toBeNull()
   })

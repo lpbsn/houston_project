@@ -195,7 +195,7 @@ def test_merge_keeps_older_survivor_created_at_and_mins_association(
     source_id = source.id
     target.refresh_from_db()
 
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into__isnull=False).exists()
     assert target.first_action_plan_associated_at == earlier
     assert target.created_at == target_created
 
@@ -227,7 +227,7 @@ def test_merge_rewinds_newer_survivor_birth_and_adds_created_origin(
     )
     target.refresh_from_db()
 
-    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=source_id, merged_into__isnull=False).exists()
     assert target.created_at == source_created
     assert target.first_action_plan_associated_at == plan_at
     created_events = list(

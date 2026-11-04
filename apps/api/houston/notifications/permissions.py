@@ -74,9 +74,9 @@ def recipient_can_view_notification_subject(
         return False
 
     if subject_type == Notification.SubjectType.SIGNAL:
-        from houston.signals.selectors import get_signal_for_detail
+        from houston.signals.record_selectors import get_record
 
-        return get_signal_for_detail(membership=recipient, signal_id=subject_id) is not None
+        return get_record(recipient, subject_id) is not None
 
     if subject_type == Notification.SubjectType.CHAT_CONVERSATION:
         if not can_access_chat(recipient):

@@ -886,3 +886,19 @@ class BrainMechanismCandidate(BaseModel):
 
     def __str__(self) -> str:
         return f"BrainMechanismCandidate {self.stable_key} [{self.status}]"
+
+
+class BrainObjectiveRecord(BaseModel):
+    objective = models.ForeignKey(
+        BrainObjective, on_delete=models.CASCADE, related_name="record_links"
+    )
+    signal = models.ForeignKey(
+        "signals.Signal", on_delete=models.CASCADE, related_name="objective_links"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["objective", "signal"], name="brain_objective_record_unique"
+            )
+        ]

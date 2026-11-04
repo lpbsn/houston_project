@@ -18,7 +18,7 @@ pytestmark = pytest.mark.django_db
 SENSITIVE_SNIPPET = "Secret observation text must never leak"
 
 
-def test_push_v1_event_keys_includes_chat_and_has_twenty_keys():
+def test_push_v1_event_keys_includes_chat_and_has_twenty_three_keys():
     assert Notification.EventKey.CHAT_MESSAGE_RECEIVED in push_constants.PUSH_V1_EVENT_KEYS
     assert (
         Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
@@ -48,7 +48,7 @@ def test_push_v1_event_keys_includes_chat_and_has_twenty_keys():
         Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED
         in push_constants.PUSH_V1_EVENT_KEYS
     )
-    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 20
+    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 23
 
 
 def test_build_push_payload_has_strict_shape():

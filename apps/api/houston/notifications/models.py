@@ -14,6 +14,9 @@ from houston.notifications.constants import (
 
 class Notification(BaseModel):
     class EventKey(models.TextChoices):
+        RECORD_UPDATED = "signal.record.updated", "Field record updated"
+        RECORD_DUE = "signal.record.due", "Field record due"
+        RECORD_OVERDUE = "signal.record.overdue", "Field record overdue"
         ACTION_PLAN_EXECUTION_CREATED = (
             "action_plan.execution.created",
             "Action plan execution created",

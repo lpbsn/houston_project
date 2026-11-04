@@ -31,6 +31,8 @@ import {
   LazyTeamMemberDetailPage,
   LazyOperationalConfigPage,
   LazyBrainPage,
+  LazyRecordFeedPage,
+  LazyRecordDetailPage,
   LazyReportPage,
   LazySignalDetailPage,
   LazySignalFeedPage,
@@ -740,6 +742,10 @@ function App() {
 
     if (route.kind === 'signal-detail') {
       const scope = route.scope
+      const recordSiteId = scope?.type === 'establishment' ? scope.establishmentId : establishmentId
+      if (scope?.type !== 'cross' && recordSiteId) {
+        return <LazyRecordDetailPage key={`${recordSiteId}:${route.signalId}`} establishmentId={recordSiteId} recordId={route.signalId} onNavigate={navigate} onBack={terrainBackPath ? performBack : undefined} />
+      }
       return (
         <LazySignalDetailPage
           signalId={route.signalId}
@@ -856,6 +862,7 @@ function App() {
         return <LazyAnalyticsPage scope={scope} />
       }
       if (route.page === 'signals') {
+        if (scope.type === 'establishment') return <LazyRecordFeedPage key={scope.establishmentId} establishmentId={scope.establishmentId} onNavigate={navigate} />
         return (
           <LazySignalFeedPage
             establishmentId={establishmentIdForScope ?? null}
@@ -955,6 +962,10 @@ function App() {
 
     if (route.path === '/reporting') {
       return <LazyReportPage />
+    }
+
+    if (route.path === '/signals' && establishmentId) {
+      return <LazyRecordFeedPage key={establishmentId} establishmentId={establishmentId} onNavigate={navigate} />
     }
 
     if (route.path === '/signals') {

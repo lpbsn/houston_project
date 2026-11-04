@@ -36,6 +36,16 @@ class ExpectedAction(models.TextChoices):
 
 
 class Signal(BaseModel):
+    class RecordKind(models.TextChoices):
+        OBSERVATION = "observation", "Observation"
+        PROJECT = "project", "Project"
+        INTAKE = "intake", "Awaiting classification"
+
+    class ClosureReason(models.TextChoices):
+        RESOLVED = "resolved", "Resolution confirmed"
+        ACKNOWLEDGED = "acknowledged", "Information acknowledged"
+        ABANDONED = "abandoned", "Abandoned"
+
     class Status(models.TextChoices):
         OPEN = "open", "Open"
         INTERESTING = "interesting", "Interesting"
@@ -157,9 +167,53 @@ class Signal(BaseModel):
     )
     canceled_at = models.DateTimeField(null=True, blank=True)
     first_action_plan_associated_at = models.DateTimeField(null=True, blank=True)
+    record_kind = models.CharField(
+        max_length=20,
+        choices=RecordKind.choices,
+        default=RecordKind.OBSERVATION,
+    )
+    owner_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="owned_field_records",
+        null=True,
+        blank=True,
+    )
+    due_on = models.DateField(null=True, blank=True)
+    due_revision = models.PositiveIntegerField(default=1)
+    review_requested_at = models.DateTimeField(null=True, blank=True)
+    closure_reason = models.CharField(
+        max_length=20,
+        choices=ClosureReason.choices,
+        blank=True,
+        default="",
+    )
+    blocked_reason = models.CharField(max_length=500, blank=True, default="")
+    waiting_for_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="field_records_waiting_for",
+        null=True,
+        blank=True,
+    )
+    intake_observation = models.OneToOneField(
+        "observations.Observation",
+        on_delete=models.SET_NULL,
+        related_name="intake_record",
+        null=True,
+        blank=True,
+    )
+    content_edited_by_user = models.BooleanField(default=False)
+    merged_into = models.ForeignKey(
+        "self", on_delete=models.RESTRICT, null=True, blank=True, related_name="merged_records"
+    )
 
     class Meta:
         indexes = [
+            models.Index(
+                fields=["establishment", "owner_membership", "due_on"], name="signal_owner_due_idx"
+            ),
+            models.Index(fields=["establishment", "due_on"], name="signal_calendar_due_idx"),
             models.Index(
                 fields=[
                     "establishment",
@@ -205,6 +259,78 @@ class Signal(BaseModel):
 
     def __str__(self) -> str:
         return f"Signal {self.id} [{self.status}]"
+
+
+class SignalExecutionLink(BaseModel):
+    """An execution may serve several records; source_signal retains its provenance."""
+
+    signal = models.ForeignKey(Signal, on_delete=models.CASCADE, related_name="work_links")
+    execution = models.ForeignKey(
+        "action_plans.ActionPlanExecution",
+        on_delete=models.CASCADE,
+        related_name="record_links",
+    )
+    added_by = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="field_record_links_created",
+    )
+    is_quick_tasks = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["signal", "execution"], name="signal_work_link_unique"),
+            models.UniqueConstraint(
+                fields=["signal"], condition=Q(is_quick_tasks=True), name="signal_one_quick_tasks"
+            ),
+        ]
+
+
+class SignalParticipant(BaseModel):
+    signal = models.ForeignKey(Signal, on_delete=models.CASCADE, related_name="participants")
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.CASCADE,
+        related_name="field_record_participations",
+    )
+    notifications_enabled = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["signal", "membership"],
+                name="signal_participant_unique",
+            )
+        ]
+
+
+class SignalAlias(BaseModel):
+    """A stable redirect for old links after a merge, scoped to its establishment."""
+
+    former_signal_id = models.UUIDField(unique=True)
+    target = models.ForeignKey(Signal, on_delete=models.CASCADE, related_name="aliases")
+    original_created_at = models.DateTimeField()
+
+
+class SignalRecordEvent(BaseModel):
+    """Append-only record decisions; lifecycle statuses keep their existing journal."""
+
+    signal = models.ForeignKey(Signal, on_delete=models.CASCADE, related_name="record_events")
+    actor = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="field_record_events",
+        null=True,
+        blank=True,
+    )
+    kind = models.CharField(max_length=40)
+    changes = models.JSONField(default=dict)
+    notified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["signal", "created_at"], name="signal_record_events_idx")]
 
 
 class SignalLifecycleEvent(BaseModel):

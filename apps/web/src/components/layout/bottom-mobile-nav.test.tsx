@@ -65,7 +65,7 @@ describe('BottomMobileNav', () => {
       <BottomMobileNav activePath="/signals" navigate={vi.fn()} />,
     )
 
-    const signalsLink = screen.getByRole('link', { name: 'Observations' })
+    const signalsLink = screen.getByRole('link', { name: 'Fiches' })
     expect(signalsLink.className).toContain('min-h-12')
     expect(signalsLink.className).toContain('min-w-12')
     expect(signalsLink.className).toContain('w-full')
@@ -80,7 +80,7 @@ describe('BottomMobileNav', () => {
       <BottomMobileNav activePath="/signals" navigate={vi.fn()} />,
     )
 
-    const signalsLink = screen.getByRole('link', { name: 'Observations' })
+    const signalsLink = screen.getByRole('link', { name: 'Fiches' })
     const label = signalsLink.querySelector('span')
     const listItem = signalsLink.closest('li')
     const nav = screen.getByRole('navigation', { name: 'Navigation terrain' })
@@ -105,8 +105,8 @@ describe('BottomMobileNav', () => {
     const list = container.querySelector('ul')
     expect(list?.className).toContain('grid-cols-5')
     expect(screen.getByRole('link', { name: 'Chat' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Observations' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Exécution' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Fiches' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Ma journée' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Général' })).toBeTruthy()
   })

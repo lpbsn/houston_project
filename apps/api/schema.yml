@@ -8922,6 +8922,265 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/record-options/:
+    get:
+      operationId: v1_establishments_record_options_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecordOptions'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/:
+    get:
+      operationId: field_records_list
+      parameters:
+      - in: query
+        name: day
+        schema:
+          type: boolean
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: pole
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: stage
+        schema:
+          type: string
+          enum:
+          - closed
+          - doing
+          - review
+          - todo
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecordPage'
+          description: ''
+    post:
+      operationId: v1_establishments_records_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FieldRecordCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FieldRecordCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FieldRecordCreate'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecord'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/:
+    get:
+      operationId: v1_establishments_records_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecord'
+          description: ''
+    patch:
+      operationId: v1_establishments_records_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFieldRecordUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFieldRecordUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFieldRecordUpdate'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecord'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/commands/:
+    post:
+      operationId: v1_establishments_records_commands_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FieldRecordCommand'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FieldRecordCommand'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FieldRecordCommand'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecord'
+          description: ''
+  /api/v1/establishments/{establishment_id}/records/{record_id}/sections/:
+    get:
+      operationId: v1_establishments_records_sections_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: section
+        schema:
+          type: string
+          enum:
+          - history
+          - objectives
+          - sources
+          - work
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRecordSection'
+          description: ''
   /api/v1/establishments/{establishment_id}/signal-feed/:
     get:
       operationId: v1_establishments_signal_feed_retrieve
@@ -12484,6 +12743,10 @@ components:
         id:
           type: string
           format: uuid
+        depends_on_id:
+          type: string
+          format: uuid
+          nullable: true
         task:
           type: string
         description:
@@ -12532,6 +12795,7 @@ components:
       - business_unit
       - completed_at
       - deadline_at
+      - depends_on_id
       - description
       - id
       - observation_created_at
@@ -15529,6 +15793,32 @@ components:
           minimum: 0
       required:
       - android_min_supported_version_code
+    ClosureReasonEnum:
+      enum:
+      - resolved
+      - acknowledged
+      - abandoned
+      type: string
+      description: |-
+        * `resolved` - resolved
+        * `acknowledged` - acknowledged
+        * `abandoned` - abandoned
+    CommandEnum:
+      enum:
+      - participants
+      - work
+      - link_work
+      - dependency
+      - follow
+      - link_objective
+      type: string
+      description: |-
+        * `participants` - participants
+        * `work` - work
+        * `link_work` - link_work
+        * `dependency` - dependency
+        * `follow` - follow
+        * `link_objective` - link_objective
     CommentAttachment:
       type: object
       properties:
@@ -16629,6 +16919,253 @@ components:
       - has_more
       - items
       - next_cursor
+    FieldRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        summary:
+          type: string
+        kind:
+          $ref: '#/components/schemas/FieldRecordKindEnum'
+        stage:
+          $ref: '#/components/schemas/StageEnum'
+        closure_reason:
+          type: string
+        pole:
+          type: string
+        pole_id:
+          type: string
+          format: uuid
+          nullable: true
+        color_index:
+          type: integer
+          nullable: true
+        is_pinned:
+          type: boolean
+        owner:
+          allOf:
+          - $ref: '#/components/schemas/RecordPerson'
+          nullable: true
+        waiting_for:
+          allOf:
+          - $ref: '#/components/schemas/RecordPerson'
+          nullable: true
+        due_on:
+          type: string
+          format: date
+          nullable: true
+        blocked_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        observation_count:
+          type: integer
+        calendar:
+          allOf:
+          - $ref: '#/components/schemas/RecordCalendar'
+          nullable: true
+        can_manage:
+          type: boolean
+        can_progress:
+          type: boolean
+        can_use_brain:
+          type: boolean
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
+      required:
+      - blocked_reason
+      - calendar
+      - can_manage
+      - can_progress
+      - can_use_brain
+      - closure_reason
+      - color_index
+      - created_at
+      - due_on
+      - id
+      - is_pinned
+      - kind
+      - observation_count
+      - owner
+      - pole
+      - pole_id
+      - stage
+      - summary
+      - title
+      - updated_at
+      - waiting_for
+    FieldRecordCommand:
+      type: object
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+        command:
+          $ref: '#/components/schemas/CommandEnum'
+        membership_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 50
+        title:
+          type: string
+          maxLength: 200
+        tasks:
+          type: array
+          items:
+            type: string
+            maxLength: 500
+          maxItems: 50
+        assignee_id:
+          type: string
+          format: uuid
+          nullable: true
+        due_on:
+          type: string
+          format: date
+          nullable: true
+        quick:
+          type: boolean
+        execution_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        depends_on_id:
+          type: string
+          format: uuid
+          nullable: true
+        enabled:
+          type: boolean
+        objective_id:
+          type: string
+          format: uuid
+      required:
+      - command
+      - expected_updated_at
+    FieldRecordCreate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        business_unit_id:
+          type: string
+          format: uuid
+        owner_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        due_on:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - business_unit_id
+      - title
+    FieldRecordKindEnum:
+      enum:
+      - observation
+      - project
+      - intake
+      type: string
+      description: |-
+        * `observation` - observation
+        * `project` - project
+        * `intake` - intake
+    FieldRecordOptions:
+      type: object
+      properties:
+        poles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
+        more_members:
+          type: boolean
+        objectives:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
+        executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordPerson'
+      required:
+      - executions
+      - members
+      - more_members
+      - objectives
+      - poles
+    FieldRecordPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldRecord'
+        next_offset:
+          type: integer
+          nullable: true
+        timezone:
+          type: string
+      required:
+      - items
+      - next_offset
+      - timezone
+    FieldRecordSection:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldRecordSectionItem'
+        next_offset:
+          type: integer
+          nullable: true
+      required:
+      - items
+      - next_offset
+    FieldRecordSectionItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        text:
+          type: string
+        author:
+          type: string
+        date:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+      required:
+      - author
+      - date
+      - id
+      - status
+      - text
+      - title
     GamificationCurrentSummary:
       type: object
       properties:
@@ -17899,6 +18436,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EstablishmentMembershipScopeWriteItem'
+    PatchedFieldRecordUpdate:
+      type: object
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+        title:
+          type: string
+          maxLength: 200
+        structured_summary:
+          type: string
+          maxLength: 5000
+        owner_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        waiting_for_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        due_on:
+          type: string
+          format: date
+          nullable: true
+        blocked_reason:
+          type: string
+          maxLength: 500
+        stage:
+          $ref: '#/components/schemas/StageEnum'
+        closure_reason:
+          $ref: '#/components/schemas/ClosureReasonEnum'
     PatchedMembershipUpdateRequest:
       type: object
       properties:
@@ -18575,6 +19143,36 @@ components:
       type: string
       enum:
       - wrong_pattern
+    RecordCalendar:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        due:
+          type: string
+          format: date
+        overdue:
+          type: boolean
+      required:
+      - due
+      - end
+      - overdue
+      - start
+    RecordPerson:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
     RefreshRequest:
       type: object
       properties:
@@ -19568,6 +20166,18 @@ components:
       - media_count
       - reporter_display_name
       - submitted_at
+    StageEnum:
+      enum:
+      - todo
+      - doing
+      - review
+      - closed
+      type: string
+      description: |-
+        * `todo` - todo
+        * `doing` - doing
+        * `review` - review
+        * `closed` - closed
     SuccessConditionEnum:
       enum:
       - eq

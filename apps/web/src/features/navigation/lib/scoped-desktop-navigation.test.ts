@@ -151,11 +151,10 @@ describe('scoped desktop navigation', () => {
       'my-day',
       'reporting',
       'signals',
-      'execution',
       'history',
       'general',
     ])
-    expect(navigation.activeItemId).toBe('execution')
+    expect(navigation.activeItemId).toBe('signals')
     expect(
       resolveDesktopScopeFooterContext({
         scope: navigation.scope,
@@ -175,7 +174,6 @@ describe('scoped desktop navigation', () => {
       'my-day',
       'reporting',
       'signals',
-      'execution',
       'chat',
       'history',
       'general',
@@ -200,13 +198,12 @@ describe('scoped desktop navigation', () => {
       'brain',
       'reporting',
       'signals',
-      'execution',
       'chat',
       'history',
       'general',
       'settings',
     ])
-    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 1, 2, 2, 2, 2, 3, 3, 3])
+    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3])
     expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
       label: 'Spore Brain',
       href: '/e/est-owner/brain',
@@ -275,7 +272,6 @@ describe('scoped desktop navigation', () => {
       'brain',
       'reporting',
       'signals',
-      'execution',
       'chat',
       'history',
       'general',
@@ -291,7 +287,6 @@ describe('scoped desktop navigation', () => {
       'dashboard',
       'reporting',
       'signals',
-      'execution',
       'chat',
       'history',
       'general',
@@ -313,7 +308,7 @@ describe('scoped desktop navigation', () => {
         route: establishmentRoute('est-1', 'signals'),
         bootstrap: bootstrap([staff, inactiveOwner]),
       }).items.map((item) => item.id),
-    ).toEqual(['my-day', 'reporting', 'signals', 'execution', 'chat', 'history', 'general'])
+    ).toEqual(['my-day', 'reporting', 'signals', 'chat', 'history', 'general'])
   })
 
   it('shows establishment Chat from membership chat_available', () => {

@@ -89,3 +89,40 @@ def recover_stuck_observation_processing_task() -> int:
         },
     )
     return recovered_count
+
+
+@shared_task(
+    name="houston.signals.tasks.deliver_record_event_task",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
+def deliver_record_event_task(event_id):
+    from houston.signals.record_notifications import deliver_record_event
+
+    deliver_record_event(event_id)
+
+
+@shared_task(name="houston.signals.tasks.record_followup_task")
+def record_followup_task():
+    from houston.signals.models import SignalRecordEvent
+    from houston.signals.record_notifications import deliver_record_event, deliver_record_reminders
+
+    for event_id in (
+        SignalRecordEvent.objects.filter(
+            notified_at__isnull=True,
+            kind__in=[
+                "assigned",
+                "closed",
+                "reopened",
+                "review_requested",
+                "linked",
+                "taken_in_charge",
+                "work_added",
+            ],
+        )
+        .order_by("created_at")
+        .values_list("id", flat=True)[:200]
+    ):
+        deliver_record_event(event_id)
+    deliver_record_reminders()
